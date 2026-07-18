@@ -1,6 +1,6 @@
 {
   "name": "@yiaany/ghostapi",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "The local internet for AI coding agents.",
   "type": "module",
   "repository": {
@@ -10,7 +10,7 @@
   "bugs": {
     "url": "https://github.com/yiaany/ghostapi/issues"
   },
-  "homepage": "https://github.com/yiaany/ghostapi#readme",
+  "homepage": "https://github.com/yiaany/ghostweb#readme",
   "bin": {
     "ghostapi": "dist/cli/index.js"
   },

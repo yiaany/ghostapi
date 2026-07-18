@@ -4,6 +4,12 @@ All notable changes to GhostAPI will be documented in this file.
 
 The format follows the spirit of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project uses semantic versioning once public releases begin.
 
+## 0.1.7 - 2026-07-18
+
+### Changed
+
+- Set npm package `homepage` link to the landing repository `yiaany/ghostweb` so npm cards point to the public site instead of repository code.
+
 ## 0.1.6 - 2026-07-18
 
 ### Fixed
