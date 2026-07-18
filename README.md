@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/ghostapi-mark.svg" alt="GhostAPI" width="96" height="96">
+  <img src="docs/assets/ghostapi-avatar.png" alt="GhostAPI" width="96" height="96">
 </p>
 
 <h1 align="center">GhostAPI</h1>
@@ -24,7 +24,7 @@ npx @yiaany/ghostapi start --open
 ```
 
 <p align="center">
-  <img src="docs/assets/dashboard-preview.svg" alt="GhostAPI dashboard preview">
+  <img src="docs/assets/dashboard.png" alt="GhostAPI dashboard showing local API traffic">
 </p>
 
 ## Why GhostAPI
