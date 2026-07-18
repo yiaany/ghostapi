@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+.ghostapi/
+coverage/
+*.log
+*.tgz
+.npmrc
+.DS_Store
+session_log.md
+ghostapi-dashboard.out.log
+ghostapi-dashboard.err.log

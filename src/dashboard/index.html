@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GhostAPI Dashboard</title>
+  <link rel="stylesheet" href="/dashboard/styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👻</text></svg>">
+</head>
+<body>
+
+<div class="app-wrapper">
+  
+  <!-- Left Nav Sidebar (Exact React replica) -->
+  <aside class="sidebar" id="sidebar">
+    <!-- Workspace Switcher -->
+    <div class="ws-switcher">
+      <div class="ws-btn" style="cursor: default">
+        <div class="ws-btn-content">
+          <div class="ws-avatar">G</div>
+          <div class="ws-info">
+            <span class="ws-title">GhostAPI.local</span>
+            <span class="ws-subtitle">Proxy Engine</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Navigation Scroll -->
+    <div class="nav-scroll-area">
+      <!-- Group 1 -->
+      <div class="nav-group">
+        <div class="nav-item" onclick="openSearch()">
+          <div class="nav-item-left">
+            <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <span class="nav-item-title">Search</span>
+          </div>
+          <div class="nav-item-right"><div class="sc-badge">⌘K</div></div>
+        </div>
+        <div class="nav-item active" id="nav-all" onclick="setFilter('all')">
+          <div class="nav-item-left">
+            <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
+            <span class="nav-item-title">Live Traffic</span>
+          </div>
+        </div>
+        <div class="nav-item" onclick="generateRepoSetup(event)">
+          <div class="nav-item-left">
+            <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v6"></path><path d="m16 6-4 4-4-4"></path><rect x="4" y="12" width="16" height="8" rx="2"></rect><path d="M8 16h.01"></path><path d="M12 16h.01"></path></svg>
+            <span class="nav-item-title">Agent Setup</span>
+          </div>
+          <div class="nav-item-right"><div class="sc-badge">1-click</div></div>
+        </div>
+        <div class="nav-item" onclick="openScenarios(event)">
+          <div class="nav-item-left">
+            <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"></path><path d="M4 12h10"></path><path d="M4 18h7"></path><path d="m15 16 2 2 4-4"></path></svg>
+            <span class="nav-item-title">Scenarios</span>
+          </div>
+        </div>
+        <div class="nav-item" onclick="copyAgentPrompt(event)">
+          <div class="nav-item-left">
+            <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a4 4 0 0 1-4 4H7l-4 4V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path></svg>
+            <span class="nav-item-title">Copy Agent Prompt</span>
+          </div>
+        </div>
+        <div class="nav-item" onclick="openSafetyReport(event)">
+          <div class="nav-item-left">
+            <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
+            <span class="nav-item-title">Safety Report</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Group 2 Filters -->
+      <div class="nav-group">
+        <span class="nav-heading">Filter Providers</span>
+        <div class="nav-item" id="nav-stripe" onclick="setFilter('stripe')">
+          <div class="nav-item-left">
+            <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+            <span class="nav-item-title">Stripe</span>
+          </div>
+        </div>
+        <div class="nav-item" id="nav-twilio" onclick="setFilter('twilio')">
+          <div class="nav-item-left">
+            <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 21v-4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v4"></path><path d="M3 21v-4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v4"></path><path d="M9 15V9a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v6"></path></svg>
+            <span class="nav-item-title">Twilio</span>
+          </div>
+        </div>
+        <div class="nav-item" id="nav-resend" onclick="setFilter('resend')">
+          <div class="nav-item-left">
+            <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+            <span class="nav-item-title">Resend</span>
+          </div>
+        </div>
+        <div class="nav-item" id="nav-github" onclick="setFilter('github')">
+          <div class="nav-item-left">
+            <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"></path><path d="M9 18c-4.51 2-5-2-7-2"></path></svg>
+            <span class="nav-item-title">GitHub</span>
+          </div>
+        </div>
+        <div class="nav-item" id="nav-discord" onclick="setFilter('discord')">
+          <div class="nav-item-left">
+            <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10a4 4 0 0 0-4-4h-4a4 4 0 0 0-4 4v4a4 4 0 0 0 4 4h4a4 4 0 0 0 4-4v-4z"></path><line x1="8" y1="10" x2="8" y2="10.01"></line><line x1="16" y1="10" x2="16" y2="10.01"></line></svg>
+            <span class="nav-item-title">Discord</span>
+          </div>
+        </div>
+        <div class="nav-item" id="nav-generic" onclick="setFilter('generic')">
+          <div class="nav-item-left">
+            <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+            <span class="nav-item-title">Generic REST</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Nav Bottom -->
+    <div class="nav-bottom">
+      <div class="nav-item" onclick="clearStorage('cache', event)">
+        <div class="nav-item-left">
+          <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg>
+          <span class="nav-item-title">Clear Cache</span>
+        </div>
+      </div>
+      <div class="nav-item" onclick="clearStorage('state', event)">
+        <div class="nav-item-left">
+          <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          <span class="nav-item-title">Clear State</span>
+        </div>
+      </div>
+      <div class="nav-item fault-toggle" id="fault-toggle" onclick="toggleFaultLab(event)">
+        <div class="nav-item-left">
+          <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h8l-1 8 11-14h-8l0-6z"></path></svg>
+          <span class="nav-item-title">Chaos Mode</span>
+        </div>
+        <span class="fault-state" id="fault-state">Off</span>
+      </div>
+      <div class="nav-item" onclick="generateAiRules(event)">
+        <div class="nav-item-left">
+          <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3"></path><path d="M18.36 5.64 16.24 7.76"></path><path d="M21 12h-3"></path><path d="M18.36 18.36 16.24 16.24"></path><path d="M12 18v3"></path><path d="M7.76 16.24 5.64 18.36"></path><path d="M6 12H3"></path><path d="M7.76 7.76 5.64 5.64"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <span class="nav-item-title">Generate AI Rules</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content Structure -->
+  <main class="main">
+    
+    <!-- Topbar -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="toggle-btn" id="sidebar-toggle">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg>
+        </button>
+        <div class="breadcrumb">
+          <span>GhostAPI</span>
+          <span>/</span>
+          <span class="breadcrumb-active">Live Traffic</span>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="status-indicator connected" id="status-indicator">
+          <div class="status-dot"></div>
+          <span id="status-text">Connected</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Content Engine -->
+    <div class="content-wrapper">
+      
+      <!-- Event List Pane -->
+      <div class="event-list-pane">
+        <div class="event-list-header">
+          <h2>Requests</h2>
+          <div class="event-count" id="event-count">0</div>
+        </div>
+        <div class="events-scroll" id="event-list">
+          <!-- JS mounts events here -->
+        </div>
+      </div>
+
+      <!-- Details Split Pane -->
+      <div class="details-pane">
+        <!-- Empty State -->
+        <div class="empty-view" id="empty-details">
+          <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+          <p>Select a request to view details</p>
+        </div>
+
+        <!-- Populated Details -->
+        <div class="details-content" id="details-content">
+          <div class="dep-header">
+            <div class="dep-title">
+              <span class="ec-method" id="d-method"></span>
+              <span id="d-path"></span>
+            </div>
+            <div class="dep-badges">
+              <button class="mini-action" onclick="generateSelectedTest()">Generate Test</button>
+              <span class="pill" id="d-status"></span>
+              <span class="pill" id="d-time"></span>
+              <span class="pill" id="d-provider"></span>
+              <span class="pill" id="d-source"></span>
+            </div>
+          </div>
+          
+          <div class="json-split">
+             <div class="json-pane">
+               <div class="json-header">
+                 <span>Request</span>
+                 <svg class="ws-icon" style="cursor:pointer" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" onclick="copy('req')"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+               </div>
+               <div class="json-body"><pre id="d-req-body"></pre></div>
+             </div>
+             <div class="json-pane">
+               <div class="json-header">
+                 <span>Response</span>
+                 <svg class="ws-icon" style="cursor:pointer" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" onclick="copy('res')"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+               </div>
+               <div class="json-body"><pre id="d-res-body"></pre></div>
+             </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- Modal Search -->
+  <div class="modal-overlay" id="search-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+         <input type="text" class="modal-input" id="search-input" placeholder="Search paths, providers, payloads...">
+        <div class="sc-badge" style="display:flex">ESC</div>
+      </div>
+      <div class="modal-body">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.3"><polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg>
+        <p>Type to filter live traffic...</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="rules-modal">
+    <div class="modal-content rules-modal-content">
+      <div class="modal-header rules-modal-header">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5V4a2 2 0 0 1 2-2h9l5 5v12.5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"></path><path d="M14 2v6h6"></path></svg>
+        <div class="rules-title-block">
+          <strong>.cursorrules</strong>
+          <span id="rules-subtitle">Generated from package.json</span>
+        </div>
+        <button class="modal-action" onclick="copyRules()">Copy</button>
+        <button class="modal-action ghost" onclick="closeRulesModal()">Close</button>
+      </div>
+      <div class="rules-body">
+        <pre id="rules-output">Generating...</pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="setup-modal">
+    <div class="modal-content setup-modal-content">
+      <div class="modal-header rules-modal-header">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v6"></path><path d="m16 6-4 4-4-4"></path><rect x="4" y="12" width="16" height="8" rx="2"></rect></svg>
+        <div class="rules-title-block">
+          <strong>Agent Setup</strong>
+          <span id="setup-subtitle">One-click onboarding for this repo</span>
+        </div>
+        <button class="modal-action" onclick="copySetupOutput()">Copy Selected</button>
+        <button class="modal-action ghost" onclick="closeSetupModal()">Close</button>
+      </div>
+      <div class="setup-grid">
+        <div class="setup-list" id="setup-list"></div>
+        <div class="rules-body setup-output"><pre id="setup-output">Generating setup...</pre></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="scenarios-modal">
+    <div class="modal-content setup-modal-content">
+      <div class="modal-header rules-modal-header">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"></path><path d="M4 12h10"></path><path d="M4 18h7"></path><path d="m15 16 2 2 4-4"></path></svg>
+        <div class="rules-title-block">
+          <strong>Scenario Presets</strong>
+          <span id="scenarios-subtitle">Replay, export, or share agent-ready API flows</span>
+        </div>
+        <button class="modal-action ghost" onclick="closeScenariosModal()">Close</button>
+      </div>
+      <div class="scenario-shell">
+        <div class="scenario-list" id="scenario-list"></div>
+        <div class="rules-body scenario-output"><pre id="scenario-output">Select a scenario.</pre></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+<script src="/dashboard/app.js"></script>
+</body>
+</html>

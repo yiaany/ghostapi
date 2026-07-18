@@ -1,0 +1,73 @@
+{
+  "name": "@yiaany/ghostapi",
+  "version": "0.1.5",
+  "description": "The local internet for AI coding agents.",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yiaany/ghostapi.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yiaany/ghostapi/issues"
+  },
+  "homepage": "https://github.com/yiaany/ghostapi#readme",
+  "bin": {
+    "ghostapi": "dist/cli/index.js"
+  },
+  "files": [
+    "dist",
+    "examples",
+    "docs",
+    "README.md",
+    "CHANGELOG.md",
+    "SECURITY.md",
+    "CONTRIBUTING.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "dev": "tsx src/cli/index.ts start",
+    "build": "tsc -p tsconfig.json && vite build --config vite.landing.config.ts && npm run build:static",
+    "build:static": "node -e \"const {cpSync, mkdirSync} = require('fs'); mkdirSync('dist/dashboard', {recursive:true}); cpSync('src/dashboard/index.html', 'dist/dashboard/index.html'); cpSync('src/dashboard/styles.css', 'dist/dashboard/styles.css'); cpSync('src/dashboard/app.js', 'dist/dashboard/app.js');\"",
+    "start": "node dist/cli/index.js start",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "mcp",
+    "stripe",
+    "openai",
+    "cursor",
+    "proxy",
+    "sandbox",
+    "mock-server",
+    "local-development",
+    "ai-agents",
+    "api-testing",
+    "mock-api",
+    "developer-tools",
+    "typescript"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "express": "^4.19.2",
+    "selfsigned": "^5.5.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.14.10",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^4.7.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.3",
+    "vite": "^5.4.21",
+    "vitest": "^2.0.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
