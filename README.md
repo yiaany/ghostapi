@@ -15,7 +15,7 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/@yiaany/ghostapi"><img alt="npm" src="https://img.shields.io/npm/v/@yiaany/ghostapi?color=0f172a&label=npm"></a>
   <a href="https://github.com/yiaany/ghostapi/blob/main/LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-0f172a"></a>
-  <a href="https://github.com/yiaany/ghostapi/actions"><img alt="ci" src="https://img.shields.io/badge/CI-ready-0f172a"></a>
+  <a href="https://github.com/yiaany/ghostapi/actions/workflows/ci.yml"><img alt="ci" src="https://github.com/yiaany/ghostapi/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="node" src="https://img.shields.io/badge/node-%3E%3D20-0f172a">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-enabled-0f172a">
 </p>

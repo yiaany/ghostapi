@@ -1,6 +1,6 @@
 {
   "name": "@yiaany/ghostapi",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "The local internet for AI coding agents.",
   "type": "module",
   "repository": {

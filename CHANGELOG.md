@@ -4,6 +4,13 @@ All notable changes to GhostAPI will be documented in this file.
 
 The format follows the spirit of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project uses semantic versioning once public releases begin.
 
+## 0.1.6 - 2026-07-18
+
+### Fixed
+
+- Updated npm package repository, bugs, and homepage URLs to point to `yiaany/ghostapi` instead of broken legacy links.
+- Replaced custom CI badge with live GitHub Actions workflow status badge (`yiaany/ghostapi/actions/workflows/ci.yml/badge.svg`).
+
 ## 0.1.5 - 2026-07-18
 
 ### Fixed
