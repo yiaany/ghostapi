@@ -34,6 +34,8 @@ describe("CLI parser", () => {
 
   it("parses doctor and init", () => {
     expect(parseCliArgs(["doctor", "--port", "8081"])).toEqual({ name: "doctor", options: { port: 8081 } });
+    expect(parseCliArgs(["doctor", "--egress"])).toEqual({ name: "doctor", options: { egress: true } });
+    expect(parseCliArgs(["doctor", "--egress", "--json"])).toEqual({ name: "doctor", options: { egress: true, json: true } });
     expect(parseCliArgs(["init"])).toEqual({ name: "init" });
   });
 
@@ -56,5 +58,6 @@ describe("CLI parser", () => {
     expect(() => parseCliArgs(["clear", "logs"])).toThrow("Unknown clear target");
     expect(() => parseCliArgs(["model", "set"])).toThrow("Missing model name");
     expect(() => parseCliArgs(["providers", "inspect"])).toThrow("Missing provider name");
+    expect(() => parseCliArgs(["doctor", "--json"])).toThrow("--json requires --egress");
   });
 });

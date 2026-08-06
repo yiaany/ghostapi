@@ -13,6 +13,7 @@ import { clearEvents } from "../server/eventsStore.js";
 import { DEFAULT_MODEL, loadServerConfig, type ServerConfig } from "../config/serverConfig.js";
 import { initializeLocalConfig, readLocalConfig, writeLocalConfig } from "../config/localConfig.js";
 import { getDataPaths } from "../config/dataPaths.js";
+import { detectEgressCapabilities, formatEgressCapabilityReport } from "../egress/capabilities.js";
 import { isLoopbackHost } from "../server/accessControl.js";
 import { getProviderManifests, isRegisteredProvider, providerRegistry } from "../providers/registry.js";
 import { parseCliArgs, type ClearTarget, type OpenOptions } from "./parser.js";
@@ -46,7 +47,7 @@ async function main(): Promise<void> {
       inspectProvider(command.provider);
       return;
     case "doctor":
-      await runDoctor(command.options.port);
+      await runDoctor(command.options);
       return;
     case "init":
       await initProject();
@@ -218,8 +219,14 @@ function inspectProvider(provider: string): void {
   console.log("Error formatting: supported");
 }
 
-async function runDoctor(portOverride: number | undefined): Promise<void> {
-  const config = loadServerConfig(process.env, [], portOverride ? { port: portOverride } : {});
+async function runDoctor(options: { port?: number; egress?: boolean; json?: boolean }): Promise<void> {
+  if (options.egress) {
+    const report = detectEgressCapabilities();
+    console.log(options.json ? JSON.stringify(report, null, 2) : formatEgressCapabilityReport(report));
+    return;
+  }
+
+  const config = loadServerConfig(process.env, [], options.port ? { port: options.port } : {});
   const checks: Array<{ label: string; ok: boolean; detail: string; hint?: string }> = [];
 
   const major = Number(process.versions.node.split(".")[0]);
@@ -292,6 +299,7 @@ Usage:
   ghostapi report
   ghostapi mcp
   ghostapi doctor [--port 8080]
+  ghostapi doctor --egress [--json]
   ghostapi init`);
 }
 

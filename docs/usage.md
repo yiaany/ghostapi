@@ -26,6 +26,17 @@ GHOSTAPI_AUTH_TOKEN="replace-with-a-long-random-token" ghostapi start --host 0.0
 
 Remote access protects dashboard/control routes with the token, but the token does not encrypt traffic. Use HTTPS or a secure tunnel. Provider simulation routes are not authenticated and GhostAPI does not provide network isolation.
 
+## Egress Diagnosis
+
+Before relying on a future `ghostapi run` backend, inspect the host-specific boundary that GhostAPI can honestly provide:
+
+```bash
+ghostapi doctor --egress
+ghostapi doctor --egress --json
+```
+
+The current release always reports `NOT ISOLATED`: it provides local HTTP proxy guidance, not process containment. The JSON output is stable for CI/tooling and identifies the available platform primitives, required setup, and remaining bypasses without probing production network access. See [`docs/security/egress-threat-model.md`](security/egress-threat-model.md) for the security model.
+
 ## Send A Local Request
 
 ```bash

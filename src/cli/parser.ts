@@ -27,6 +27,8 @@ export type StartOptions = {
 
 export type DoctorOptions = {
   port?: number;
+  egress?: boolean;
+  json?: boolean;
 };
 
 export type SetupOptions = {
@@ -193,13 +195,22 @@ function parseDoctorOptions(args: string[]): DoctorOptions {
   const options: DoctorOptions = {};
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]!;
+    if (arg === "--egress") {
+      options.egress = true;
+      continue;
+    }
+    if (arg === "--json") {
+      options.json = true;
+      continue;
+    }
     if (arg === "--port") {
       options.port = parsePort(readValue(args, index, arg), "--port");
       index += 1;
       continue;
     }
-    throw new CliError(`Unknown doctor option: ${arg}`, "Supported option: --port 8080");
+    throw new CliError(`Unknown doctor option: ${arg}`, "Supported options: --port 8080, --egress, --json");
   }
+  if (options.json && !options.egress) throw new CliError("--json requires --egress.", "Use: ghostapi doctor --egress --json");
   return options;
 }
 
