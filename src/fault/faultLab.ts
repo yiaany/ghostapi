@@ -72,7 +72,9 @@ export async function decideFault(provider: ProviderName, random = Math.random):
   const action = Math.floor(random() * 3);
   if (action === 2) return { type: "delay", latencyMs: pickLatency(config, random) };
 
-  const statusCode = action === 0 ? 429 : config.statusCode === 429 ? 503 : config.statusCode;
+  // An explicit 429 configuration must be reproducible for retry tests. Other
+  // configured provider failures retain the existing 5xx/429 error path.
+  const statusCode = config.statusCode;
 
   return {
     type: "error",

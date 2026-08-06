@@ -215,7 +215,7 @@ export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "stripe_test_g
 });
 ```
 
-The Stripe core pack supports deterministic Customers, Payment Intents, Payment Methods, Checkout Sessions, and Refunds using `2026-02-25.clover`. Unsupported endpoints fail diagnostically rather than returning generated success. See [`docs/providers/stripe-core-pack.md`](docs/providers/stripe-core-pack.md) and the runnable [`examples/stripe-node`](examples/stripe-node) flow.
+The Stripe billing pack supports deterministic Customers, Products, Prices, Subscriptions, Invoices, Payment Intents, Payment Methods, Checkout Sessions, Refunds, and local signed webhook delivery using `2026-02-25.clover`. Unsupported endpoints fail diagnostically rather than returning generated success. See [`docs/providers/stripe-core-pack.md`](docs/providers/stripe-core-pack.md) and the runnable [`examples/stripe-node`](examples/stripe-node) flow.
 
 OpenAI:
 

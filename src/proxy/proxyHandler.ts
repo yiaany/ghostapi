@@ -20,6 +20,7 @@ import { assertProviderStateTransition, getProviderPackHeaders, prepareProviderP
 import { createProviderRuntime } from "../providers/runtime.js";
 import type { ProviderPackExecution } from "../providers/types.js";
 import { transactState } from "../state/stateStore.js";
+import { corruptStripeWebhookSignature, createStripeWebhookSignature, isStripeWebhookDeliveryRequest, readStripeWebhookDelivery } from "../providers/stripeWebhook.js";
 
 
 export async function proxyHandler(request: Request, response: Response, config: ServerConfig): Promise<void> {
@@ -134,6 +135,25 @@ export async function proxyHandler(request: Request, response: Response, config:
     for (const [key, value] of Object.entries(generatedOption.headers)) response.setHeader(key, value);
     response.setHeader("x-ghostapi-cache", "BYPASS");
     if (normalizedRequest.method === "GET" && generatedOption.status < 400) response.setHeader("x-ghostapi-state", "HIT");
+
+    if (packExecution.pack.name === "stripe" && isStripeWebhookDeliveryRequest(normalizedRequest)) {
+      const delivery = readStripeWebhookDelivery(normalizedRequest.query);
+      if (delivery.error !== null) {
+        const body = packExecution.pack.formatError(delivery.error);
+        response.status(delivery.error.status).json(body);
+        await completeRequest("error", delivery.error.status, body);
+        return;
+      }
+      if (delivery.delayMs > 0) await waitForFault(delivery.delayMs);
+      const payload = JSON.stringify(generatedOption.body);
+      const signature = createStripeWebhookSignature(payload);
+      response.setHeader("stripe-signature", delivery.mode === "invalid_signature" ? corruptStripeWebhookSignature(signature) : signature);
+      response.setHeader("x-ghostapi-webhook-delivery", delivery.mode);
+      response.status(generatedOption.status).type("application/json").send(payload);
+      await completeRequest("state", generatedOption.status, generatedOption.body);
+      return;
+    }
+
     response.status(generatedOption.status).json(generatedOption.body);
     await completeRequest(generatedOption.status >= 400 ? "error" : "state", generatedOption.status, generatedOption.body);
     return;
@@ -176,7 +196,7 @@ export async function proxyHandler(request: Request, response: Response, config:
   });
 
   if (packExecution !== undefined) {
-    const transition = packExecution.pack.transitionState({
+      const transition = packExecution.pack.transitionState({
       request: normalizedRequest,
       response: generatedOption,
       apiVersion: packExecution.apiVersion,

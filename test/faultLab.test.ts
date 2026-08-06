@@ -27,8 +27,8 @@ describe("Fault Lab", () => {
     });
   });
 
-  it("returns provider-formatted 503 faults when Chaos Mode selects service unavailable", async () => {
-    await updateFaultLabConfig({ enabled: true, errorRate: 100 });
+  it("returns provider-formatted configured 503 faults", async () => {
+    await updateFaultLabConfig({ enabled: true, errorRate: 100, statusCode: 503 });
     const randomValues = [0.1, 0.5];
     const decision = await decideFault("twilio", () => randomValues.shift() ?? 0);
 

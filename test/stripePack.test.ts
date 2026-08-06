@@ -4,6 +4,9 @@ import { clearCache } from "../src/cache/index.js";
 import { clearEvents, getEventsHistory } from "../src/server/eventsStore.js";
 import { clearState, getStateStore } from "../src/state/stateStore.js";
 import { closeServer } from "./serverTestUtils.js";
+import { createProviderRuntime } from "../src/providers/runtime.js";
+import { stripePack } from "../src/providers/packs/stripePack.js";
+import { verifyStripeWebhookSignature } from "../src/providers/stripeWebhook.js";
 
 async function withServer<T>(test: (baseUrl: string) => Promise<T>): Promise<T> {
   const app = await createServer({ host: "127.0.0.1", port: 8080, model: "gpt-4o-mini" });
@@ -142,9 +145,9 @@ describe("Stripe core provider pack", () => {
       expect(missing.response.status).toBe(404);
       expect(missing.body).toMatchObject({ error: { code: "resource_missing", param: "id" } });
 
-      const endpoint = await requestJson(baseUrl, "/v1/subscriptions", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
-      expect(endpoint.response.status).toBe(404);
-      expect(endpoint.body).toMatchObject({ error: { code: "resource_missing" } });
+      const endpoint = await requestJson(baseUrl, "/v1/events", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+      expect(endpoint.response.status).toBe(405);
+      expect(endpoint.body).toMatchObject({ error: { code: "method_not_allowed" } });
     });
   });
 
@@ -164,4 +167,117 @@ describe("Stripe core provider pack", () => {
       expect(JSON.stringify(getEventsHistory())).not.toContain(cvc);
     });
   });
+
+  it("runs a deterministic trial, activation, failed renewal, invoice recovery, cancellation, and refund lifecycle", async () => {
+    await withServer(async (baseUrl) => {
+      const customer = await requestJson(baseUrl, "/v1/customers", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "billing@example.com" })
+      });
+      const product = await requestJson(baseUrl, "/v1/products", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: "GhostAPI Pro" })
+      });
+      const price = await requestJson(baseUrl, "/v1/prices", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ product: product.body.id, currency: "usd", unit_amount: 2500, recurring: { interval: "month" } })
+      });
+      const trial = await requestJson(baseUrl, "/v1/subscriptions", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ customer: customer.body.id, items: [{ price: price.body.id }], trial_period_days: 7 })
+      });
+      expect(trial.body).toMatchObject({ object: "subscription", status: "trialing", latest_invoice: null });
+
+      const activated = await requestJson(baseUrl, `/v1/subscriptions/${String(trial.body.id)}/renew`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+      expect(activated.body).toMatchObject({ id: trial.body.id, status: "active", latest_invoice: expect.stringMatching(/^in_/) });
+
+      const failedRenewal = await requestJson(baseUrl, `/v1/subscriptions/${String(trial.body.id)}/renew`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ payment_method: "pm_card_chargeDeclined" })
+      });
+      expect(failedRenewal.response.status).toBe(402);
+      const pastDue = await requestJson(baseUrl, `/v1/subscriptions/${String(trial.body.id)}`);
+      expect(pastDue.body.status).toBe("past_due");
+
+      const invoices = await requestJson(baseUrl, "/v1/invoices?limit=10");
+      const openInvoice = (invoices.body.data as Array<Record<string, unknown>>).find((invoice) => invoice.status === "open");
+      expect(openInvoice).toBeDefined();
+      const recovered = await requestJson(baseUrl, `/v1/invoices/${String(openInvoice!.id)}/pay`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+      expect(recovered.body).toMatchObject({ id: openInvoice!.id, status: "paid", paid: true });
+      expect((await requestJson(baseUrl, `/v1/subscriptions/${String(trial.body.id)}`)).body.status).toBe("active");
+
+      const intent = await requestJson(baseUrl, "/v1/payment_intents", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ amount: 2500, currency: "usd", confirm: true })
+      });
+      const refund = await requestJson(baseUrl, "/v1/refunds", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ payment_intent: intent.body.id })
+      });
+      expect(refund.body).toMatchObject({ object: "refund", payment_intent: intent.body.id, status: "succeeded" });
+
+      const canceled = await requestJson(baseUrl, `/v1/subscriptions/${String(trial.body.id)}`, { method: "DELETE" });
+      expect(canceled.body).toMatchObject({ id: trial.body.id, status: "canceled" });
+    });
+  });
+
+  it("delivers signed local webhook payloads with reproducible duplicate, delay, ordering, and invalid-signature modes", async () => {
+    await withServer(async (baseUrl) => {
+      const intent = await requestJson(baseUrl, "/v1/payment_intents", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ amount: 2500, currency: "usd", confirm: true })
+      });
+      expect(intent.body.status).toBe("succeeded");
+      const events = await requestJson(baseUrl, "/v1/events?delivery_mode=out_of_order");
+      const event = (events.body.data as Array<Record<string, unknown>>).find((candidate) => candidate.type === "payment_intent.succeeded");
+      expect(event).toBeDefined();
+      expect(event!.data).toMatchObject({ object: { object: "payment_intent", id: intent.body.id } });
+
+      const first = await fetch(`${baseUrl}/v1/events/${String(event!.id)}/deliver?delivery_mode=duplicate`);
+      const firstPayload = await first.text();
+      expect(first.headers.get("x-ghostapi-webhook-delivery")).toBe("duplicate");
+      expect(verifyStripeWebhookSignature(firstPayload, String(first.headers.get("stripe-signature")))).toBe(true);
+      const second = await fetch(`${baseUrl}/v1/events/${String(event!.id)}/deliver?delivery_mode=duplicate`);
+      expect(await second.text()).toBe(firstPayload);
+
+      const delayed = await fetch(`${baseUrl}/v1/events/${String(event!.id)}/deliver?delivery_mode=delayed&delay_ms=1`);
+      expect(delayed.headers.get("x-ghostapi-webhook-delivery")).toBe("delayed");
+      const invalid = await fetch(`${baseUrl}/v1/events/${String(event!.id)}/deliver?delivery_mode=invalid_signature`);
+      expect(verifyStripeWebhookSignature(await invalid.text(), String(invalid.headers.get("stripe-signature")))).toBe(false);
+      expect(JSON.stringify(await getStateStore())).not.toContain("whsec_ghostapi_local_test_secret");
+    });
+  });
+
+  it("expires idempotency receipts after 24 hours instead of replaying stale responses", () => {
+    const oldNow = new Date("2026-08-06T00:00:00.000Z");
+    const runtime = createProviderRuntime({
+      clock: { now: () => new Date(oldNow.getTime() + 24 * 60 * 60 * 1000) },
+      idGenerator: { create: (prefix) => `${prefix}_fresh` },
+      state: {
+        snapshot: () => ({
+          "stripe:idempotency_test": {
+            method: "POST",
+            path: "/v1/payment_intents",
+            params: '{"amount":1000,"currency":"usd"}',
+            created: Math.floor(oldNow.getTime() / 1000),
+            response: { status: 200, headers: {}, body: { id: "pi_stale", object: "payment_intent" } }
+          }
+        })
+      }
+    });
+    const request = { method: "POST", path: "/v1/payment_intents", query: {}, headers: { "idempotency-key": "idempotency_test", "content-type": "application/json" }, body: { amount: 1000, currency: "usd" }, receivedAt: oldNow.toISOString() };
+    const parsed = stripePack.parseRequest(request);
+    const response = stripePack.handleDeterministic({ request, parsedRequest: parsed, apiVersion: "2026-02-25.clover", runtime });
+    expect(response.body).toMatchObject({ id: "pi_fresh", object: "payment_intent" });
+    expect(response.headers["x-ghostapi-idempotency"]).toBeUndefined();
+  });
+
 });

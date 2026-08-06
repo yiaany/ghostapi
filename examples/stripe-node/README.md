@@ -1,4 +1,4 @@
-# Stripe Node Checkout Flow
+# Stripe Node Subscription Flow
 
 Run the official Stripe Node SDK against GhostAPI without patching SDK source. This example only talks to `127.0.0.1`; it does not call Stripe.
 
@@ -16,15 +16,15 @@ Install the SDK once in this example directory:
 npm install stripe
 ```
 
-Run the checkout flow:
+Run the subscription flow:
 
 ```bash
 node checkout-flow.mjs
 ```
 
-The script creates a customer, confirmed Payment Intent, Checkout Session, and refund, then prints their IDs.
+The script creates a customer, product, recurring price, and trial subscription; activates the local renewal control; then verifies the signed `invoice.payment_succeeded` payload with the official Stripe SDK. `delivery_mode=duplicate` deliberately returns the same event again so application-level de-duplication can be tested.
 
-The core pack accepts SDK-style `application/x-www-form-urlencoded` requests and JSON requests used by direct HTTP clients. It uses Stripe API version `2026-02-25.clover`.
+The pack accepts SDK-style `application/x-www-form-urlencoded` requests and JSON requests used by direct HTTP clients. It uses Stripe API version `2026-02-25.clover`. Webhook deliveries are pull-based local test endpoints, so this example never asks GhostAPI to send an outbound request.
 
 To inspect the generated state:
 
