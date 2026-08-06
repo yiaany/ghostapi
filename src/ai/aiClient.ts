@@ -10,13 +10,14 @@ type ChatCompletionResponse = {
 };
 
 export async function askLLM(messages: AiMessage[], config: ServerConfig): Promise<string> {
-  if (!config.apiKey) {
-    throw new Error("No LLM API key configured");
+  if (config.offline || config.allowExternalLlm !== true || !config.apiKey) {
+    throw new Error("External LLM access requires explicit opt-in and GHOSTAPI_LLM_API_KEY");
   }
 
   // A basic OpenAI-compatible implementation. Since GPT-4o-mini / GPT-4o are standard defaults, 
   // OpenAI chat completions endpoint is assumed for MVP.
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    signal: AbortSignal.timeout(15_000),
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -30,8 +31,7 @@ export async function askLLM(messages: AiMessage[], config: ServerConfig): Promi
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`LLM Error: ${response.status} ${text}`);
+    throw new Error(`LLM request failed with status ${response.status}`);
   }
 
   const json = await response.json() as ChatCompletionResponse;

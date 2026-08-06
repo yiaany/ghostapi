@@ -1,8 +1,8 @@
-import { rm } from "node:fs/promises";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { createServer } from "../src/server/createServer.js";
 import { getFaultLabConfig, resetFaultLabForTests } from "../src/fault/faultLab.js";
 import type { ServerConfig } from "../src/config/serverConfig.js";
+import { closeServer } from "./serverTestUtils.js";
 
 const baseConfig = { host: "127.0.0.1", port: 8080, model: "gpt-4o-mini" } satisfies ServerConfig;
 
@@ -14,17 +14,13 @@ async function withServer<T>(test: (baseUrl: string) => Promise<T>): Promise<T> 
   try {
     return await test(`http://127.0.0.1:${address.port}`);
   } finally {
-    server.close();
+    await closeServer(server);
   }
 }
 
 describe("product routes", () => {
-  beforeEach(() => {
-    resetFaultLabForTests();
-  });
-
-  afterAll(async () => {
-    await rm(".ghostapi", { recursive: true, force: true });
+  beforeEach(async () => {
+    await resetFaultLabForTests();
   });
 
   it("serves one-click setup and scenario actions", async () => {
@@ -70,7 +66,7 @@ describe("product routes", () => {
       });
 
       expect(response.status).toBe(403);
-      expect(getFaultLabConfig().enabled).toBe(false);
+      expect((await getFaultLabConfig()).enabled).toBe(false);
     });
   });
 });

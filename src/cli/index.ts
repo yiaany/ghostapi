@@ -11,7 +11,9 @@ import { clearCache } from "../cache/index.js";
 import { clearState } from "../state/stateStore.js";
 import { clearEvents } from "../server/eventsStore.js";
 import { DEFAULT_MODEL, loadServerConfig, type ServerConfig } from "../config/serverConfig.js";
-import { CONFIG_PATH, GHOSTAPI_DIR, initializeLocalConfig, readLocalConfig, writeLocalConfig } from "../config/localConfig.js";
+import { initializeLocalConfig, readLocalConfig, writeLocalConfig } from "../config/localConfig.js";
+import { getDataPaths } from "../config/dataPaths.js";
+import { isLoopbackHost } from "../server/accessControl.js";
 import { isRegisteredProvider, providerRegistry } from "../providers/registry.js";
 import { parseCliArgs, type ClearTarget, type OpenOptions } from "./parser.js";
 import { CliError } from "./errors.js";
@@ -87,10 +89,14 @@ async function startServer(config: ServerConfig, open = false): Promise<void> {
 
   server.listen(config.port, config.host, () => {
     const dashboardUrl = `${protocol}://${config.host}:${config.port}/dashboard`;
+    const remote = !isLoopbackHost(config.host);
     console.log(`GhostAPI listening on ${protocol}://${config.host}:${config.port}`);
     console.log(`Dashboard: ${dashboardUrl}`);
-    console.log(`Model: ${config.model}${config.offline ? " (offline)" : ""}`);
-    if (open) openUrl(dashboardUrl);
+    console.log(`Model: ${config.model}${config.offline ? " (offline)" : config.allowExternalLlm ? " (external LLM opt-in enabled)" : " (local only)"}`);
+    if (remote) {
+      console.warn("Warning: GhostAPI is bound beyond loopback. Use HTTPS or a secure tunnel because the dashboard token does not encrypt traffic.");
+    }
+    if (open) openUrl(remote && config.authToken ? `${dashboardUrl}?token=${encodeURIComponent(config.authToken)}` : dashboardUrl);
   });
 }
 
@@ -117,7 +123,8 @@ async function clearTarget(target: ClearTarget): Promise<void> {
 
 async function initProject(): Promise<void> {
   const result = await initializeLocalConfig();
-  console.log(result.created ? `Created ${CONFIG_PATH}.` : `${CONFIG_PATH} already exists.`);
+  const configPath = getDataPaths().config;
+  console.log(result.created ? `Created ${configPath}.` : `${configPath} already exists.`);
   console.log(`Model: ${result.config.model ?? DEFAULT_MODEL}`);
 }
 
@@ -213,7 +220,7 @@ async function runDoctor(portOverride: number | undefined): Promise<void> {
   checks.push({ label: "Node version", ok: major >= 20, detail: process.versions.node, hint: "Install Node.js 20 or newer." });
 
   const writeAccess = await canWriteGhostApiDir();
-  checks.push({ label: ".ghostapi write access", ok: writeAccess, detail: GHOSTAPI_DIR, hint: "Check directory permissions in the project root." });
+  checks.push({ label: "GhostAPI data write access", ok: writeAccess, detail: getDataPaths().root, hint: "Check GHOSTAPI_DATA_DIR and directory permissions." });
 
   const portAvailable = await isPortAvailable(config.host, config.port);
   checks.push({ label: "Port availability", ok: portAvailable, detail: `${config.host}:${config.port}`, hint: `Run ghostapi start --port <free-port>.` });
@@ -224,8 +231,8 @@ async function runDoctor(portOverride: number | undefined): Promise<void> {
   checks.push({
     label: "LLM API key",
     ok: true,
-    detail: config.offline ? "offline mode" : hasApiKey ? "present" : "not required; deterministic provider mocks enabled",
-    hint: hasApiKey || config.offline ? undefined : "Set GHOSTAPI_LLM_API_KEY only if you want AI-generated mocks."
+    detail: config.offline ? "offline mode" : config.allowExternalLlm ? hasApiKey ? "explicitly enabled" : "enabled without GHOSTAPI_LLM_API_KEY" : "disabled; deterministic provider mocks enabled",
+    hint: config.allowExternalLlm && !hasApiKey ? "Set GHOSTAPI_LLM_API_KEY or remove the external LLM opt-in." : undefined
   });
 
   const tlsBypass = process.env.NODE_TLS_REJECT_UNAUTHORIZED === "0";
@@ -245,9 +252,10 @@ async function runDoctor(portOverride: number | undefined): Promise<void> {
 }
 
 async function canWriteGhostApiDir(): Promise<boolean> {
+  const dataDir = getDataPaths().root;
   try {
-    await mkdir(GHOSTAPI_DIR, { recursive: true });
-    await access(GHOSTAPI_DIR, constants.W_OK);
+    await mkdir(dataDir, { recursive: true });
+    await access(dataDir, constants.W_OK);
     return true;
   } catch {
     return false;
@@ -267,7 +275,7 @@ function printHelp(): void {
   console.log(`GhostAPI CLI
 
 Usage:
-  ghostapi start [--host 127.0.0.1] [--port 8080] [--model gpt-4o-mini] [--offline] [--https] [--open]
+  ghostapi start [--host 127.0.0.1] [--port 8080] [--model gpt-4o-mini] [--offline] [--https] [--allow-external-llm] [--open]
   ghostapi open [--host 127.0.0.1] [--port 8080] [--https]
   ghostapi clear cache|state|events|all
   ghostapi model get

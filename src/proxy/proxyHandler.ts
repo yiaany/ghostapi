@@ -14,6 +14,7 @@ import { broadcastEvent } from "../server/sse.js";
 import { inferGenericService } from "../ai/genericInference.js";
 import { decideFault, waitForFault } from "../fault/faultLab.js";
 import { findApiBehavior } from "../behavior/behaviorStore.js";
+import { sanitizeSecrets } from "../security/secrets.js";
 
 
 export async function proxyHandler(request: Request, response: Response, config: ServerConfig): Promise<void> {
@@ -38,10 +39,10 @@ export async function proxyHandler(request: Request, response: Response, config:
         headers: normalizedRequest.headers,
         body: normalizedRequest.body
       },
-      response: body
+      response: sanitizeSecrets(body)
     };
-    await addEvent(event);
-    broadcastEvent(event);
+    const safeEvent = await addEvent(event);
+    broadcastEvent(safeEvent);
   }
 
   const behavior = await findApiBehavior(normalizedRequest);
@@ -55,7 +56,7 @@ export async function proxyHandler(request: Request, response: Response, config:
     return;
   }
 
-  const fault = decideFault(provider);
+  const fault = await decideFault(provider);
   if (fault.type === "error") {
     await waitForFault(fault.latencyMs);
     response.setHeader("x-ghostapi-fault-lab", "error");

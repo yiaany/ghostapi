@@ -18,7 +18,7 @@ GhostAPI runs locally as a zero-config HTTP proxy. Developers point SDKs or HTTP
 - Handles common HTTP methods: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, and `OPTIONS`.
 - Keeps internal routes like `/health`, `/dashboard`, `/events`, and `/api/*` separate from proxied traffic.
 - Designed to avoid real third-party provider calls by default.
-- Supports offline mode for deterministic local fallback behavior.
+- Supports offline mode for deterministic local fallback behavior; external LLM access requires explicit GhostAPI opt-in and never activates from ambient `OPENAI_API_KEY` alone.
 
 ### Provider Detection
 
@@ -79,7 +79,7 @@ Examples:
 ### Event Log
 
 - Captures recent proxy events in memory.
-- Persists event history to `.ghostapi/events.jsonl`.
+- Persists event history to a bounded `.ghostapi/events.jsonl` with a 5 MiB active file, two archives, and a 256 KiB per-event limit.
 - Tracks method, path, provider, status code, duration, source, sanitized request, and response.
 - Event sources include:
   - `state`
@@ -93,7 +93,7 @@ Examples:
 
 ### Live Dashboard
 
-- Available at `http://localhost:8080/dashboard`.
+- Available at `http://localhost:8080/dashboard`; non-loopback dashboard, API, and SSE access requires an explicit authentication token.
 - Built with plain HTML, CSS, and JavaScript, with no React or bundler.
 - Uses a dark Linear/Vercel-style layout.
 - Includes a sidebar, provider filters, search modal, live traffic list, and request/response details pane.
@@ -334,9 +334,10 @@ ghostapi mcp
 | --- | --- |
 | `.ghostapi/config.json` | Project-local GhostAPI config. |
 | `.ghostapi/state.json` | Local API object state. |
-| `.ghostapi/events.jsonl` | Persisted event log. |
+| `.ghostapi/events.jsonl` | Bounded persisted event log with two rotated archives. |
 | `.ghostapi/behaviors.json` | Agent-configured deterministic mock behavior. |
 | `.ghostapi/cache/*` | Cached provider responses. |
+| `.ghostapi/fault-lab.json` | Persisted Fault Lab configuration shared across local processes. |
 
 ### Safety Model
 

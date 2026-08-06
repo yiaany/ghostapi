@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createServer } from "../src/server/createServer.js";
+import { closeServer } from "./serverTestUtils.js";
 
 describe("health route", () => {
   it("returns ok", async () => {
@@ -8,7 +9,7 @@ describe("health route", () => {
     const address = server.address();
 
     if (address === null || typeof address === "string") {
-      server.close();
+      await closeServer(server);
       throw new Error("Expected TCP server address");
     }
 
@@ -17,7 +18,7 @@ describe("health route", () => {
       await expect(response.json()).resolves.toEqual({ ok: true });
       expect(response.status).toBe(200);
     } finally {
-      server.close();
+      await closeServer(server);
     }
   });
 });

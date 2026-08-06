@@ -1,13 +1,10 @@
-import { existsSync } from "node:fs";
-import { rm } from "node:fs/promises";
-import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { clearState, getStateStore, saveToStateStore } from "../src/state/stateStore.js";
 import { extractIdFromPath, extractIdFromResponse } from "../src/state/stateExtractor.js";
 import { resolveState } from "../src/state/stateResolver.js";
 import type { NormalizedRequest } from "../src/proxy/requestNormalizer.js";
-
-const STATE_FILE_PATH = join(".ghostapi", "state.json");
+import { readFile } from "node:fs/promises";
+import { getDataPaths } from "../src/config/dataPaths.js";
 
 describe("State Management", () => {
   beforeEach(async () => {
@@ -41,6 +38,14 @@ describe("State Management", () => {
       const state = await getStateStore();
       expect(Object.keys(state).length).toBe(50);
       expect(state["test:obj_49"]).toEqual({ id: 49 });
+    });
+
+    it("redacts secrets before state reaches memory or disk", async () => {
+      const secret = ["ghp", "state-secret"].join("_");
+      await saveToStateStore("github:secret", { access_token: secret, note: `Bearer ${secret}` });
+
+      expect(await getStateStore()).toEqual({ "github:secret": { access_token: "***", note: "Bearer ***" } });
+      expect(await readFile(getDataPaths().state, "utf8")).not.toContain(secret);
     });
   });
 

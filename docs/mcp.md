@@ -33,10 +33,12 @@ This writes copy-ready local snippets under `.ghostapi/agent-configs/` and proje
 
 | Tool | Purpose |
 | --- | --- |
-| `inspect_state` | Read local API objects from `.ghostapi/state.json`. |
+| `inspect_state` | Read sanitized local API objects from the configured GhostAPI data directory. |
 | `get_traffic_logs` | Inspect recent captured API traffic. |
 | `set_api_behavior` | Force a deterministic local response for `method + path`. |
 | `toggle_chaos_mode` | Enable or disable local latency and error injection. |
+
+The HTTP server and MCP process must use the same `GHOSTAPI_DATA_DIR` to share state, behaviors, and persisted Fault Lab configuration. Updates use local inter-process locking; this is not distributed coordination for network filesystems.
 
 ## Agent Prompt
 

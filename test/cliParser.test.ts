@@ -4,9 +4,9 @@ import { parseCliArgs } from "../src/cli/parser.js";
 
 describe("CLI parser", () => {
   it("parses start flags", () => {
-    expect(parseCliArgs(["start", "--port", "8443", "--host", "127.0.0.1", "--model", "gemini-flash", "--offline", "--https"])).toEqual({
+    expect(parseCliArgs(["start", "--port", "8443", "--host", "127.0.0.1", "--model", "gemini-flash", "--offline", "--https", "--allow-external-llm"])).toEqual({
       name: "start",
-      options: { port: 8443, host: "127.0.0.1", model: "gemini-flash", offline: true, https: true }
+      options: { port: 8443, host: "127.0.0.1", model: "gemini-flash", offline: true, https: true, allowExternalLlm: true }
     });
     expect(parseCliArgs(["start", "--open"])).toEqual({ name: "start", options: { open: true } });
   });

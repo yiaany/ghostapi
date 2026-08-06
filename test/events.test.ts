@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { addEvent, clearEventsHistoryForTests, getEventsHistory } from "../src/server/eventsStore.js";
+import { addEvent, clearEvents, clearEventsHistoryForTests, EVENT_LOG_ARCHIVES, getEventsHistory, MAX_EVENT_LOG_BYTES } from "../src/server/eventsStore.js";
 import { addSseClient, broadcastEvent, getSseClientCount } from "../src/server/sse.js";
-import { rm } from "node:fs/promises";
-import { join } from "node:path";
 import EventEmitter from "node:events";
+import { readFile, stat } from "node:fs/promises";
+import { getDataPaths } from "../src/config/dataPaths.js";
 
 describe("Events Store", () => {
   beforeEach(async () => {
@@ -11,7 +11,7 @@ describe("Events Store", () => {
   });
 
   afterEach(async () => {
-    await rm(join(".ghostapi", "events.jsonl"), { force: true });
+    await clearEvents();
   });
 
   it("stores events and exposes history", async () => {
@@ -41,6 +41,52 @@ describe("Events Store", () => {
     expect(history.length).toBe(200);
     expect(history[0]?.id).toBe("evt_5");
     expect(history[199]?.id).toBe("evt_204");
+  });
+
+  it("redacts secrets before exposing or persisting events", async () => {
+    const secret = ["sk", "live", "persisted-secret"].join("_");
+    const safeEvent = await addEvent({
+      id: "evt_secret",
+      timestamp: "2026-08-05T00:00:00.000Z",
+      provider: "stripe",
+      method: "POST",
+      path: "/v1/customers",
+      statusCode: 200,
+      source: "fallback",
+      durationMs: 1,
+      request: { authorization: `Bearer ${secret}` },
+      response: { client_secret: secret }
+    });
+
+    const history = JSON.stringify(getEventsHistory());
+    const persisted = await readFile(getDataPaths().events, "utf8");
+    expect(JSON.stringify(safeEvent)).not.toContain(secret);
+    expect(history).not.toContain(secret);
+    expect(persisted).not.toContain(secret);
+    expect(persisted).toContain("***");
+  });
+
+  it("rotates persisted logs at the documented byte limit", async () => {
+    const payload = "x".repeat(200 * 1024);
+    const eventCount = Math.ceil(MAX_EVENT_LOG_BYTES / Buffer.byteLength(payload)) + 2;
+    for (let index = 0; index < eventCount; index += 1) {
+      await addEvent({
+        id: `evt_large_${index}`,
+        timestamp: "2026-08-05T00:00:00.000Z",
+        provider: "generic",
+        method: "POST",
+        path: "/large",
+        statusCode: 200,
+        source: "fallback",
+        durationMs: 1,
+        request: { payload },
+        response: { index }
+      });
+    }
+
+    expect((await stat(getDataPaths().events)).size).toBeLessThanOrEqual(MAX_EVENT_LOG_BYTES);
+    await expect(stat(`${getDataPaths().events}.1`)).resolves.toBeDefined();
+    await expect(stat(`${getDataPaths().events}.${EVENT_LOG_ARCHIVES + 1}`)).rejects.toMatchObject({ code: "ENOENT" });
   });
 });
 

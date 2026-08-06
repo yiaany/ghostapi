@@ -1,4 +1,3 @@
-import { rm } from "node:fs/promises";
 import { afterEach, describe, expect, it } from "vitest";
 import { clearApiBehaviorsForTests, findApiBehavior, getApiBehaviors, setApiBehavior } from "../src/behavior/behaviorStore.js";
 import { normalizedRequestFixture } from "./fixtures/requests.js";
@@ -6,7 +5,6 @@ import { normalizedRequestFixture } from "./fixtures/requests.js";
 describe("behavior store", () => {
   afterEach(async () => {
     await clearApiBehaviorsForTests();
-    await rm(".ghostapi", { recursive: true, force: true });
   });
 
   it("sets and resolves deterministic method/path behavior", async () => {

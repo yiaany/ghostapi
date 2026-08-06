@@ -1,7 +1,10 @@
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { setApiBehavior } from "../behavior/behaviorStore.js";
 import type { ProxyEvent } from "../server/eventsStore.js";
+import { getDataPaths } from "../config/dataPaths.js";
+import { atomicWriteJson } from "../storage/fileStore.js";
+import { sanitizeSecrets } from "../security/secrets.js";
 
 export type ScenarioStep = {
   name: string;
@@ -88,8 +91,6 @@ const SCENARIOS: ScenarioPreset[] = [
   }
 ];
 
-const CUSTOM_SCENARIOS_DIR = join(".ghostapi", "scenarios");
-
 export async function listScenarioPresets(): Promise<ScenarioPreset[]> {
   return [...structuredClone(SCENARIOS), ...(await listCustomScenarios())];
 }
@@ -156,11 +157,12 @@ export async function saveEventsAsScenario(events: ProxyEvent[], input: { title?
 
 async function listCustomScenarios(): Promise<ScenarioPreset[]> {
   try {
-    const entries = await readdir(CUSTOM_SCENARIOS_DIR, { withFileTypes: true });
+    const scenariosDir = getDataPaths().scenarios;
+    const entries = await readdir(scenariosDir, { withFileTypes: true });
     const scenarios = [];
     for (const entry of entries) {
       if (entry.isFile() && entry.name.endsWith(".json")) {
-        scenarios.push(normalizeScenario(JSON.parse(await readFile(join(CUSTOM_SCENARIOS_DIR, entry.name), "utf8"))));
+        scenarios.push(normalizeScenario(JSON.parse(await readFile(join(scenariosDir, entry.name), "utf8"))));
       }
     }
     return scenarios;
@@ -172,7 +174,7 @@ async function listCustomScenarios(): Promise<ScenarioPreset[]> {
 
 async function readCustomScenario(id: string): Promise<ScenarioPreset | null> {
   try {
-    return normalizeScenario(JSON.parse(await readFile(join(CUSTOM_SCENARIOS_DIR, `${slugify(id)}.json`), "utf8")));
+    return normalizeScenario(JSON.parse(await readFile(join(getDataPaths().scenarios, `${slugify(id)}.json`), "utf8")));
   } catch (error) {
     if (error instanceof Error && "code" in error && error.code === "ENOENT") return null;
     throw error;
@@ -180,8 +182,7 @@ async function readCustomScenario(id: string): Promise<ScenarioPreset | null> {
 }
 
 async function writeScenario(scenario: ScenarioPreset): Promise<void> {
-  await mkdir(CUSTOM_SCENARIOS_DIR, { recursive: true });
-  await writeFile(join(CUSTOM_SCENARIOS_DIR, `${scenario.id}.json`), JSON.stringify(scenario, null, 2), "utf8");
+  await atomicWriteJson(join(getDataPaths().scenarios, `${scenario.id}.json`), sanitizeSecrets(scenario));
 }
 
 function normalizeScenario(input: unknown): ScenarioPreset {
@@ -190,13 +191,13 @@ function normalizeScenario(input: unknown): ScenarioPreset {
   if (typeof record.title !== "string" || record.title.trim() === "") throw new Error("Scenario title is required.");
   if (!Array.isArray(record.steps) || record.steps.length === 0) throw new Error("Scenario steps are required.");
   const id = typeof record.id === "string" && record.id.trim() !== "" ? slugify(record.id) : slugify(record.title);
-  return {
+  return sanitizeSecrets({
     id,
     title: record.title.trim(),
     provider: typeof record.provider === "string" ? record.provider : "custom",
     description: typeof record.description === "string" ? record.description : "Custom GhostAPI scenario.",
     steps: record.steps.map(normalizeStep)
-  };
+  }) as ScenarioPreset;
 }
 
 function normalizeStep(input: unknown): ScenarioStep {
