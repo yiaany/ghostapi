@@ -83,7 +83,7 @@ Planned backend: use an explicit container or VM backend before claiming egress 
 
 ### Node.js Runtime
 
-Node's Permission Model can restrict network use for a launched Node process unless `--allow-net` is granted. Node explicitly describes the model as a seat belt for trusted code and says it does not provide security guarantees against malicious code. [Node.js Permissions](https://nodejs.org/api/permissions.html)
+Node's Permission Model is activated with `--permission`; a launched Node process without `--allow-net` is denied network access. Node explicitly describes the model as a seat belt for trusted code and says it does not provide security guarantees against malicious code. [Node.js Permissions](https://nodejs.org/api/permissions.html)
 
 GhostAPI reports this as a degraded auxiliary control only. It cannot contain non-Node children, is not the future `ghostapi run` hostile-sandbox boundary, and does not replace OS-level isolation.
 

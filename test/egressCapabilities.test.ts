@@ -15,6 +15,12 @@ describe("egress capability detection", () => {
       status: "not-implemented",
       guarantee: "process-level-enforcement"
     }));
+    expect(report.capabilities).toContainEqual(expect.objectContaining({
+      id: "node-permission-model",
+      status: "degraded",
+      guarantee: "process-level-enforcement",
+      requiredPrivileges: ["Launch the target with --permission and do not grant --allow-net."]
+    }));
   });
 
   it("maps Windows to a non-green AppContainer backend", () => {
