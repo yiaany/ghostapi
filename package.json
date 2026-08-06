@@ -49,10 +49,16 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "express": "^4.19.2",
     "selfsigned": "^5.5.0",
     "zod": "^4.4.3"
+  },
+  "overrides": {
+    "@hono/node-server": "2.1.0",
+    "fast-uri": "3.1.5",
+    "hono": "4.13.0",
+    "ip-address": "10.4.0"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
