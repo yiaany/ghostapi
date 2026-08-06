@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { detectEgressCapabilities, formatEgressCapabilityReport } from "../src/egress/capabilities.js";
 
 describe("egress capability detection", () => {
-  it("reports Linux namespace support as unimplemented instead of isolated", () => {
+  it("reports Linux namespace enforcement as degraded instead of isolated until preflight", () => {
     const report = detectEgressCapabilities({ platform: "linux", arch: "x64", nodeVersion: "26.4.0", nodeNetworkPermission: true });
 
     expect(report).toMatchObject({
@@ -12,7 +12,7 @@ describe("egress capability detection", () => {
     });
     expect(report.capabilities).toContainEqual(expect.objectContaining({
       id: "linux-network-namespace",
-      status: "not-implemented",
+      status: "degraded",
       guarantee: "process-level-enforcement"
     }));
     expect(report.capabilities).toContainEqual(expect.objectContaining({
@@ -55,7 +55,7 @@ describe("egress capability detection", () => {
     const human = formatEgressCapabilityReport(report);
 
     expect(JSON.parse(json)).toMatchObject({ schemaVersion: 1, isolated: false, currentGuarantee: "http-proxy-guidance" });
-    expect(human).toContain("Status: NOT ISOLATED");
+    expect(human).toContain("Status: NO PROCESS LAUNCHED");
     expect(human).toContain("No system-wide proxy or firewall rules were inspected or changed.");
   });
 });

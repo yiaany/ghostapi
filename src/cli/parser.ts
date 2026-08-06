@@ -8,6 +8,7 @@ export type CliCommand =
   | { name: "providers-list" }
   | { name: "providers-inspect"; provider: string }
   | { name: "doctor"; options: DoctorOptions }
+  | { name: "run"; options: RunOptions }
   | { name: "init" }
   | { name: "setup"; options: SetupOptions }
   | { name: "open"; options: OpenOptions }
@@ -29,6 +30,12 @@ export type DoctorOptions = {
   port?: number;
   egress?: boolean;
   json?: boolean;
+};
+
+export type RunOptions = {
+  port?: number;
+  allowHosts: string[];
+  command: string[];
 };
 
 export type SetupOptions = {
@@ -88,6 +95,10 @@ export function parseCliArgs(args: string[]): CliCommand {
 
   if (command === "doctor") {
     return { name: "doctor", options: parseDoctorOptions(args.slice(1)) };
+  }
+
+  if (command === "run") {
+    return { name: "run", options: parseRunOptions(args.slice(1)) };
   }
 
   if (command === "init") {
@@ -211,6 +222,37 @@ function parseDoctorOptions(args: string[]): DoctorOptions {
     throw new CliError(`Unknown doctor option: ${arg}`, "Supported options: --port 8080, --egress, --json");
   }
   if (options.json && !options.egress) throw new CliError("--json requires --egress.", "Use: ghostapi doctor --egress --json");
+  return options;
+}
+
+function parseRunOptions(args: string[]): RunOptions {
+  const separatorIndex = args.indexOf("--");
+  if (separatorIndex === -1) {
+    throw new CliError("Missing command separator for ghostapi run.", "Use: ghostapi run [--port 8080] [--allow-host localhost] -- <command> [args...]");
+  }
+
+  const command = args.slice(separatorIndex + 1);
+  if (command.length === 0) {
+    throw new CliError("Missing command for ghostapi run.", "Use: ghostapi run -- <command> [args...]");
+  }
+
+  const options: RunOptions = { allowHosts: [], command };
+  const optionArgs = args.slice(0, separatorIndex);
+  for (let index = 0; index < optionArgs.length; index += 1) {
+    const arg = optionArgs[index]!;
+    if (arg === "--port") {
+      options.port = parsePort(readValue(optionArgs, index, arg), "--port");
+      index += 1;
+      continue;
+    }
+    if (arg === "--allow-host") {
+      options.allowHosts.push(readValue(optionArgs, index, arg));
+      index += 1;
+      continue;
+    }
+    throw new CliError(`Unknown run option: ${arg}`, "Supported options: --port 8080, --allow-host localhost");
+  }
+
   return options;
 }
 

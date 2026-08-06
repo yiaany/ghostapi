@@ -52,6 +52,8 @@ That creates a bad default loop:
 
 GhostAPI gives agents a local universe where integrations behave like real providers, but every request stays on your machine.
 
+On supported Linux hosts, `ghostapi run -- <command>` adds a loopback-only namespace boundary for a target process and its ordinary descendants. It fails closed when that boundary cannot be created; it is not a proxy fallback or a hostile-code filesystem sandbox. See the [egress threat model](docs/security/egress-threat-model.md).
+
 ## What GhostAPI Does
 
 GhostAPI is a local API control layer for agent-driven development.
