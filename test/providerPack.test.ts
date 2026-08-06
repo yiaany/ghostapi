@@ -26,7 +26,7 @@ describe("ProviderPack", () => {
     expect(runProviderPackConformance(stripePack, deterministicRuntime)).toEqual({
       provider: "stripe",
       apiVersion: "2026-02-25.clover",
-      fixtures: 1
+      fixtures: 2
     });
     expect(deterministicRuntime.requireCapability("clock").now().toISOString()).toBe("2026-08-06T12:00:00.000Z");
   });
@@ -73,7 +73,7 @@ describe("ProviderPack", () => {
     expect(getProviderPack("stripe")).toBe(stripePack);
     expect(getProviderManifests()).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: "resend", implementation: "pack", packVersion: "1.0.0", apiVersions: { default: "v1", supported: ["v1"] } }),
-      expect.objectContaining({ name: "stripe", implementation: "pack", packVersion: "1.0.0", apiVersions: { default: "2026-02-25.clover", supported: ["2026-02-25.clover"] } }),
+      expect.objectContaining({ name: "stripe", implementation: "pack", packVersion: "1.1.0", apiVersions: { default: "2026-02-25.clover", supported: ["2026-02-25.clover"] } }),
       expect.objectContaining({ name: "generic", implementation: "fallback" })
     ]));
   });

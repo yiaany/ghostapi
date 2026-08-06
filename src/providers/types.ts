@@ -30,6 +30,12 @@ export type ProviderResponse = {
   status: number;
   headers: Record<string, string>;
   body: unknown;
+  /**
+   * Internal writes produced alongside the primary response resource. They are
+   * committed atomically by the stateful-pack transaction and never serialized
+   * to the provider client.
+   */
+  stateWrites?: readonly { key: string; value: unknown }[];
 };
 
 export type ProviderStateTransition = {

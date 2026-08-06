@@ -84,7 +84,7 @@ describe("proxy handler", () => {
       const response = await fetch(`${baseUrl}/v1/customers`, { method: "POST" });
       const body = await response.json();
 
-      expect(response.headers.get("x-ghostapi-provider-pack")).toBe("stripe@1.0.0");
+      expect(response.headers.get("x-ghostapi-provider-pack")).toBe("stripe@1.1.0");
       expect(body).toMatchObject({ object: "customer", livemode: false });
     });
   });
