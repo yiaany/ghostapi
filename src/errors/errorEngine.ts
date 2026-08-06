@@ -1,18 +1,18 @@
 import type { NormalizedRequest } from "../proxy/requestNormalizer.js";
-import type { ProviderName, ProviderErrorDetails } from "../providers/types.js";
+import type { ProviderName, ProviderErrorDetails, ProviderPackExecution } from "../providers/types.js";
 import { isJsonObject } from "../utils/json.js";
 
-export function validateRequest(request: NormalizedRequest, provider: ProviderName): ProviderErrorDetails | null {
+export function validateRequest(request: NormalizedRequest, provider: ProviderName, execution?: ProviderPackExecution): ProviderErrorDetails | null {
+  if (execution !== undefined) {
+    return execution.pack.validate(execution.parsedRequest, request);
+  }
+
   if (provider === "stripe") {
     return validateStripe(request);
   }
 
   if (provider === "twilio") {
     return validateTwilio(request);
-  }
-
-  if (provider === "resend") {
-    return validateResend(request);
   }
 
   return null;
@@ -53,26 +53,6 @@ function validateTwilio(request: NormalizedRequest): ProviderErrorDetails | null
     }
     if (!body["Body"] && !body["MediaUrl"]) {
       return { status: 400, message: "Message body is required.", code: 21602 };
-    }
-  }
-
-  return null;
-}
-
-function validateResend(request: NormalizedRequest): ProviderErrorDetails | null {
-  if (request.method !== "POST") return null;
-
-  const body = isJsonObject(request.body) ? request.body : {};
-
-  if (request.path === "/emails" || request.path.startsWith("/emails/")) {
-    if (!body["from"]) {
-      return { status: 400, message: "Missing required field: from", type: "validation_error" };
-    }
-    if (!body["to"]) {
-      return { status: 400, message: "Missing required field: to", type: "validation_error" };
-    }
-    if (!body["subject"]) {
-      return { status: 400, message: "Missing required field: subject", type: "validation_error" };
     }
   }
 

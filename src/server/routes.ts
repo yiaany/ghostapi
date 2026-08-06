@@ -14,6 +14,7 @@ import { exportScenario, importScenario, listScenarioPresets, replayScenario, sa
 import { generateAgentPrompt } from "../agents/agentPrompt.js";
 import { generateVitestFromEvent } from "../tests/testGenerator.js";
 import { generateSafetyReport } from "../report/safetyReport.js";
+import { getProviderManifests } from "../providers/registry.js";
 
 const PROXY_METHODS = ["get", "post", "put", "patch", "delete", "head", "options"] as const;
 const CLEAR_TARGETS = ["cache", "state", "events", "all"] as const;
@@ -41,6 +42,10 @@ export function registerRoutes(app: Express, config: ServerConfig): void {
 
   app.get("/api/events", (_request: Request, response: Response) => {
     response.status(200).json(getEventsHistory());
+  });
+
+  app.get("/api/providers", (_request: Request, response: Response) => {
+    response.status(200).json(getProviderManifests());
   });
 
   app.get("/api/fault-lab", async (_request: Request, response: Response, next: NextFunction) => {

@@ -43,9 +43,34 @@ let scenarios = [];
 // Initialize
 async function init() {
   setupInteractions();
+  await fetchProviderManifests();
   await fetchFaultLab();
   await fetchHistory();
   setupSSE();
+}
+
+async function fetchProviderManifests() {
+  try {
+    const res = await fetch('/api/providers');
+    const manifests = await res.json();
+    if (!res.ok || !Array.isArray(manifests)) return;
+
+    for (const manifest of manifests) {
+      const item = document.getElementById(`nav-${manifest.name}`);
+      if (!item) continue;
+      const enabledCapabilities = Object.entries(manifest.capabilities ?? {}).filter(([, enabled]) => enabled).map(([name]) => name);
+      item.title = `${manifest.displayName}: ${enabledCapabilities.join(', ') || 'no declared capabilities'}`;
+      const right = document.createElement('div');
+      right.className = 'nav-item-right';
+      const badge = document.createElement('div');
+      badge.className = 'sc-badge';
+      badge.textContent = manifest.packVersion ? `${manifest.packVersion} / ${manifest.apiVersions.default}` : manifest.implementation;
+      right.appendChild(badge);
+      item.appendChild(right);
+    }
+  } catch(error) {
+    console.warn('Provider manifest load failed', error);
+  }
 }
 
 // Side-effects & Listeners
@@ -453,7 +478,7 @@ function renderList() {
     const matchesSearch = path.toLowerCase().includes(query) || 
                           provider.toLowerCase().includes(query) ||
                           requestText.includes(query);
-    const matchesFilter = currentFilter === 'all' || provider === currentFilter;
+    const matchesFilter = currentFilter === 'all' || provider === currentFilter || provider.startsWith(`${currentFilter}:`);
     return matchesSearch && matchesFilter;
   });
 

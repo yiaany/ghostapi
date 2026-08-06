@@ -1,12 +1,7 @@
 import type { IncomingHttpHeaders } from "node:http";
-import { isRegisteredProvider, type ProviderName } from "../providers/index.js";
+import { detectProviderPack, isRegisteredProvider, type ProviderDetectionInput, type ProviderName } from "../providers/index.js";
 
-export type ProviderDetectionInput = {
-  path: string;
-  headers?: IncomingHttpHeaders | Record<string, string | string[]>;
-  query?: Record<string, unknown>;
-  body?: unknown;
-};
+export type { ProviderDetectionInput } from "../providers/index.js";
 
 export type Provider = ProviderName;
 
@@ -32,9 +27,8 @@ export function detectProvider(inputOrPath: ProviderDetectionInput | string, hea
     return "twilio";
   }
 
-  if (normalizedPath === "/emails" || normalizedPath.startsWith("/emails/")) {
-    return "resend";
-  }
+  const packedProvider = detectProviderPack({ path: normalizedPath });
+  if (packedProvider !== null) return packedProvider;
 
   if (normalizedPath.startsWith("/repos/") || normalizedPath.startsWith("/user/") || normalizedPath === "/user" || normalizedHeaders["x-github-api-version"] !== undefined) {
     return "github";

@@ -15,6 +15,9 @@ import { inferGenericService } from "../ai/genericInference.js";
 import { decideFault, waitForFault } from "../fault/faultLab.js";
 import { findApiBehavior } from "../behavior/behaviorStore.js";
 import { sanitizeSecrets } from "../security/secrets.js";
+import { getProviderPack } from "../providers/registry.js";
+import { assertProviderStateTransition, getProviderPackHeaders, prepareProviderPackExecution } from "../providers/runtime.js";
+import type { ProviderPackExecution } from "../providers/types.js";
 
 
 export async function proxyHandler(request: Request, response: Response, config: ServerConfig): Promise<void> {
@@ -22,6 +25,13 @@ export async function proxyHandler(request: Request, response: Response, config:
   const provider = detectProvider({ path: request.path, headers: request.headers, query: request.query, body: request.body });
   const normalizedRequest = normalizeRequest(request);
   const providerLabel = provider === "generic" ? inferGenericService(normalizedRequest.path, normalizedRequest.query, normalizedRequest.body) : provider;
+  const pack = getProviderPack(provider);
+  const preparedPack = pack === null ? null : prepareProviderPackExecution(pack, normalizedRequest);
+  const packExecution: ProviderPackExecution | undefined = preparedPack !== null && !("error" in preparedPack) ? preparedPack : undefined;
+
+  if (packExecution !== undefined) {
+    for (const [key, value] of Object.entries(getProviderPackHeaders(packExecution))) response.setHeader(key, value);
+  }
   
   async function completeRequest(source: EventSource, status: number, body: unknown) {
     const durationMs = Math.round(performance.now() - t0);
@@ -71,7 +81,15 @@ export async function proxyHandler(request: Request, response: Response, config:
     await waitForFault(fault.latencyMs);
   }
 
-  const validationError = validateRequest(normalizedRequest, provider);
+  if (preparedPack !== null && "error" in preparedPack) {
+    const formattedError = createProviderError(provider, preparedPack.error);
+    response.setHeader("x-ghostapi-provider-pack", `${pack!.name}@${pack!.manifest.packVersion}`);
+    response.status(preparedPack.error.status).json(formattedError);
+    await completeRequest("error", preparedPack.error.status, formattedError);
+    return;
+  }
+
+  const validationError = validateRequest(normalizedRequest, provider, packExecution);
   if (validationError !== null) {
     const formattedError = createProviderError(provider, validationError);
     response.status(validationError.status).json(formattedError);
@@ -102,7 +120,7 @@ export async function proxyHandler(request: Request, response: Response, config:
     return;
   }
 
-  const generatedOption = await generateAiMock(normalizedRequest, provider, response, config);
+  const generatedOption = await generateAiMock(normalizedRequest, provider, response, config, packExecution);
 
   if (generatedOption === "streamed") {
     await completeRequest("stream", 200, { streamed: true });
@@ -115,7 +133,18 @@ export async function proxyHandler(request: Request, response: Response, config:
     body: generatedOption.body
   });
 
-  if (["POST", "PUT", "PATCH"].includes(normalizedRequest.method)) {
+  if (packExecution !== undefined) {
+    const transition = packExecution.pack.transitionState({
+      request: normalizedRequest,
+      response: generatedOption,
+      apiVersion: packExecution.apiVersion,
+      runtime: packExecution.runtime
+    });
+    if (transition !== null) {
+      assertProviderStateTransition(packExecution.pack, transition);
+      await saveToStateStore(transition.key, transition.value);
+    }
+  } else if (["POST", "PUT", "PATCH"].includes(normalizedRequest.method)) {
     const extractedId = extractIdFromResponse(generatedOption.body);
     if (extractedId !== undefined) {
       await saveToStateStore(`${provider}:${extractedId}`, generatedOption.body);

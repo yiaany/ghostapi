@@ -5,6 +5,7 @@ import type { ProxyEvent } from "../server/eventsStore.js";
 import { getDataPaths } from "../config/dataPaths.js";
 import { atomicWriteJson } from "../storage/fileStore.js";
 import { sanitizeSecrets } from "../security/secrets.js";
+import { getProviderScenarios } from "../providers/registry.js";
 
 export type ScenarioStep = {
   name: string;
@@ -59,21 +60,7 @@ const SCENARIOS: ScenarioPreset[] = [
       }
     ]
   },
-  {
-    id: "resend-email-send",
-    title: "Resend email send",
-    provider: "resend",
-    description: "Returns a delivered email ID for transactional email flows.",
-    steps: [
-      {
-        name: "Send email",
-        method: "POST",
-        path: "/emails",
-        status: 200,
-        body: { id: "email_ghostapi_123", object: "email", status: "sent" }
-      }
-    ]
-  },
+  ...getProviderScenarios(),
   {
     id: "github-issue-create",
     title: "GitHub issue create",

@@ -88,12 +88,12 @@ Before adding a new native adapter, ask whether generic fallback plus prompt hin
 
 If a native adapter is justified:
 
-1. Add the adapter under `src/providers/`.
-2. Register it in `src/providers/registry.ts`.
-3. Add detection rules in `src/proxy/providerDetector.ts`.
-4. Add provider-specific prompt guidance in `src/ai/prompts.ts` only if useful.
-5. Add tests for detection, formatting, validation, and proxy behavior.
-6. Update README provider matrix.
+1. Read `docs/providers/authoring-packs.md`.
+2. Add one built-in pack under `src/providers/packs/`.
+3. Register it in `src/providers/registry.ts` without changing generic fallback.
+4. Add deterministic conformance fixtures and provider regression tests.
+5. Do not import network, filesystem, environment, or state-store capabilities into the pack.
+6. Update README provider coverage and the versioned capability manifest.
 
 ## Adding Prompt Hints
 
