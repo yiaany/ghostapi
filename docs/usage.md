@@ -28,14 +28,28 @@ Remote access protects dashboard/control routes with the token, but the token do
 
 ## Egress Diagnosis
 
-Before relying on a future `ghostapi run` backend, inspect the host-specific boundary that GhostAPI can honestly provide:
+Before relying on `ghostapi run`, inspect the host-specific boundary that GhostAPI can honestly provide:
 
 ```bash
 ghostapi doctor --egress
 ghostapi doctor --egress --json
 ```
 
-The current release always reports `NOT ISOLATED`: it provides local HTTP proxy guidance, not process containment. The JSON output is stable for CI/tooling and identifies the available platform primitives, required setup, and remaining bypasses without probing production network access. See [`docs/security/egress-threat-model.md`](security/egress-threat-model.md) for the security model.
+The diagnostic is stable for CI/tooling and identifies platform primitives, required setup, and remaining bypasses without probing production network access. It is not proof that a run succeeded. See [`docs/security/egress-threat-model.md`](security/egress-threat-model.md) for the security model.
+
+## Run With Linux Egress Enforcement
+
+On Linux hosts where unprivileged user, mount, network and PID namespaces are available, run a command with a loopback-only network namespace:
+
+```bash
+ghostapi run -- npm test
+```
+
+The target and all ordinary descendants have no external route, DNS path or non-loopback IP interface. GhostAPI starts inside the same namespace at `http://127.0.0.1:8080`; the target receives `GHOSTAPI_BASE_URL`, `GHOSTAPI_HOST`, `GHOSTAPI_PORT`, `GHOSTAPI_PROTOCOL`, and `GHOSTAPI_OPENAI_BASE_URL`.
+
+`ghostapi run` fails closed on Windows, macOS, hosts without a successful namespace preflight, and any external `--allow-host` value. There is no proxy-only fallback. The current backend does not transparently intercept provider TLS hostnames or provide individual audit records for kernel-denied socket attempts. Do not mount or expose same-user container-control UNIX sockets to untrusted code; this is not a hostile-code filesystem sandbox.
+
+Each run writes sanitized lifecycle evidence under `.ghostapi/runs/<run-id>/run.json`. The command, argument values and environment secrets are not persisted there; allowed GhostAPI request traffic remains in the run's isolated GhostAPI event log.
 
 ## Send A Local Request
 

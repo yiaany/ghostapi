@@ -14,6 +14,7 @@ import { DEFAULT_MODEL, loadServerConfig, type ServerConfig } from "../config/se
 import { initializeLocalConfig, readLocalConfig, writeLocalConfig } from "../config/localConfig.js";
 import { getDataPaths } from "../config/dataPaths.js";
 import { detectEgressCapabilities, formatEgressCapabilityReport } from "../egress/capabilities.js";
+import { EgressRunError, runEgressCommand } from "../egress/run.js";
 import { isLoopbackHost } from "../server/accessControl.js";
 import { getProviderManifests, isRegisteredProvider, providerRegistry } from "../providers/registry.js";
 import { parseCliArgs, type ClearTarget, type OpenOptions } from "./parser.js";
@@ -49,6 +50,11 @@ async function main(): Promise<void> {
     case "doctor":
       await runDoctor(command.options);
       return;
+    case "run": {
+      const result = await runEgressCommand(command.options);
+      process.exitCode = result.exitCode;
+      return;
+    }
     case "init":
       await initProject();
       return;
@@ -300,11 +306,12 @@ Usage:
   ghostapi mcp
   ghostapi doctor [--port 8080]
   ghostapi doctor --egress [--json]
+  ghostapi run [--port 8080] [--allow-host localhost] -- <command> [args...]
   ghostapi init`);
 }
 
 main().catch((error: unknown) => {
-  if (error instanceof CliError) {
+  if (error instanceof CliError || error instanceof EgressRunError) {
     console.error(`Error: ${error.message}`);
     if (error.hint) console.error(`Hint: ${error.hint}`);
     process.exit(1);

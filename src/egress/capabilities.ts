@@ -65,7 +65,7 @@ export function detectEgressCapabilities(input: EgressRuntimeInput = {}): Egress
     runtime,
     isolated: false,
     currentGuarantee: "http-proxy-guidance",
-    summary: "GhostAPI currently provides HTTP proxy guidance only. No process is isolated by this version of GhostAPI.",
+    summary: "This diagnostic has not launched an isolated process. Linux ghostapi run can provide loopback-only namespace enforcement after successful local preflight.",
     capabilities,
     globalStateChanged: false,
     remainingBypasses: [...PROXY_BYPASSES, ...HOSTILE_BYPASSES],
@@ -77,8 +77,8 @@ export function formatEgressCapabilityReport(report: EgressCapabilityReport): st
   const lines = [
     "GhostAPI egress diagnosis",
     `Runtime: ${report.runtime.platform}/${report.runtime.arch}, Node.js ${report.runtime.nodeVersion}`,
-    "Status: NOT ISOLATED",
-    "Current guarantee: HTTP proxy guidance only",
+    "Status: NO PROCESS LAUNCHED",
+    "Current diagnostic guarantee: HTTP proxy guidance only",
     "",
     "Capabilities:"
   ];
@@ -133,11 +133,11 @@ function createPlatformCapabilities(platform: NodeJS.Platform): EgressCapability
         {
           id: "linux-network-namespace",
           title: "Linux network namespace",
-          status: "not-implemented",
+          status: "degraded",
           guarantee: "process-level-enforcement",
-          detail: "Linux network namespaces can isolate network devices, routing tables, protocol stacks, ports, DNS paths, and netfilter state; GhostAPI does not launch one yet.",
-          requiredPrivileges: ["A preflight must prove that the host permits creating the required user and network namespaces, or provide the required capabilities."],
-          remainingBypasses: ["A future launcher must close inherited sockets and keep the target process out of the host network namespace.", ...HOSTILE_BYPASSES]
+          detail: "ghostapi run uses a fresh user, mount, and network namespace with loopback-only GhostAPI. It fails closed unless local unshare and ip preflight succeeds.",
+          requiredPrivileges: ["util-linux unshare, iproute2 ip, and host policy allowing the required unprivileged user, mount, and network namespaces."],
+          remainingBypasses: ["Denied kernel socket attempts are enforced but not individually attributable by this backend.", "The target must use GhostAPI loopback configuration; TLS provider-host interception is not implemented.", "Filesystem UNIX sockets that the same user can access, such as a mounted container-control socket, are outside this network-namespace boundary.", ...HOSTILE_BYPASSES]
         },
         createContainerCapability("An OCI runtime configured with a no-network mode")
       ];
@@ -197,7 +197,7 @@ function createContainerCapability(requirement: string): EgressCapability {
 
 function architectureFor(platform: NodeJS.Platform): string[] {
   const nativeStep = platform === "linux"
-    ? "Implement a Linux launcher that creates a fresh user and network namespace, keeps only loopback, validates setup before spawning, and tears down by process lifetime."
+    ? "Linux launcher is available with user, mount, and network namespaces plus loopback-only GhostAPI; add a reviewed policy gateway before supporting external allowlist routes or transparent provider-host TLS interception."
     : platform === "win32"
       ? "Implement a Windows AppContainer/LPAC launcher with no network capabilities, a per-run profile, and deterministic profile cleanup."
       : platform === "darwin"

@@ -39,6 +39,17 @@ describe("CLI parser", () => {
     expect(parseCliArgs(["init"])).toEqual({ name: "init" });
   });
 
+  it("parses run commands without passing through a shell", () => {
+    expect(parseCliArgs(["run", "--port", "9080", "--allow-host", "localhost", "--", "node", "script.mjs", "--secret=sk_live_fixture"])).toEqual({
+      name: "run",
+      options: {
+        port: 9080,
+        allowHosts: ["localhost"],
+        command: ["node", "script.mjs", "--secret=sk_live_fixture"]
+      }
+    });
+  });
+
   it("parses setup and mcp", () => {
     expect(parseCliArgs(["setup"])).toEqual({ name: "setup", options: {} });
     expect(parseCliArgs(["setup", "--write"])).toEqual({ name: "setup", options: { write: true } });
@@ -59,5 +70,8 @@ describe("CLI parser", () => {
     expect(() => parseCliArgs(["model", "set"])).toThrow("Missing model name");
     expect(() => parseCliArgs(["providers", "inspect"])).toThrow("Missing provider name");
     expect(() => parseCliArgs(["doctor", "--json"])).toThrow("--json requires --egress");
+    expect(() => parseCliArgs(["run", "node", "script.mjs"])).toThrow("Missing command separator");
+    expect(() => parseCliArgs(["run", "--"])).toThrow("Missing command for ghostapi run");
+    expect(() => parseCliArgs(["run", "--allow-host", "localhost", "--unknown", "--", "node"])).toThrow("Unknown run option");
   });
 });
