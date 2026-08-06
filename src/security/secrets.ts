@@ -8,6 +8,7 @@ const SECRET_FIELD_NAMES = [
   "access_token",
   "refresh_token",
   "client_secret",
+  "cvc",
   "password",
   "secret",
   "token",
@@ -39,16 +40,16 @@ export function isSecretFieldName(name: string): boolean {
   return SECRET_FIELD_NAMES.some((secretName) => normalizedName.includes(secretName));
 }
 
-function sanitizeValue(value: unknown): unknown {
+function sanitizeValue(value: unknown, parentKey?: string): unknown {
   if (Array.isArray(value)) {
-    return value.map(sanitizeValue);
+    return value.map((entry) => sanitizeValue(entry, parentKey));
   }
 
   if (value !== null && typeof value === "object") {
     return Object.fromEntries(
       Object.entries(value as Record<string, unknown>).map(([key, entryValue]) => [
         key,
-        isSecretFieldName(key) ? maskByType(entryValue) : sanitizeValue(entryValue)
+        isSecretFieldName(key) || isCardNumberField(key, parentKey) ? maskByType(entryValue) : sanitizeValue(entryValue, key)
       ])
     );
   }
@@ -58,6 +59,10 @@ function sanitizeValue(value: unknown): unknown {
   }
 
   return value;
+}
+
+function isCardNumberField(key: string, parentKey: string | undefined): boolean {
+  return key.toLowerCase() === "number" && parentKey !== undefined && /(?:card|payment_method)/i.test(parentKey);
 }
 
 function maskByType(value: unknown): unknown {

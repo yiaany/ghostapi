@@ -78,7 +78,6 @@ function generateOfflineMock(request: NormalizedRequest, provider: string): unkn
     return generateGenericOfflineMock(request);
   }
 
-  if (provider === "stripe") return generateStripeOfflineMock(request);
   if (provider === "openai") return generateOpenAiOfflineMock(request);
   if (provider === "twilio") return generateTwilioOfflineMock(request);
   if (provider === "github") return generateGithubOfflineMock(request);
@@ -95,68 +94,6 @@ function generateOfflineMock(request: NormalizedRequest, provider: string): unkn
     method: request.method,
     path: request.path,
     status: "ok"
-  };
-}
-
-function generateStripeOfflineMock(request: NormalizedRequest): unknown {
-  const path = request.path;
-  const body = copyObjectBody(request.body);
-
-  if (isLikelyCollectionPath(request.method, path)) {
-    return annotateMock({ object: "list", data: [annotateMock(stripeObjectForPath(path, body), request, "stripe")], has_more: false, url: path }, request, "stripe");
-  }
-
-  return annotateMock(stripeObjectForPath(path, body), request, "stripe");
-}
-
-function stripeObjectForPath(path: string, body: Record<string, unknown>): Record<string, unknown> {
-  const now = Math.floor(Date.now() / 1000);
-
-  if (path.includes("/payment_intents")) {
-    return {
-      id: `pi_mock_${Date.now().toString(36)}`,
-      object: "payment_intent",
-      amount: readNumber(body.amount, 2000),
-      currency: readString(body.currency, "usd"),
-      status: body.confirm === true || body.confirm === "true" ? "succeeded" : "requires_payment_method",
-      client_secret: `pi_mock_secret_${Date.now().toString(36)}`,
-      livemode: false,
-      created: now,
-      metadata: readRecord(body.metadata)
-    };
-  }
-
-  if (path.includes("/customers")) {
-    return {
-      id: `cus_mock_${Date.now().toString(36)}`,
-      object: "customer",
-      email: readString(body.email, "customer@example.com"),
-      name: readString(body.name, "GhostAPI Customer"),
-      livemode: false,
-      created: now,
-      metadata: readRecord(body.metadata)
-    };
-  }
-
-  if (path.includes("/checkout/sessions")) {
-    return {
-      id: `cs_test_mock_${Date.now().toString(36)}`,
-      object: "checkout.session",
-      mode: readString(body.mode, "payment"),
-      payment_status: "paid",
-      status: "complete",
-      url: "https://checkout.stripe.com/c/pay/mock_ghostapi",
-      livemode: false,
-      created: now
-    };
-  }
-
-  return {
-    id: `stripe_mock_${Date.now().toString(36)}`,
-    object: inferResourceName(path),
-    livemode: false,
-    created: now,
-    ...body
   };
 }
 
@@ -248,11 +185,6 @@ function annotateMock<T extends Record<string, unknown>>(body: T, request: Norma
 
 function readString(value: unknown, fallback: string): string {
   return typeof value === "string" && value.trim() !== "" ? value : fallback;
-}
-
-function readNumber(value: unknown, fallback: number): number {
-  const number = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
-  return Number.isFinite(number) ? number : fallback;
 }
 
 function readRecord(value: unknown): Record<string, unknown> {

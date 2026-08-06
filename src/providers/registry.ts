@@ -3,12 +3,12 @@ import { genericAdapter } from "./generic.js";
 import { githubAdapter } from "./github.js";
 import { openaiAdapter } from "./openai.js";
 import { resendPack } from "./packs/resendPack.js";
-import { stripeAdapter } from "./stripe.js";
+import { stripePack } from "./packs/stripePack.js";
 import { twilioAdapter } from "./twilio.js";
 import type { ProviderAdapter, ProviderName, ProviderPack, ProviderPackDetectionInput, ProviderPackManifest, ProviderScenario } from "./types.js";
 
 export const providerRegistry = {
-  stripe: stripeAdapter,
+  stripe: stripePack,
   twilio: twilioAdapter,
   resend: resendPack,
   github: githubAdapter,
@@ -17,11 +17,11 @@ export const providerRegistry = {
   generic: genericAdapter
 } satisfies Record<ProviderName, ProviderAdapter>;
 
-const providerPacks = [resendPack] satisfies ProviderPack[];
+const providerPacks = [stripePack, resendPack] satisfies ProviderPack[];
 const providerPacksByPriority = [...providerPacks].sort((left, right) => right.detection.priority - left.detection.priority);
 
 const legacyCapabilities: Record<ProviderName, ProviderPackManifest["capabilities"]> = {
-  stripe: capabilities({ validation: true, scenarios: true }),
+  stripe: stripePack.manifest.capabilities,
   twilio: capabilities({ validation: true }),
   resend: resendPack.manifest.capabilities,
   github: capabilities({ scenarios: true }),

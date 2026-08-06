@@ -119,10 +119,14 @@ export const resendPack: ProviderPack = {
       body: { id, provider: "resend", method: request.method, path: request.path }
     };
   },
+  createResponseHeaders() {
+    return {};
+  },
   transitionState({ request, response }): ProviderStateTransition | null {
     if (!isMutation(request.method) || !isJsonObject(response.body) || typeof response.body.id !== "string") return null;
     return { key: `resend:${response.body.id}`, value: response.body };
   },
+  stateful: false,
   formatError(details: ProviderErrorDetails) {
     return {
       statusCode: details.status,

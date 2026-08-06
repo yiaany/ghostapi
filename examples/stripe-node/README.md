@@ -1,6 +1,6 @@
-# Stripe Node Example
+# Stripe Node Checkout Flow
 
-Create and fetch a Stripe-like customer through GhostAPI. This does not call Stripe.
+Run the official Stripe Node SDK against GhostAPI without patching SDK source. This example only talks to `127.0.0.1`; it does not call Stripe.
 
 ## Run
 
@@ -10,20 +10,26 @@ Start GhostAPI:
 ghostapi start
 ```
 
-Create a customer:
+Install the SDK once in this example directory:
 
 ```bash
-curl -X POST http://localhost:8080/v1/customers \
-  -H "content-type: application/json" \
-  -H "authorization: Bearer stripe_test_local_only" \
-  -d '{"email":"ada@example.com","name":"Ada Lovelace","metadata":{"source":"ghostapi-example"}}'
+npm install stripe
 ```
 
-Copy the returned `id`, then fetch it:
+Run the checkout flow:
 
 ```bash
-curl http://localhost:8080/v1/customers/cus_mock_example \
-  -H "authorization: Bearer stripe_test_local_only"
+node checkout-flow.mjs
 ```
 
-GhostAPI detects Stripe from the `/v1/customers` path and keeps the created object in `.ghostapi/state.json`.
+The script creates a customer, confirmed Payment Intent, Checkout Session, and refund, then prints their IDs.
+
+The core pack accepts SDK-style `application/x-www-form-urlencoded` requests and JSON requests used by direct HTTP clients. It uses Stripe API version `2026-02-25.clover`.
+
+To inspect the generated state:
+
+```bash
+curl http://127.0.0.1:8080/v1/payment_intents?limit=10
+```
+
+See [`docs/providers/stripe-core-pack.md`](../../docs/providers/stripe-core-pack.md) for supported operations and deliberate limits.

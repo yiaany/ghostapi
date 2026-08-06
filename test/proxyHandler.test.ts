@@ -32,7 +32,7 @@ describe("proxy handler", () => {
       // 1. Create
       const postResp = await fetch(`${baseUrl}/v1/customers`, { method: "POST", body: '{"email":"a@b.com"}' });
       const createdObj = await postResp.json();
-      expect(createdObj.id).toMatch(/^cus_mock_/);
+      expect(createdObj.id).toMatch(/^cus_/);
       expect(createdObj.object).toBe("customer");
 
       // 2. Read by ID (Cache bypassed, hitting State)
@@ -79,12 +79,13 @@ describe("proxy handler", () => {
     });
   });
 
-  it("includes detected provider in the mock response", async () => {
+  it("runs Stripe customer creation through the versioned pack", async () => {
     await withServer(async (baseUrl) => {
       const response = await fetch(`${baseUrl}/v1/customers`, { method: "POST" });
       const body = await response.json();
 
-      expect(body).toMatchObject({ provider: "stripe", method: "POST", path: "/v1/customers" });
+      expect(response.headers.get("x-ghostapi-provider-pack")).toBe("stripe@1.0.0");
+      expect(body).toMatchObject({ object: "customer", livemode: false });
     });
   });
 
@@ -99,8 +100,8 @@ describe("proxy handler", () => {
 
       expect(response.status).toBe(200);
       expect(body).toMatchObject({ object: "payment_intent", amount: 2400, currency: "usd", status: "succeeded", livemode: false });
-      expect(body.id).toMatch(/^pi_mock_/);
-      expect(body.client_secret).toMatch(/^pi_mock_secret_/);
+      expect(body.id).toMatch(/^pi_/);
+      expect(body.client_secret).toMatch(/^pi_.*_secret_ghostapi$/);
     });
   });
 
@@ -142,7 +143,7 @@ describe("proxy handler", () => {
     });
   });
 
-  it("returns identical provider response bodies on cache miss and hit", async () => {
+  it("bypasses response caching for stateful Stripe pack mutations", async () => {
     await withServer(async (baseUrl) => {
       const request = () => fetch(`${baseUrl}/v1/payment_intents`, {
         method: "POST",
@@ -154,20 +155,21 @@ describe("proxy handler", () => {
       const second = await request();
       const secondBody = await second.json();
 
-      expect(first.headers.get("x-ghostapi-cache")).toBe("MISS");
-      expect(second.headers.get("x-ghostapi-cache")).toBe("HIT");
-      expect(secondBody).toEqual(firstBody);
-      expect(secondBody.client_secret).toMatch(/^pi_mock_secret_/);
+      expect(first.headers.get("x-ghostapi-cache")).toBe("BYPASS");
+      expect(second.headers.get("x-ghostapi-cache")).toBe("BYPASS");
+      expect(secondBody.id).not.toBe(firstBody.id);
+      expect(secondBody.client_secret).toMatch(/^pi_.*_secret_ghostapi$/);
     });
   });
 
-  it("detects Stripe authorization without exposing the raw secret", async () => {
+  it("returns diagnostic errors without exposing detected Stripe authorization", async () => {
     await withServer(async (baseUrl) => {
       const stripeTestKey = ["sk", "test", "abc123"].join("_");
       const response = await fetch(`${baseUrl}/anything`, { method: "POST", headers: { authorization: `Bearer ${stripeTestKey}` } });
       const body = await response.json();
 
-      expect(body).toMatchObject({ provider: "stripe", method: "POST", path: "/anything" });
+      expect(response.status).toBe(404);
+      expect(body.error.code).toBe("resource_missing");
       expect(JSON.stringify(body)).not.toContain(stripeTestKey);
     });
   });

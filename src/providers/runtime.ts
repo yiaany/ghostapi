@@ -8,13 +8,16 @@ import type {
 } from "./types.js";
 import type { NormalizedRequest } from "../proxy/requestNormalizer.js";
 
+let defaultIdSequence = 0;
+
 export function createProviderRuntime(overrides: Partial<ProviderRuntimeCapabilities> = {}): ProviderRuntime {
   const clock = overrides.clock ?? { now: () => new Date() };
   const capabilities: ProviderRuntimeCapabilities = {
     clock,
     idGenerator: overrides.idGenerator ?? {
-      create: (prefix) => `${prefix}_${clock.now().getTime().toString(36)}`
-    }
+      create: (prefix) => `${prefix}_${clock.now().getTime().toString(36)}${(defaultIdSequence += 1).toString(36).padStart(4, "0")}`
+    },
+    state: overrides.state ?? { snapshot: () => ({}) }
   };
 
   return {
@@ -52,7 +55,9 @@ export function getProviderPackHeaders(execution: ProviderPackExecution): Record
 }
 
 export function assertProviderStateTransition(pack: ProviderPack, transition: ProviderStateTransition): void {
-  if (!transition.key.startsWith(`${pack.name}:`) || transition.key.length <= pack.name.length + 1) {
-    throw new Error(`Provider pack ${pack.name} returned an invalid state transition key.`);
+  for (const write of [transition, ...(transition.additionalWrites ?? [])]) {
+    if (!write.key.startsWith(`${pack.name}:`) || write.key.length <= pack.name.length + 1) {
+      throw new Error(`Provider pack ${pack.name} returned an invalid state transition key.`);
+    }
   }
 }
