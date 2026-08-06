@@ -1,5 +1,7 @@
 const SECRET_FIELD_NAMES = [
   "authorization",
+  "cookie",
+  "set-cookie",
   "api_key",
   "apikey",
   "x-api-key",

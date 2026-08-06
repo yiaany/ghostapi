@@ -1,6 +1,7 @@
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
-import { randomUUID } from "node:crypto";
+import { readFile, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { getDataPaths } from "../config/dataPaths.js";
+import { atomicWriteJson, ensurePrivateDirectory } from "../storage/fileStore.js";
 
 export type CacheEntry = {
   status: number;
@@ -8,15 +9,13 @@ export type CacheEntry = {
   body: unknown;
 };
 
-const BASE_CACHE_DIR = ".ghostapi/cache";
-
 export async function initializeCacheDir(): Promise<void> {
-  await mkdir(BASE_CACHE_DIR, { recursive: true });
+  await ensurePrivateDirectory(getDataPaths().cache);
 }
 
 export async function getCachedResponse(provider: string, hash: string): Promise<CacheEntry | null> {
   try {
-    const filePath = join(BASE_CACHE_DIR, provider, `${hash}.json`);
+    const filePath = cacheFilePath(provider, hash);
     const content = await readFile(filePath, "utf8");
     return JSON.parse(content) as CacheEntry;
   } catch (error) {
@@ -28,19 +27,18 @@ export async function getCachedResponse(provider: string, hash: string): Promise
 }
 
 export async function setCachedResponse(provider: string, hash: string, entry: CacheEntry): Promise<void> {
-  const providerDir = join(BASE_CACHE_DIR, provider);
-  const filePath = join(providerDir, `${hash}.json`);
-  const tempFilePath = join(providerDir, `${hash}.tmp.${randomUUID()}`);
-
-  await mkdir(providerDir, { recursive: true });
-
-  const content = JSON.stringify(entry, null, 2);
-  
-  await writeFile(tempFilePath, content, "utf8");
-  await rename(tempFilePath, filePath);
+  const filePath = cacheFilePath(provider, hash);
+  await atomicWriteJson(filePath, entry);
 }
 
 export async function clearCache(): Promise<void> {
-  await rm(BASE_CACHE_DIR, { recursive: true, force: true });
+  await rm(getDataPaths().cache, { recursive: true, force: true });
   await initializeCacheDir();
+}
+
+function cacheFilePath(provider: string, hash: string): string {
+  if (!/^[a-z0-9_-]+$/i.test(provider) || !/^[a-z0-9_-]+$/i.test(hash)) {
+    throw new Error("Cache provider and hash must contain only letters, numbers, underscores, or hyphens.");
+  }
+  return join(getDataPaths().cache, provider, `${hash}.json`);
 }

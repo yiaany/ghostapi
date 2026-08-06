@@ -21,6 +21,7 @@ export type StartOptions = {
   model?: string;
   offline?: boolean;
   https?: boolean;
+  allowExternalLlm?: boolean;
   open?: boolean;
 };
 
@@ -129,6 +130,10 @@ function parseStartOptions(args: string[]): StartOptions {
       options.open = true;
       continue;
     }
+    if (arg === "--allow-external-llm") {
+      options.allowExternalLlm = true;
+      continue;
+    }
     if (arg === "--host") {
       options.host = readValue(args, index, arg);
       index += 1;
@@ -144,7 +149,7 @@ function parseStartOptions(args: string[]): StartOptions {
       index += 1;
       continue;
     }
-    throw new CliError(`Unknown start option: ${arg}`, "Supported options: --host, --port, --model, --offline, --https, --open");
+    throw new CliError(`Unknown start option: ${arg}`, "Supported options: --host, --port, --model, --offline, --https, --allow-external-llm, --open");
   }
   return options;
 }

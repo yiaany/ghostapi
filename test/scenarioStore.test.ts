@@ -1,4 +1,5 @@
 import { rm } from "node:fs/promises";
+import { getDataPaths } from "../src/config/dataPaths.js";
 import { afterEach, describe, expect, it } from "vitest";
 import { findApiBehavior } from "../src/behavior/behaviorStore.js";
 import { exportScenario, importScenario, listScenarioPresets, replayScenario, saveEventsAsScenario, shareScenario } from "../src/scenarios/scenarioStore.js";
@@ -6,7 +7,7 @@ import { normalizedRequestFixture } from "./fixtures/requests.js";
 
 describe("scenario presets", () => {
   afterEach(async () => {
-    await rm(".ghostapi", { recursive: true, force: true });
+    await rm(getDataPaths().scenarios, { recursive: true, force: true });
   });
 
   it("lists, exports, shares, and replays provider scenarios", async () => {

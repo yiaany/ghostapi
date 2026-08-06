@@ -42,7 +42,7 @@ function sortObject<T extends Record<string, unknown>>(obj: T): T {
 
 function stableStringify(value: unknown): string {
   if (Array.isArray(value)) {
-    const stringifiedArr = value.map(stableStringify).sort();
+    const stringifiedArr = value.map(stableStringify);
     return `[${stringifiedArr.join(",")}]`;
   }
 

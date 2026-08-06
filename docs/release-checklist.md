@@ -59,9 +59,16 @@ Confirm the package includes only intended release files and does not include:
 ## Safety Checks
 
 - GhostAPI does not make real provider API calls by default.
-- LLM usage requires explicit API key configuration and receives sanitized requests.
+- Ambient `OPENAI_API_KEY` does not enable external LLM access.
+- LLM usage requires explicit opt-in plus `GHOSTAPI_LLM_API_KEY`, and receives sanitized requests.
 - Dashboard events are sanitized.
+- State and persisted event files do not contain secret fixtures used by security tests.
 - Cache keys do not include raw secrets.
+- Ordered request arrays produce distinct cache keys when their order changes.
+- Concurrent child-process state and behavior writes preserve all covered updates.
+- Persisted events rotate at 5 MiB and retain no more than two archives.
+- Non-loopback startup fails without a strong `GHOSTAPI_AUTH_TOKEN`; dashboard APIs and SSE reject missing tokens.
+- Generated tests honor `GHOSTAPI_BASE_URL` instead of requiring port 8080.
 - CLI user errors are actionable and do not print confusing stack traces.
 
 ## Publish

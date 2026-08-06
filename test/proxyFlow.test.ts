@@ -1,5 +1,4 @@
-import { rm } from "node:fs/promises";
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createServer } from "../src/server/createServer.js";
 import { clearCache } from "../src/cache/index.js";
 import { clearEvents, getEventsHistory } from "../src/server/eventsStore.js";
@@ -8,6 +7,7 @@ import { resetFaultLabForTests } from "../src/fault/faultLab.js";
 import { clearApiBehaviorsForTests, setApiBehavior } from "../src/behavior/behaviorStore.js";
 import type { ServerConfig } from "../src/config/serverConfig.js";
 import { genericTaskBody, stripeCustomerCreateBody } from "./fixtures/requests.js";
+import { closeServer } from "./serverTestUtils.js";
 
 const baseConfig = { host: "127.0.0.1", port: 8080, model: "gpt-4o-mini" } satisfies ServerConfig;
 
@@ -17,14 +17,14 @@ async function withServer<T>(config: ServerConfig, test: (baseUrl: string) => Pr
   const address = server.address();
 
   if (address === null || typeof address === "string") {
-    server.close();
+    await closeServer(server);
     throw new Error("Expected TCP server address");
   }
 
   try {
     return await test(`http://127.0.0.1:${address.port}`);
   } finally {
-    server.close();
+    await closeServer(server);
   }
 }
 
@@ -33,12 +33,8 @@ describe("proxy flow integration", () => {
     await clearState();
     await clearCache();
     await clearEvents();
-    resetFaultLabForTests();
+    await resetFaultLabForTests();
     await clearApiBehaviorsForTests();
-  });
-
-  afterAll(async () => {
-    await rm(".ghostapi", { recursive: true, force: true });
   });
 
   it("serves state hits before cache or AI", async () => {

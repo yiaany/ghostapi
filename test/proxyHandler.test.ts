@@ -1,8 +1,8 @@
-import { rm } from "node:fs/promises";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { createServer } from "../src/server/createServer.js";
 import { clearState } from "../src/state/stateStore.js";
 import { clearCache } from "../src/cache/index.js";
+import { closeServer } from "./serverTestUtils.js";
 
 async function withServer<T>(test: (baseUrl: string) => Promise<T>): Promise<T> {
   const app = await createServer({ host: "127.0.0.1", port: 8080, model: "gpt-4o-mini" });
@@ -10,14 +10,14 @@ async function withServer<T>(test: (baseUrl: string) => Promise<T>): Promise<T> 
   const address = server.address();
 
   if (address === null || typeof address === "string") {
-    server.close();
+    await closeServer(server);
     throw new Error("Expected TCP server address");
   }
 
   try {
     return await test(`http://127.0.0.1:${address.port}`);
   } finally {
-    server.close();
+    await closeServer(server);
   }
 }
 
@@ -25,10 +25,6 @@ describe("proxy handler", () => {
   beforeEach(async () => {
     await clearState();
     await clearCache();
-  });
-
-  afterAll(async () => {
-    await rm(".ghostapi", { recursive: true, force: true });
   });
 
   it("synchronizes state between POST, GET by id, and GET list", async () => {
@@ -105,6 +101,25 @@ describe("proxy handler", () => {
       expect(body).toMatchObject({ object: "payment_intent", amount: 2400, currency: "usd", status: "succeeded", livemode: false });
       expect(body.id).toMatch(/^pi_mock_/);
       expect(body.client_secret).toMatch(/^pi_mock_secret_/);
+    });
+  });
+
+  it("returns identical provider response bodies on cache miss and hit", async () => {
+    await withServer(async (baseUrl) => {
+      const request = () => fetch(`${baseUrl}/v1/payment_intents`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ amount: 2400, currency: "usd" })
+      });
+      const first = await request();
+      const firstBody = await first.json();
+      const second = await request();
+      const secondBody = await second.json();
+
+      expect(first.headers.get("x-ghostapi-cache")).toBe("MISS");
+      expect(second.headers.get("x-ghostapi-cache")).toBe("HIT");
+      expect(secondBody).toEqual(firstBody);
+      expect(secondBody.client_secret).toMatch(/^pi_mock_secret_/);
     });
   });
 

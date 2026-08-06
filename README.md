@@ -246,11 +246,14 @@ curl -X POST http://127.0.0.1:8080/tasks \
 ## Safety Model
 
 - No real provider calls by default.
+- Ambient `OPENAI_API_KEY` does not enable outbound traffic. External LLM generation requires `--allow-external-llm` or `GHOSTAPI_ALLOW_EXTERNAL_LLM=true` plus `GHOSTAPI_LLM_API_KEY`.
 - Keep SDKs pointed at `http://127.0.0.1:8080`.
 - Use fake local keys like `stripe_test_ghostapi` and `sk-ghostapi`.
 - Secrets are masked before logs, cache, dashboard, events, and prompts.
 - Chaos Mode is opt-in.
-- Local state lives under `.ghostapi/` and is gitignored.
+- Local state defaults to `.ghostapi/`, is gitignored, and can be isolated with `GHOSTAPI_DATA_DIR`.
+- Non-loopback dashboard access requires a strong `GHOSTAPI_AUTH_TOKEN` and should use HTTPS or a secure tunnel.
+- GhostAPI is not a host-level network-isolation boundary; provider simulation routes follow the configured bind address. On a remote bind with external LLM generation enabled, proxy requests also require the dashboard token.
 
 ## Local Files
 
@@ -258,14 +261,18 @@ curl -X POST http://127.0.0.1:8080/tasks \
 | --- | --- |
 | `.ghostapi/config.json` | Local GhostAPI config. |
 | `.ghostapi/state.json` | Simulated API object state. |
-| `.ghostapi/events.jsonl` | Captured local request events. |
+| `.ghostapi/events.jsonl` | Captured local request events; 5 MiB active file plus two archives. |
 | `.ghostapi/behaviors.json` | Deterministic behavior overrides. |
 | `.ghostapi/cache/` | Local response cache. |
+| `.ghostapi/fault-lab.json` | Persisted Fault Lab configuration shared with MCP. |
+
+On POSIX systems GhostAPI requests owner-only permissions. On Windows, effective permissions inherit from the data directory ACL. Local lock files coordinate cooperating processes on one filesystem, not distributed or synchronized copies.
 
 ## CLI Reference
 
 ```bash
 npx @yiaany/ghostapi start --open
+npx @yiaany/ghostapi start --allow-external-llm
 npx @yiaany/ghostapi open
 npx @yiaany/ghostapi setup --write
 npx @yiaany/ghostapi mcp

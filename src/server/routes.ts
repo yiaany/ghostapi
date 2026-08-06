@@ -43,13 +43,17 @@ export function registerRoutes(app: Express, config: ServerConfig): void {
     response.status(200).json(getEventsHistory());
   });
 
-  app.get("/api/fault-lab", (_request: Request, response: Response) => {
-    response.status(200).json(getFaultLabConfig());
+  app.get("/api/fault-lab", async (_request: Request, response: Response, next: NextFunction) => {
+    try {
+      response.status(200).json(await getFaultLabConfig());
+    } catch (error) {
+      next(error);
+    }
   });
 
-  app.post("/api/fault-lab", (req: Request, res: Response) => {
+  app.post("/api/fault-lab", async (req: Request, res: Response) => {
     try {
-      res.status(200).json(updateFaultLabConfig(req.body));
+      res.status(200).json(await updateFaultLabConfig(req.body));
     } catch (error) {
       const message = error instanceof Error ? error.message : "Invalid Fault Lab config.";
       res.status(400).json({ error: { code: "invalid_fault_lab_config", message } });

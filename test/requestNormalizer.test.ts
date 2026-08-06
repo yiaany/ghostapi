@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { normalizeRequest } from "../src/proxy/requestNormalizer.js";
 
 describe("normalizeRequest", () => {
-  it("returns method, path, query, sanitized headers, body, rawBody, and receivedAt", () => {
+  it("returns method, path, query, sanitized headers, body, and receivedAt without unsafe rawBody", () => {
     const stripeTestKey = ["sk", "test", "abc123"].join("_");
 
     const request = {
@@ -12,7 +12,8 @@ describe("normalizeRequest", () => {
       headers: {
         authorization: "Bearer real-token",
         "content-type": "application/json",
-        "x-api-key": "secret-key"
+        "x-api-key": "secret-key",
+        cookie: "ghostapi_dashboard_token=random-cookie-secret"
       },
       body: { name: "Ada", token: stripeTestKey },
       rawBody: '{"name":"Ada"}'
@@ -26,17 +27,19 @@ describe("normalizeRequest", () => {
     expect(normalized.headers).toMatchObject({
       authorization: "Bearer ***",
       "content-type": "application/json",
-      "x-api-key": "***"
+      "x-api-key": "***",
+      cookie: "***"
     });
     expect(normalized.body).toEqual({ name: "Ada", token: "***" });
-    expect(normalized.rawBody).toBe('{"name":"Ada"}');
+    expect(normalized).not.toHaveProperty("rawBody");
     expect(Date.parse(normalized.receivedAt)).not.toBeNaN();
   });
 
-  it("omits rawBody when it is not available", () => {
-    const normalized = normalizeRequest({ method: "GET", path: "/items", query: {}, headers: {}, body: undefined } as never);
+  it("redacts known secret patterns embedded in URL paths", () => {
+    const secret = ["sk", "live", "path-secret"].join("_");
+    const normalized = normalizeRequest({ method: "GET", path: `/files/${secret}`, query: {}, headers: {}, body: undefined } as never);
 
-    expect(normalized).not.toHaveProperty("rawBody");
+    expect(normalized.path).toBe("/files/***");
   });
 
   it("handles binary buffer bodies gracefully", () => {

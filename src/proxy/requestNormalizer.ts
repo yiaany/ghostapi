@@ -1,6 +1,6 @@
 import type { Request } from "express";
 import { sanitizeHeaders } from "../security/headerSanitizer.js";
-import { sanitizeSecrets } from "../security/secrets.js";
+import { sanitizeSecrets, sanitizeSecretString } from "../security/secrets.js";
 
 export type NormalizedRequest = {
   method: string;
@@ -8,23 +8,18 @@ export type NormalizedRequest = {
   query: Record<string, unknown>;
   headers: Record<string, string | string[]>;
   body: unknown;
-  rawBody?: string;
   receivedAt: string;
 };
 
 export function normalizeRequest(request: Request): NormalizedRequest {
   const normalized: NormalizedRequest = {
     method: request.method,
-    path: request.path,
+    path: sanitizeSecretString(request.path),
     query: sanitizeRecord(request.query),
     headers: sanitizeHeaders(request.headers),
     body: sanitizeSecrets(getSafeBody(request)),
     receivedAt: new Date().toISOString()
   };
-
-  if (request.rawBody !== undefined) {
-    normalized.rawBody = request.rawBody;
-  }
 
   return normalized;
 }

@@ -1,11 +1,12 @@
 import { existsSync } from "node:fs";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { clearCache, getCachedResponse, setCachedResponse } from "../src/cache/index.js";
 import { createCacheKey } from "../src/proxy/cacheKey.js";
+import { getDataPaths } from "../src/config/dataPaths.js";
 
-const TEST_DIR = ".ghostapi";
+const TEST_DIR = getDataPaths().root;
 
 describe("Response Cache", () => {
   beforeEach(async () => {
@@ -15,7 +16,6 @@ describe("Response Cache", () => {
 
   afterEach(async () => {
     await clearCache();
-    await rm(TEST_DIR, { recursive: true, force: true });
   });
 
   describe("API", () => {
@@ -46,7 +46,7 @@ describe("Response Cache", () => {
   });
 
   describe("Cache Key", () => {
-    it("sorts array elements for stability", () => {
+    it("preserves array order because ordered payloads have different semantics", () => {
       const key1 = createCacheKey(
         { method: "GET", path: "/", query: {}, headers: {}, body: { items: [{ id: 1 }, { id: 2 }] }, receivedAt: "" },
         "generic"
@@ -57,7 +57,15 @@ describe("Response Cache", () => {
         "generic"
       );
 
-      expect(key1).toBe(key2);
+      expect(key1).not.toBe(key2);
+    });
+
+    it("distinguishes reordered OpenAI messages", () => {
+      const request = (messages: unknown[]) => ({ method: "POST", path: "/v1/chat/completions", query: {}, headers: {}, body: { messages }, receivedAt: "" });
+      const userFirst = createCacheKey(request([{ role: "user", content: "Question" }, { role: "assistant", content: "Answer" }]), "openai");
+      const assistantFirst = createCacheKey(request([{ role: "assistant", content: "Answer" }, { role: "user", content: "Question" }]), "openai");
+
+      expect(userFirst).not.toBe(assistantFirst);
     });
 
     it("includes specific headers in the key", () => {

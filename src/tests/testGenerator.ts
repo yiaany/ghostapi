@@ -15,9 +15,11 @@ export function generateVitestFromEvent(event: ProxyEvent): GeneratedTest {
     content: [
       "import { describe, expect, it } from \"vitest\";",
       "",
+      "const baseUrl = process.env.GHOSTAPI_BASE_URL ?? \"http://127.0.0.1:8080\";",
+      "",
       `describe(${JSON.stringify(`GhostAPI ${event.provider}`)}, () => {`,
       `  it(${JSON.stringify(`${event.method} ${event.path} returns ${event.statusCode}`)}, async () => {`,
-      `    const response = await fetch(\`http://127.0.0.1:8080${event.path}\`, {`,
+      `    const response = await fetch(\`\${baseUrl}${event.path}\`, {`,
       `      method: ${JSON.stringify(event.method)}${headersLine}${bodyLine}`,
       "    });",
       "",

@@ -56,7 +56,7 @@ export async function startMcpServer(): Promise<void> {
         retryAfterSeconds: z.number().int().min(0).max(120).optional()
       }
     },
-    async (args) => jsonResult({ faultLab: updateFaultLabConfig({ ...getFaultLabConfig(), ...args }) })
+    async (args) => jsonResult({ faultLab: await updateFaultLabConfig(args) })
   );
 
   await server.connect(new StdioServerTransport());

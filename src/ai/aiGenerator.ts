@@ -24,7 +24,7 @@ export async function generateAiMock(request: NormalizedRequest, provider: Provi
 
   let body: unknown = null;
 
-  if (config.offline || !config.apiKey) {
+  if (config.offline || config.allowExternalLlm !== true || !config.apiKey) {
     return {
       status: 200,
       headers: { "content-type": "application/json" },

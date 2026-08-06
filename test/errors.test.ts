@@ -3,6 +3,7 @@ import { createServer } from "../src/server/createServer.js";
 import { clearState } from "../src/state/stateStore.js";
 import { clearCache } from "../src/cache/index.js";
 import { createProviderError } from "../src/errors/providerErrors.js";
+import { closeServer } from "./serverTestUtils.js";
 
 async function withServer<T>(test: (baseUrl: string) => Promise<T>): Promise<T> {
   const app = await createServer({ host: "127.0.0.1", port: 8080, model: "gpt-4o-mini" });
@@ -10,14 +11,14 @@ async function withServer<T>(test: (baseUrl: string) => Promise<T>): Promise<T> 
   const address = server.address();
 
   if (address === null || typeof address === "string") {
-    server.close();
+    await closeServer(server);
     throw new Error("Expected TCP server address");
   }
 
   try {
     return await test(`http://127.0.0.1:${address.port}`);
   } finally {
-    server.close();
+    await closeServer(server);
   }
 }
 
