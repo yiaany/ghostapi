@@ -115,13 +115,13 @@ function createNodePermissionCapability(supportsNetworkPermission: boolean): Egr
     id: "node-permission-model",
     title: "Node.js Permission Model",
     status: supportsNetworkPermission ? "degraded" : "unsupported",
-    guarantee: "http-proxy-guidance",
+    guarantee: "process-level-enforcement",
     detail: supportsNetworkPermission
-      ? "Recent Node.js releases can deny network access to a Node process, but the model is a seat belt for trusted code, not hostile-code sandboxing."
+      ? "A Node process started with --permission and without --allow-net can deny network access, but the model is a seat belt for trusted code, not hostile-code sandboxing."
       : "This Node.js version does not provide a supported network-deny control suitable for GhostAPI egress enforcement.",
-    requiredPrivileges: [],
+    requiredPrivileges: supportsNetworkPermission ? ["Launch the target with --permission and do not grant --allow-net."] : [],
     remainingBypasses: supportsNetworkPermission
-      ? ["It applies only to the launched Node process and is not a defense against malicious code or other processes."]
+      ? ["It applies only to the launched Node process and does not provide security guarantees against malicious code or other processes."]
       : ["Any Node program, child process, or native tool can still create network connections."]
   };
 }
