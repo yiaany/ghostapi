@@ -24,7 +24,7 @@ export function createCacheKey(normalizedRequest: NormalizedRequest, provider: s
 }
 
 function extractImportantHeaders(headers: NormalizedRequest["headers"]): Record<string, string | string[]> {
-  const importantKeys = ["content-type", "accept", "stripe-version", "x-github-api-version", "twilio-version"];
+  const importantKeys = ["content-type", "accept", "stripe-version", "x-github-api-version", "twilio-version", "x-ghostapi-api-version"];
   const result: Record<string, string | string[]> = {};
 
   for (const key of importantKeys) {

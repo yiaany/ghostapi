@@ -6,7 +6,8 @@ import { askLLM } from "./aiClient.js";
 import { getSystemPrompt, getUserPrompt } from "./prompts.js";
 import { repairJson } from "./jsonRepair.js";
 import { createProviderError } from "../errors/index.js";
-import type { ProviderName } from "../providers/types.js";
+import { getProviderPackHeaders } from "../providers/runtime.js";
+import type { ProviderName, ProviderPackExecution } from "../providers/types.js";
 import { inferResourceName, isLikelyCollectionPath } from "./genericInference.js";
 
 export type AiMockResponse = {
@@ -15,11 +16,21 @@ export type AiMockResponse = {
   body: unknown;
 };
 
-export async function generateAiMock(request: NormalizedRequest, provider: ProviderName, response: Response, config: ServerConfig): Promise<AiMockResponse | "streamed"> {
+export async function generateAiMock(request: NormalizedRequest, provider: ProviderName, response: Response, config: ServerConfig, execution?: ProviderPackExecution): Promise<AiMockResponse | "streamed"> {
   const isStreamRequested = hasBooleanFlag(request.body, "stream") || hasBooleanFlag(request.query, "stream") || request.headers.accept === "text/event-stream";
 
   if (isStreamRequested) {
     return handleStreamResponse(request, provider, response);
+  }
+
+  if (execution !== undefined) {
+    const generated = execution.pack.handleDeterministic({
+      request,
+      parsedRequest: execution.parsedRequest,
+      apiVersion: execution.apiVersion,
+      runtime: execution.runtime
+    });
+    return { ...generated, headers: { ...generated.headers, ...getProviderPackHeaders(execution) } };
   }
 
   let body: unknown = null;
@@ -70,7 +81,6 @@ function generateOfflineMock(request: NormalizedRequest, provider: string): unkn
   if (provider === "stripe") return generateStripeOfflineMock(request);
   if (provider === "openai") return generateOpenAiOfflineMock(request);
   if (provider === "twilio") return generateTwilioOfflineMock(request);
-  if (provider === "resend") return generateResendOfflineMock(request);
   if (provider === "github") return generateGithubOfflineMock(request);
   if (provider === "discord") return generateDiscordOfflineMock(request);
 
@@ -177,10 +187,6 @@ function generateTwilioOfflineMock(request: NormalizedRequest): unknown {
     body: readString(body.Body ?? body.body, "Mock message from GhostAPI."),
     date_created: new Date().toUTCString()
   }, request, "twilio");
-}
-
-function generateResendOfflineMock(request: NormalizedRequest): unknown {
-  return annotateMock({ id: `email_mock_${Date.now().toString(36)}` }, request, "resend");
 }
 
 function generateGithubOfflineMock(request: NormalizedRequest): unknown {

@@ -14,7 +14,7 @@ import { DEFAULT_MODEL, loadServerConfig, type ServerConfig } from "../config/se
 import { initializeLocalConfig, readLocalConfig, writeLocalConfig } from "../config/localConfig.js";
 import { getDataPaths } from "../config/dataPaths.js";
 import { isLoopbackHost } from "../server/accessControl.js";
-import { isRegisteredProvider, providerRegistry } from "../providers/registry.js";
+import { getProviderManifests, isRegisteredProvider, providerRegistry } from "../providers/registry.js";
 import { parseCliArgs, type ClearTarget, type OpenOptions } from "./parser.js";
 import { CliError } from "./errors.js";
 import { startMcpServer } from "../mcp/server.js";
@@ -196,8 +196,9 @@ async function setModel(model: string): Promise<void> {
 }
 
 function listProviders(): void {
-  for (const adapter of Object.values(providerRegistry)) {
-    console.log(`${adapter.name.padEnd(8)} ${adapter.displayName}`);
+  for (const manifest of getProviderManifests()) {
+    const version = manifest.packVersion === null ? manifest.implementation : `pack ${manifest.packVersion}`;
+    console.log(`${manifest.name.padEnd(8)} ${manifest.displayName} (${version})`);
   }
 }
 
@@ -206,9 +207,14 @@ function inspectProvider(provider: string): void {
     throw new CliError(`Unknown provider: ${provider}`, `Run ghostapi providers list to see supported providers.`);
   }
   const adapter = providerRegistry[provider];
+  const manifest = getProviderManifests().find((candidate) => candidate.name === provider);
+  if (manifest === undefined) throw new CliError(`Provider manifest missing: ${provider}`);
   console.log(`${adapter.displayName}`);
   console.log(`Name: ${adapter.name}`);
-  console.log(`Mode: ${adapter.name === "generic" ? "fallback" : "built-in adapter"}`);
+  console.log(`Mode: ${manifest.implementation}`);
+  console.log(`Pack version: ${manifest.packVersion ?? "n/a"}`);
+  console.log(`API versions: ${manifest.apiVersions?.supported.join(", ") ?? "legacy"}`);
+  console.log(`Capabilities: ${Object.entries(manifest.capabilities).filter(([, enabled]) => enabled).map(([name]) => name).join(", ")}`);
   console.log("Error formatting: supported");
 }
 

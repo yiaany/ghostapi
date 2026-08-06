@@ -78,6 +78,23 @@ Runtime files default to `.ghostapi/`. Set `GHOSTAPI_DATA_DIR` to isolate tests 
 
 Generated Vitest files read `GHOSTAPI_BASE_URL`, falling back to `http://127.0.0.1:8080`, so CI can use an ephemeral or custom port.
 
+## Provider Capabilities
+
+Inspect built-in providers and their implementation mode from the CLI:
+
+```bash
+ghostapi providers list
+ghostapi providers inspect resend
+```
+
+The dashboard reads the same versioned capability manifests from:
+
+```text
+GET http://127.0.0.1:8080/api/providers
+```
+
+Resend is the first provider migrated to the `ProviderPack` contract. Its deterministic responses include `x-ghostapi-provider-pack` and `x-ghostapi-api-version`. Select the current GhostAPI compatibility version explicitly with `x-ghostapi-api-version: v1`. Other providers remain available through legacy adapters while they are migrated one at a time. Generic REST remains the fallback.
+
 ## Failure Scenarios
 
 Use MCP or the dashboard to force deterministic responses such as Stripe card declines, rate limits, upstream errors, and latency.

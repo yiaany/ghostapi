@@ -1,4 +1,5 @@
 import type { ProviderName } from "../providers/types.js";
+import { getProviderPack } from "../providers/registry.js";
 import { inferGenericService, inferResourceName, isLikelyCollectionPath, isLikelyResourceByIdPath } from "./genericInference.js";
 
 export function getSystemPrompt(provider: ProviderName): string {
@@ -7,6 +8,11 @@ Your job is to generate a realistic JSON response for a given authenticated HTTP
 Return ONLY valid JSON. No markdown wrapping unless explicitly requested, no explanations, no text before or after the JSON.
 Keep IDs seemingly real, but prefixed with mock identifiers where appropriate (e.g. mock_cus_123).
 `;
+
+  const pack = getProviderPack(provider);
+  if (pack !== null) {
+    return `${base}\n${pack.promptHints.map((hint) => `- ${hint}`).join("\n")}\n`;
+  }
 
   switch (provider) {
     case "stripe":
@@ -21,11 +27,6 @@ Keep IDs seemingly real, but prefixed with mock identifiers where appropriate (e
 - This is the Twilio REST API.
 - Use Twilio structures. Return SID, account_sid, date_created, etc.
 - Always include 'uri' ending in .json.
-`;
-    case "resend":
-      return `${base}
-- This is the Resend Email API.
-- The standard response for sending an email is a single object with an 'id' string.
 `;
     case "github":
       return `${base}

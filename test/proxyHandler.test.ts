@@ -104,6 +104,44 @@ describe("proxy handler", () => {
     });
   });
 
+  it("runs Resend through its versioned pack and persists its state transition", async () => {
+    await withServer(async (baseUrl) => {
+      const createResponse = await fetch(`${baseUrl}/emails`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-ghostapi-api-version": "v1" },
+        body: JSON.stringify({ from: "sender@example.com", to: "reader@example.com", subject: "Hello" })
+      });
+      const created = await createResponse.json();
+
+      expect(createResponse.status).toBe(200);
+      expect(createResponse.headers.get("x-ghostapi-provider-pack")).toBe("resend@1.0.0");
+      expect(createResponse.headers.get("x-ghostapi-api-version")).toBe("v1");
+      expect(created).toMatchObject({ provider: "resend", method: "POST", path: "/emails" });
+      expect(created.id).toMatch(/^email_mock_/);
+
+      const readResponse = await fetch(`${baseUrl}/emails/${created.id}`);
+      expect(readResponse.headers.get("x-ghostapi-state")).toBe("HIT");
+      await expect(readResponse.json()).resolves.toEqual(created);
+    });
+  });
+
+  it("returns a provider-shaped error for an unsupported pack API version", async () => {
+    await withServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/emails`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-ghostapi-api-version": "v2" },
+        body: JSON.stringify({ from: "sender@example.com", to: "reader@example.com", subject: "Hello" })
+      });
+
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toEqual({
+        statusCode: 400,
+        name: "invalid_api_version",
+        message: "Unsupported Resend API version: v2. Supported versions: v1."
+      });
+    });
+  });
+
   it("returns identical provider response bodies on cache miss and hit", async () => {
     await withServer(async (baseUrl) => {
       const request = () => fetch(`${baseUrl}/v1/payment_intents`, {

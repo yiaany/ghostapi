@@ -9,5 +9,7 @@ describe("dashboard assets", () => {
     expect(app).toContain("document.createElement('div')");
     expect(app).toContain("path.textContent = String(ev.path ?? '')");
     expect(app).toContain("async function copyText");
+    expect(app).toContain("fetch('/api/providers')");
+    expect(app).toContain("provider === currentFilter || provider.startsWith(`${currentFilter}:`)");
   });
 });

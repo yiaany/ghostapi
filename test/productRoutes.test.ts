@@ -57,6 +57,19 @@ describe("product routes", () => {
     });
   });
 
+  it("exposes provider pack versions and capabilities", async () => {
+    await withServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/providers`);
+      const manifests = await response.json() as Array<Record<string, unknown>>;
+
+      expect(response.status).toBe(200);
+      expect(manifests).toEqual(expect.arrayContaining([
+        expect.objectContaining({ name: "resend", implementation: "pack", packVersion: "1.0.0" }),
+        expect.objectContaining({ name: "generic", implementation: "fallback" })
+      ]));
+    });
+  });
+
   it("blocks cross-origin dashboard API mutations", async () => {
     await withServer(async (baseUrl) => {
       const response = await fetch(`${baseUrl}/api/fault-lab`, {

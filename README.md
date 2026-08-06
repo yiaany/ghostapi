@@ -301,6 +301,7 @@ mcp, ai-agents, stripe, openai, mock-server, api-testing, sandbox, proxy, local-
 
 - [MCP setup](docs/mcp.md)
 - [Usage guide](docs/usage.md)
+- [Provider pack authoring](docs/providers/authoring-packs.md)
 - [Release checklist](docs/release-checklist.md)
 - [Contributing](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)
