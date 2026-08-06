@@ -35,6 +35,7 @@ export type ProviderResponse = {
 export type ProviderStateTransition = {
   key: string;
   value: unknown;
+  additionalWrites?: readonly { key: string; value: unknown }[];
 };
 
 export type ProviderScenarioStep = {
@@ -57,6 +58,7 @@ export type ProviderScenario = {
 export type ProviderRuntimeCapabilities = {
   clock: { now: () => Date };
   idGenerator: { create: (prefix: string) => string };
+  state: { snapshot: () => Readonly<Record<string, unknown>> };
 };
 
 export type ProviderRuntime = {
@@ -128,12 +130,18 @@ export type ProviderPack = ProviderAdapter & {
     apiVersion: string;
     runtime: ProviderRuntime;
   }) => ProviderResponse;
+  createResponseHeaders: (input: { apiVersion: string; runtime: ProviderRuntime }) => Record<string, string>;
   transitionState: (input: {
     request: NormalizedRequest;
     response: ProviderResponse;
     apiVersion: string;
     runtime: ProviderRuntime;
   }) => ProviderStateTransition | null;
+  /**
+   * Stateful packs execute inside GhostAPI's atomic local-state transaction.
+   * They may inspect the injected state snapshot but cannot write storage directly.
+   */
+  stateful: boolean;
   promptHints: readonly string[];
   scenarios: readonly ProviderScenario[];
   webhooks?: ProviderWebhookHook;

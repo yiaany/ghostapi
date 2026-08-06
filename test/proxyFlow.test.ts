@@ -68,12 +68,12 @@ describe("proxy flow integration", () => {
 
   it("short-circuits provider validation errors", async () => {
     await withServer(baseConfig, async (baseUrl) => {
-      const response = await fetch(`${baseUrl}/v1/charges`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+      const response = await fetch(`${baseUrl}/v1/payment_intents`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
       const body = await response.json();
 
       expect(response.status).toBe(400);
       expect(body.error.param).toBe("amount");
-      expect(getEventsHistory().at(-1)).toMatchObject({ source: "error", statusCode: 400, path: "/v1/charges" });
+      expect(getEventsHistory().at(-1)).toMatchObject({ source: "error", statusCode: 400, path: "/v1/payment_intents" });
     });
   });
 

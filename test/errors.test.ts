@@ -30,7 +30,7 @@ describe("Self-Healing Errors", () => {
 
   it("returns Stripe invalid_request_error for missing parameter", async () => {
     await withServer(async (baseUrl) => {
-      const response = await fetch(`${baseUrl}/v1/charges`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({}) });
+      const response = await fetch(`${baseUrl}/v1/payment_intents`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({}) });
       const body = await response.json();
 
       expect(response.status).toBe(400);

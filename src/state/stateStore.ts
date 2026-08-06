@@ -24,6 +24,17 @@ export async function saveToStateStore(id: string, obj: unknown): Promise<void> 
   await mutateJsonFile(getDataPaths().state, {}, sanitizeState, (state) => ({ ...state, [id]: sanitizeSecrets(obj) }));
 }
 
+export async function transactState<T>(operation: (state: Readonly<Record<string, unknown>>) => { state: Record<string, unknown>; result: T }): Promise<T> {
+  let result: T | undefined;
+  await mutateJsonFile(getDataPaths().state, {}, sanitizeState, (state) => {
+    const transaction = operation(structuredClone(state));
+    result = transaction.result;
+    return transaction.state;
+  });
+  if (result === undefined) throw new Error("Local state transaction did not return a result.");
+  return result;
+}
+
 export async function clearState(): Promise<void> {
   const statePath = getDataPaths().state;
   await withFileLock(statePath, () => atomicWriteJson(statePath, {}));

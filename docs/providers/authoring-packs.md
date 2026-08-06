@@ -1,6 +1,6 @@
 # Authoring Provider Packs
 
-Provider packs are the versioned contract layer for provider-specific behavior in GhostAPI. The first migrated pack is Resend. Stripe, Twilio, GitHub, Discord, and OpenAI remain on the legacy adapter path until they can be migrated in small reviewed changes. Generic REST remains the fallback.
+Provider packs are the versioned contract layer for provider-specific behavior in GhostAPI. Resend and Stripe are migrated built-in packs. Twilio, GitHub, Discord, and OpenAI remain on the legacy adapter path until they can be migrated in small reviewed changes. Generic REST remains the fallback.
 
 ## Scope And Trust Boundary
 
@@ -10,7 +10,7 @@ A pack receives only explicit inputs:
 
 - detection receives a normalized path only;
 - parsing, validation, and handling receive the sanitized `NormalizedRequest`;
-- clock and ID generation require explicit runtime capabilities;
+- clock, ID generation, and a read-only state snapshot require explicit runtime capabilities;
 - no network, filesystem, environment, or secret capability is available to a pack.
 
 The source regression test rejects pack modules that import Node network/filesystem modules or access `process.env` or `fetch`. This is a maintenance boundary, not a secure JavaScript sandbox. Do not advertise arbitrary plugin isolation.
@@ -66,7 +66,9 @@ export const examplePack: ProviderPack = {
     headers: { "content-type": "application/json" },
     body: { id: runtime.requireCapability("idGenerator").create("example_mock") }
   }),
+  createResponseHeaders: () => ({}),
   transitionState: () => null,
+  stateful: false,
   formatError: (details) => ({ error: { message: details.message } }),
   promptHints: [],
   scenarios: [],
@@ -102,7 +104,7 @@ const now = runtime.requireCapability("clock").now();
 const id = runtime.requireCapability("idGenerator").create("item_mock");
 ```
 
-Tests must inject fixed implementations with `createProviderRuntime()`. Asking for an undeclared capability fails with `Unknown provider capability: <name>`.
+Tests must inject fixed implementations with `createProviderRuntime()`. `createResponseHeaders()` can add deterministic provider headers such as Stripe request IDs to successful or early-error responses. Asking for an undeclared capability fails with `Unknown provider capability: <name>`.
 
 ## Validation And Errors
 
@@ -112,7 +114,7 @@ Keep validation order stable when migrating a public route. Error status, field 
 
 ## State Transitions
 
-`transitionState()` describes persistence but does not write it. Core owns storage and requires keys to stay in the exact `<provider>:<id>` namespace.
+`transitionState()` describes persistence but does not write it. Core owns storage and requires keys to stay in the exact `<provider>:<id>` namespace. A pack that declares `stateful: true` executes under one atomic local-state transaction and can inspect the injected read-only snapshot while deciding its response. It still cannot access a store directly.
 
 A transition must be derived from the handled response and must not read ambient state. The conformance fixture should assert both the key and value. Core rejects cross-provider or empty keys before persistence.
 
@@ -166,8 +168,8 @@ The remaining providers should move one at a time:
 | 2 | GitHub | Version header, deterministic issue/repository shapes, scenarios | Pagination and conditional requests |
 | 3 | OpenAI | API version policy, typed response families, list state | Streaming and token accounting |
 | 4 | Discord | Route/body detection and message shapes | Webhook and interaction semantics |
-| 5 | Stripe | Pack SDK proof, versioned resources, idempotency, transitions | Large surface and high contract risk |
+| Done | Stripe | Core pack for customers, payment intents, payment methods, checkout sessions, refunds, pagination, and idempotency | Webhooks, subscriptions, invoices, disputes, and broader state-machine parity |
 
-Stripe is intentionally last in the mechanical migration sequence even though it is the first deep product pack. Its high-fidelity implementation should build on a proven contract and dedicated conformance suite rather than mix architecture migration with broad behavior expansion.
+Stripe now demonstrates the deeper stateful pack path. See [`stripe-core-pack.md`](stripe-core-pack.md) for the supported contract and limits.
 
 Generic REST should not become a provider pack. It remains the explicit fallback so unknown APIs continue to work without pretending to have a provider contract.

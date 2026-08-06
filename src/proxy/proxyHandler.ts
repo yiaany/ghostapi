@@ -17,7 +17,9 @@ import { findApiBehavior } from "../behavior/behaviorStore.js";
 import { sanitizeSecrets } from "../security/secrets.js";
 import { getProviderPack } from "../providers/registry.js";
 import { assertProviderStateTransition, getProviderPackHeaders, prepareProviderPackExecution } from "../providers/runtime.js";
+import { createProviderRuntime } from "../providers/runtime.js";
 import type { ProviderPackExecution } from "../providers/types.js";
+import { transactState } from "../state/stateStore.js";
 
 
 export async function proxyHandler(request: Request, response: Response, config: ServerConfig): Promise<void> {
@@ -31,6 +33,9 @@ export async function proxyHandler(request: Request, response: Response, config:
 
   if (packExecution !== undefined) {
     for (const [key, value] of Object.entries(getProviderPackHeaders(packExecution))) response.setHeader(key, value);
+    for (const [key, value] of Object.entries(packExecution.pack.createResponseHeaders({ apiVersion: packExecution.apiVersion, runtime: packExecution.runtime }))) response.setHeader(key, value);
+  } else if (pack !== null && preparedPack !== null && "error" in preparedPack) {
+    for (const [key, value] of Object.entries(pack.createResponseHeaders({ apiVersion: pack.manifest.apiVersions.default, runtime: createProviderRuntime() }))) response.setHeader(key, value);
   }
   
   async function completeRequest(source: EventSource, status: number, body: unknown) {
@@ -97,6 +102,43 @@ export async function proxyHandler(request: Request, response: Response, config:
     return;
   }
 
+  if (packExecution?.pack.stateful) {
+    const generatedOption = await transactState((state) => {
+      const runtime = createProviderRuntime({ state: { snapshot: () => structuredClone(state) } });
+      const execution = prepareProviderPackExecution(packExecution.pack, normalizedRequest, runtime);
+      if ("error" in execution) throw new Error(`Provider pack version changed during execution: ${execution.error.message}`);
+      const generated = execution.pack.handleDeterministic({
+        request: normalizedRequest,
+        parsedRequest: execution.parsedRequest,
+        apiVersion: execution.apiVersion,
+        runtime: execution.runtime
+      });
+      const transition = execution.pack.transitionState({
+        request: normalizedRequest,
+        response: generated,
+        apiVersion: execution.apiVersion,
+        runtime: execution.runtime
+      });
+      if (transition === null) return { state, result: generated };
+      assertProviderStateTransition(execution.pack, transition);
+      return {
+        state: {
+          ...state,
+          [transition.key]: transition.value,
+          ...Object.fromEntries((transition.additionalWrites ?? []).map((write) => [write.key, write.value]))
+        },
+        result: generated
+      };
+    });
+
+    for (const [key, value] of Object.entries(generatedOption.headers)) response.setHeader(key, value);
+    response.setHeader("x-ghostapi-cache", "BYPASS");
+    if (normalizedRequest.method === "GET" && generatedOption.status < 400) response.setHeader("x-ghostapi-state", "HIT");
+    response.status(generatedOption.status).json(generatedOption.body);
+    await completeRequest(generatedOption.status >= 400 ? "error" : "state", generatedOption.status, generatedOption.body);
+    return;
+  }
+
   const stateResolution = await resolveState(normalizedRequest, provider);
   if (stateResolution !== null) {
     for (const [key, value] of Object.entries(stateResolution.headers)) {
@@ -140,10 +182,13 @@ export async function proxyHandler(request: Request, response: Response, config:
       apiVersion: packExecution.apiVersion,
       runtime: packExecution.runtime
     });
-    if (transition !== null) {
-      assertProviderStateTransition(packExecution.pack, transition);
-      await saveToStateStore(transition.key, transition.value);
-    }
+      if (transition !== null) {
+        assertProviderStateTransition(packExecution.pack, transition);
+        await saveToStateStore(transition.key, transition.value);
+        for (const write of transition.additionalWrites ?? []) {
+          await saveToStateStore(write.key, write.value);
+        }
+      }
   } else if (["POST", "PUT", "PATCH"].includes(normalizedRequest.method)) {
     const extractedId = extractIdFromResponse(generatedOption.body);
     if (extractedId !== undefined) {
