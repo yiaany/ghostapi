@@ -106,6 +106,39 @@ The first matched request can bind a recorded variable; later requests and synth
 
 PII detection is intentionally heuristic, not a guarantee of anonymization. Review the summary and the saved sanitized bundle before sharing it. Do not capture production traffic.
 
+## Contract Import And Drift
+
+GhostAPI imports a deliberately small, local-only OpenAPI subset: JSON OpenAPI `3.0.x`, non-parameterized relative paths, standard HTTP methods, JSON request/response bodies, object/array/scalar schemas, `required`, and scalar `enum` values. It does not support YAML, OpenAPI 3.1, Swagger 2.0, `$ref` (including local refs), remote URLs, callbacks, links, composition, path/query/header parameter schemas, headers, security schemes, servers, or executable extensions. Unsupported input fails with an actionable error; the importer never opens a network connection.
+
+```bash
+ghostapi contract import-openapi --input openapi.json --out .ghostapi/contracts/orders.contract.json
+ghostapi contract import-har \
+  --input sandbox.har \
+  --allow-sandbox-host api.sandbox.example \
+  --contract-out .ghostapi/contracts/sandbox.contract.json \
+  --approve
+```
+
+HAR import first passes through the exact same bounded sanitizer used by `ghostapi record`; it writes the sanitized scenario bundle and derives a contract only from that sanitized data. Contract input is limited to 1 MiB, output to 512 KiB, OpenAPI to 200 paths/400 operations, schemas to depth 20, and object schemas to 100 properties. ZIP and gzip archives are rejected before parsing or decompression; extract one reviewed JSON file first.
+
+Compare contracts in CI without any live provider request:
+
+```bash
+ghostapi contract diff \
+  --baseline .ghostapi/contracts/base.contract.json \
+  --candidate .ghostapi/contracts/head.contract.json \
+  --policy ghostapi.policy.yaml \
+  --ci
+
+ghostapi evidence generate \
+  --policy ghostapi.policy.yaml \
+  --contract-baseline .ghostapi/contracts/base.contract.json \
+  --contract-candidate .ghostapi/contracts/head.contract.json \
+  --ci
+```
+
+The diff deterministically reports added/removed endpoints, request required-field changes, enum/type changes, response status/schema changes, and provider-pack capability drift. Removed endpoints, removed response fields/statuses, narrowed enums, type changes, and lost pack capabilities are breaking. Added endpoints and optional request fields are non-breaking. Added response enum/status/fields and changed schema presence are `uncertain`, because client tolerance cannot be inferred. `reports.maxBreakingContractChanges` defaults to `0` when omitted and can be set explicitly in policy. Evidence artifacts include breaking/non-breaking/uncertain totals and fail CI according to the policy threshold.
+
 ## Send A Local Request
 
 ```bash

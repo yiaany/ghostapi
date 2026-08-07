@@ -1,0 +1,72 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`contract import and drift > classifies endpoint, required-field, enum, status, type, and provider capability changes deterministically 1`] = `
+{
+  "baselineHash": "0e7e0d7089c524b81dd64070d412fa165dfbb2e0d0638d5015383be0fde77adb",
+  "candidateHash": "6e99f99c680b5f6e400d83c970633072aecf051b8bf9eca461a782a17a6c861e",
+  "findings": [
+    {
+      "id": "endpoint-added:GET /health",
+      "message": "Endpoint added: GET /health.",
+      "severity": "non-breaking",
+    },
+    {
+      "id": "enum-value-removed:POST /orders request.status."paid"",
+      "message": "POST /orders request.status enum value removed: "paid".",
+      "severity": "breaking",
+    },
+    {
+      "id": "property-added:POST /orders request.currency",
+      "message": "POST /orders request property added: currency.",
+      "severity": "non-breaking",
+    },
+    {
+      "id": "property-added:POST /orders response 200.new_state",
+      "message": "POST /orders response 200 property added: new_state. Client response tolerance is unknown.",
+      "severity": "uncertain",
+    },
+    {
+      "id": "property-removed:POST /orders response 200.state",
+      "message": "POST /orders response 200 property removed: state.",
+      "severity": "breaking",
+    },
+    {
+      "id": "provider-capability-changed:stripe.webhooks",
+      "message": "Provider pack stripe capability webhooks changed from true to false.",
+      "severity": "breaking",
+    },
+    {
+      "id": "provider-pack-version-changed:stripe",
+      "message": "Provider pack stripe version changed from 1.0.0 to 1.1.0; semantic compatibility is not inferred from version text.",
+      "severity": "uncertain",
+    },
+    {
+      "id": "required-field-added:POST /orders request.currency",
+      "message": "POST /orders request required field added: currency.",
+      "severity": "breaking",
+    },
+    {
+      "id": "response-status-added:POST /orders 201",
+      "message": "Response status 201 added to POST /orders; client handling is unknown.",
+      "severity": "uncertain",
+    },
+    {
+      "id": "response-status-removed:POST /orders 202",
+      "message": "Response status 202 removed from POST /orders.",
+      "severity": "breaking",
+    },
+    {
+      "id": "schema-type-changed:POST /orders request.amount",
+      "message": "POST /orders request.amount type changed from integer to string.",
+      "severity": "breaking",
+    },
+  ],
+  "kind": "ghostapi.contract-diff",
+  "schemaVersion": 1,
+  "summary": {
+    "breaking": 6,
+    "nonBreaking": 2,
+    "uncertain": 3,
+  },
+}
+`;

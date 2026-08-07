@@ -66,6 +66,7 @@ describe("policy evaluation", () => {
     expect(evaluatePolicy(policy, { type: "scenario", scenarioId: "stripe.card_declined", completedScenarioIds: ["stripe.card_declined"] }).allowed).toBe(true);
     expect(evaluatePolicy(policy, { type: "enforcement", mode: "proxy-guidance" }).allowed).toBe(false);
     expect(evaluatePolicy(policy, { type: "report", productionEgressAttempts: 1, forbiddenCredentialMatches: 0 }).allowed).toBe(false);
+    expect(evaluatePolicy(policy, { type: "report", productionEgressAttempts: 0, forbiddenCredentialMatches: 0, breakingContractChanges: 1 }).allowed).toBe(false);
   });
 
   it("loads a policy once from a bounded local file", async () => {

@@ -9,6 +9,8 @@ export { EvidenceReportError, buildEvidenceReport, compareEvidenceReports, forma
 export type { EvidenceCompareResult, EvidenceFinding, EvidenceFindingSeverity, EvidenceGenerateOptions, EvidenceReport } from "./evidence/index.js";
 export { createScenarioReplayer, formatScenarioSanitizationSummary, loadScenarioBundle, migrateScenarioBundle, prepareScenarioRecording, prepareScenarioRecordingFromFile, ScenarioBundleError, writeScenarioBundle } from "./scenarios/scenarioBundle.js";
 export type { ScenarioBundle, ScenarioBundleInteraction, ScenarioPiiRules, ScenarioRecordingOptions, ScenarioReplayRequest, ScenarioReplayResult, ScenarioSanitizationSummary } from "./scenarios/scenarioBundle.js";
+export { ContractError, contractFromScenarioBundle, contractHash, diffContracts, formatContractDiff, importHarContract, importHarContractFromFile, importOpenApiContract, importOpenApiContractFromFile, loadContract, validateContract, writeContract } from "./contracts/index.js";
+export type { ContractDiff, ContractDiffFinding, ContractDiffSeverity, ContractOperation, ContractProviderCapability, ContractSchema, GhostApiContract, HarContractImportOptions, OpenApiImportOptions } from "./contracts/index.js";
 export type { ServerConfig } from "./config/serverConfig.js";
 export { createProviderRuntime, runProviderPackConformance } from "./providers/index.js";
 export type {

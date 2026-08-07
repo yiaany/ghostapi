@@ -9,6 +9,7 @@ export type DataPaths = {
   events: string;
   reports: string;
   scenarios: string;
+  contracts: string;
   faultLab: string;
 };
 
@@ -39,6 +40,7 @@ export function getDataPaths(): DataPaths {
     events: resolveDataPath("events.jsonl"),
     reports: resolveDataPath("reports"),
     scenarios: resolveDataPath("scenarios"),
+    contracts: resolveDataPath("contracts"),
     faultLab: resolveDataPath("fault-lab.json")
   };
 }
