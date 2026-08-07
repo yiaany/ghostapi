@@ -7,10 +7,12 @@ import { basename, join } from "node:path";
 import { getDataDir } from "../config/dataPaths.js";
 import { sanitizeSecretString } from "../security/secrets.js";
 import { atomicWriteJson } from "../storage/fileStore.js";
+import { evaluatePolicy, formatPolicyDecision, loadPolicyFile, type GhostApiPolicy } from "../policy/index.js";
 
 export type EgressRunOptions = {
   port?: number;
   allowHosts: string[];
+  policyPath?: string;
   command: string[];
 };
 
@@ -26,7 +28,7 @@ type RunEvidence = {
   backend: "linux-network-namespace";
   status: "preparing" | "running" | "failed-to-start" | "finished";
   command: { executable: string; argumentCount: number };
-  policy: { default: "deny"; allowedHosts: string[]; ghostApiOrigin: string };
+  policy: { default: "deny"; allowedHosts: string[]; ghostApiOrigin: string; policyHash?: string; requiredScenarios: string[] };
   networkAttemptAttribution: "allowed GhostAPI requests appear in the GhostAPI event log; denied kernel socket attempts are not attributable by this backend";
   events: Array<{ type: string; timestamp: string; detail?: string; exitCode?: number }>;
 };
@@ -44,7 +46,8 @@ export class EgressRunError extends Error {
 }
 
 export async function runEgressCommand(options: EgressRunOptions): Promise<EgressRunResult> {
-  validateOptions(options);
+  const loadedPolicy = await loadPolicyFile(options.policyPath, process.cwd(), options.policyPath !== undefined);
+  validateOptions(options, loadedPolicy?.policy);
   if (process.platform !== "linux") {
     throw new EgressRunError(
       `ghostapi run enforcement is unavailable on ${process.platform}.`,
@@ -64,7 +67,7 @@ export async function runEgressCommand(options: EgressRunOptions): Promise<Egres
     backend: "linux-network-namespace",
     status: "preparing",
     command: { executable: sanitizeSecretString(basename(options.command[0]!)), argumentCount: options.command.length - 1 },
-    policy: { default: "deny", allowedHosts, ghostApiOrigin: `http://127.0.0.1:${port}` },
+    policy: { default: "deny", allowedHosts, ghostApiOrigin: `http://127.0.0.1:${port}`, policyHash: loadedPolicy?.hash, requiredScenarios: loadedPolicy?.policy.requiredScenarios ?? [] },
     networkAttemptAttribution: "allowed GhostAPI requests appear in the GhostAPI event log; denied kernel socket attempts are not attributable by this backend",
     events: [{ type: "run-created", timestamp: new Date().toISOString() }]
   };
@@ -86,7 +89,7 @@ export async function runEgressCommand(options: EgressRunOptions): Promise<Egres
   }
 }
 
-function validateOptions(options: EgressRunOptions): void {
+function validateOptions(options: EgressRunOptions, policy: GhostApiPolicy | undefined): void {
   if (options.command.length === 0 || options.command[0] === undefined || options.command[0].trim() === "") {
     throw new EgressRunError("ghostapi run requires a command.", "Use: ghostapi run -- <command> [args...]");
   }
@@ -98,6 +101,20 @@ function validateOptions(options: EgressRunOptions): void {
         "This backend deliberately has no routed external egress. Use only localhost, 127.0.0.1, or ::1; do not rely on proxy fallback."
       );
     }
+  }
+
+  if (policy === undefined) return;
+  assertPolicyAllows(policy, { type: "enforcement", mode: "linux-network-namespace" });
+  for (const host of ["127.0.0.1", "localhost", ...options.allowHosts]) {
+    assertPolicyAllows(policy, { type: "network", host, provider: "ghostapi" });
+  }
+  for (const value of options.command) assertPolicyAllows(policy, { type: "credential", value });
+}
+
+function assertPolicyAllows(policy: GhostApiPolicy, event: Parameters<typeof evaluatePolicy>[1]): void {
+  const decision = evaluatePolicy(policy, event);
+  if (!decision.allowed) {
+    throw new EgressRunError(`Policy denied ${event.type} before launching the target.`, formatPolicyDecision(decision));
   }
 }
 

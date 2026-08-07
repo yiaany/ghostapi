@@ -3,6 +3,8 @@ export { detectEgressCapabilities, formatEgressCapabilityReport } from "./egress
 export type { EgressCapability, EgressCapabilityReport, EgressCapabilityStatus, EgressGuaranteeLevel, EgressRuntimeInfo, EgressRuntimeInput } from "./egress/capabilities.js";
 export { EgressRunError, runEgressCommand } from "./egress/run.js";
 export type { EgressRunOptions, EgressRunResult } from "./egress/run.js";
+export { PolicyValidationError, evaluatePolicy, formatPolicyDecision, loadPolicyFile, parsePolicyYaml } from "./policy/index.js";
+export type { EnforcementMode, GhostApiPolicy, LoadedPolicy, NetworkAction, NetworkRule, PolicyDecision, PolicyEvent } from "./policy/index.js";
 export type { ServerConfig } from "./config/serverConfig.js";
 export { createProviderRuntime, runProviderPackConformance } from "./providers/index.js";
 export type {

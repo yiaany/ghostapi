@@ -69,6 +69,13 @@ describe("ghostapi run degraded modes", () => {
     });
   });
 
+  it("applies an explicit policy before platform/backend startup", async () => {
+    await expect(runEgressCommand({ command: [process.execPath, targetPath, "exit", "0", "sk_live_secret"], allowHosts: [], policyPath: "test/fixtures/strict.policy.yaml" })).rejects.toMatchObject({
+      name: EgressRunError.name,
+      message: "Policy denied credential before launching the target."
+    });
+  });
+
   (process.platform === "linux" ? it.skip : it)("fails closed where no enforcement backend exists", async () => {
     await expect(runEgressCommand({ command: [process.execPath, targetPath, "exit", "0"], allowHosts: [] })).rejects.toMatchObject({
       name: EgressRunError.name,

@@ -19,7 +19,7 @@ type RunEvidence = {
   backend: "linux-network-namespace";
   status: "preparing" | "running" | "failed-to-start" | "finished";
   command: { executable: string; argumentCount: number };
-  policy: { default: "deny"; allowedHosts: string[]; ghostApiOrigin: string };
+  policy: { default: "deny"; allowedHosts: string[]; ghostApiOrigin: string; policyHash?: string; requiredScenarios: string[] };
   networkAttemptAttribution: string;
   events: Array<{ type: string; timestamp: string; detail?: string; exitCode?: number }>;
 };

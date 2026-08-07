@@ -9,6 +9,8 @@ export type CliCommand =
   | { name: "providers-inspect"; provider: string }
   | { name: "doctor"; options: DoctorOptions }
   | { name: "run"; options: RunOptions }
+  | { name: "policy-validate"; file?: string }
+  | { name: "policy-explain"; file?: string; event: PolicyExplainInput }
   | { name: "init" }
   | { name: "setup"; options: SetupOptions }
   | { name: "open"; options: OpenOptions }
@@ -35,8 +37,16 @@ export type DoctorOptions = {
 export type RunOptions = {
   port?: number;
   allowHosts: string[];
+  policyPath?: string;
   command: string[];
 };
+
+export type PolicyExplainInput =
+  | { type: "network"; host: string; provider?: string }
+  | { type: "credential"; value: string }
+  | { type: "scenario"; scenarioId: string; completedScenarioIds: string[] }
+  | { type: "enforcement"; mode: "linux-network-namespace" | "proxy-guidance" }
+  | { type: "report"; productionEgressAttempts: number; forbiddenCredentialMatches: number };
 
 export type SetupOptions = {
   write?: boolean;
@@ -99,6 +109,10 @@ export function parseCliArgs(args: string[]): CliCommand {
 
   if (command === "run") {
     return { name: "run", options: parseRunOptions(args.slice(1)) };
+  }
+
+  if (command === "policy") {
+    return parsePolicyCommand(args.slice(1));
   }
 
   if (command === "init") {
@@ -250,10 +264,68 @@ function parseRunOptions(args: string[]): RunOptions {
       index += 1;
       continue;
     }
-    throw new CliError(`Unknown run option: ${arg}`, "Supported options: --port 8080, --allow-host localhost");
+    if (arg === "--policy") {
+      options.policyPath = readValue(optionArgs, index, arg);
+      index += 1;
+      continue;
+    }
+    throw new CliError(`Unknown run option: ${arg}`, "Supported options: --port 8080, --allow-host localhost, --policy ghostapi.policy.yaml");
   }
 
   return options;
+}
+
+function parsePolicyCommand(args: string[]): CliCommand {
+  const [subcommand, ...rest] = args;
+  if (subcommand === "validate") return { name: "policy-validate", file: parsePolicyFileOption(rest) };
+  if (subcommand !== "explain") {
+    throw new CliError(`Unknown policy command: ${subcommand ?? "<missing>"}`, "Use: ghostapi policy validate [--file ghostapi.policy.yaml] | ghostapi policy explain <scenario-id>|network <host>|credential <value>|enforcement <mode>|report <production-attempts> <credential-matches>");
+  }
+
+  const fileIndex = rest.indexOf("--file");
+  let file: string | undefined;
+  const eventArgs = [...rest];
+  if (fileIndex !== -1) {
+    file = readValue(rest, fileIndex, "--file");
+    eventArgs.splice(fileIndex, 2);
+  }
+  if (eventArgs.includes("--file")) throw new CliError("Missing value for --file.", "Use --file ghostapi.policy.yaml.");
+  if (eventArgs.length === 0) throw new CliError("Missing policy event.", "Use: ghostapi policy explain <scenario-id>|network <host>|credential <value>|enforcement <mode>|report <production-attempts> <credential-matches>");
+  return { name: "policy-explain", file, event: parsePolicyExplainInput(eventArgs) };
+}
+
+function parsePolicyFileOption(args: string[]): string | undefined {
+  if (args.length === 0) return undefined;
+  if (args.length === 2 && args[0] === "--file") return readValue(args, 0, "--file");
+  throw new CliError(`Unexpected policy argument: ${args[0]}`, "Use: ghostapi policy validate [--file ghostapi.policy.yaml]");
+}
+
+function parsePolicyExplainInput(args: string[]): PolicyExplainInput {
+  const [kind, value, ...rest] = args;
+  if (kind === "network") {
+    if (!value) throw new CliError("Missing network host.", "Use: ghostapi policy explain network api.stripe.com [--provider stripe]");
+    if (rest.length === 0) return { type: "network", host: value };
+    if (rest.length === 2 && rest[0] === "--provider" && rest[1]) return { type: "network", host: value, provider: rest[1] };
+    throw new CliError("Invalid network explain options.", "Use: ghostapi policy explain network api.stripe.com [--provider stripe]");
+  }
+  if (kind === "credential") {
+    if (!value || rest.length > 0) throw new CliError("Credential explain requires exactly one value.", "Use: ghostapi policy explain credential sk_live_example");
+    return { type: "credential", value };
+  }
+  if (kind === "enforcement") {
+    if ((value !== "linux-network-namespace" && value !== "proxy-guidance") || rest.length > 0) throw new CliError("Invalid enforcement mode.", "Use: ghostapi policy explain enforcement linux-network-namespace|proxy-guidance");
+    return { type: "enforcement", mode: value };
+  }
+  if (kind === "report") {
+    const forbiddenCredentialMatches = Number(rest[0]);
+    const productionEgressAttempts = Number(value);
+    if (rest.length !== 1 || !Number.isInteger(productionEgressAttempts) || productionEgressAttempts < 0 || !Number.isInteger(forbiddenCredentialMatches) || forbiddenCredentialMatches < 0) {
+      throw new CliError("Report explain requires two non-negative integer counts.", "Use: ghostapi policy explain report 0 0");
+    }
+    return { type: "report", productionEgressAttempts, forbiddenCredentialMatches };
+  }
+  if (args.length !== 1) throw new CliError("Scenario explain accepts one scenario id.", "Use: ghostapi policy explain stripe.card_declined");
+  return { type: "scenario", scenarioId: kind!, completedScenarioIds: [] };
 }
 
 function readValue(args: string[], index: number, flag: string): string {

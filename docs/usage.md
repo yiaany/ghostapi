@@ -51,6 +51,19 @@ The target and all ordinary descendants have no external route, DNS path or non-
 
 Each run writes sanitized lifecycle evidence under `.ghostapi/runs/<run-id>/run.json`. The command, argument values and environment secrets are not persisted there; allowed GhostAPI request traffic remains in the run's isolated GhostAPI event log.
 
+## Policy As Code
+
+Use a strict local `ghostapi.policy.yaml` to make network, credential, scenario, enforcement and report decisions deterministic:
+
+```bash
+ghostapi policy validate
+ghostapi policy explain network api.stripe.com --provider stripe
+ghostapi policy explain stripe-payment-intent-card-declined
+ghostapi run --policy ghostapi.policy.yaml -- npm test
+```
+
+See [`docs/policy.md`](policy.md) and the safe [`examples/policy/ghostapi.policy.yaml`](../examples/policy/ghostapi.policy.yaml). The policy language has no remote includes, interpolation, or executable expressions.
+
 ## Send A Local Request
 
 ```bash

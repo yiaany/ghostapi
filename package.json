@@ -52,6 +52,7 @@
     "@modelcontextprotocol/sdk": "^1.30.0",
     "express": "^4.19.2",
     "selfsigned": "^5.5.0",
+    "yaml": "2.9.0",
     "zod": "^4.4.3"
   },
   "overrides": {
