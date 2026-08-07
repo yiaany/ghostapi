@@ -62,6 +62,8 @@ Use the [GitHub Actions PR safety check](docs/github-actions.md) to make an enfo
 
 Turn explicitly allowed sandbox JSON/HAR traffic into a portable deterministic bundle with `ghostapi record --input capture.har --allow-sandbox-host api.sandbox.example --approve`, then run it offline with `ghostapi replay bundle.json --requests requests.json`. The recorder removes secrets, redacts default PII categories, variables unstable IDs/timestamps, omits binary/multipart bodies, blocks external redirects, and requires approval when its sanitization summary found potentially sensitive traffic. It never records production hosts by default or persists raw temporary payloads. See the [record and replay guide](docs/usage.md#record-and-replay-sandbox-traffic).
 
+Import a bounded OpenAPI 3.0 JSON subset or a sanitized HAR into deterministic contracts using `ghostapi contract import-openapi` and `ghostapi contract import-har`, then run `ghostapi contract diff --baseline base.contract.json --candidate head.contract.json --policy ghostapi.policy.yaml --ci`. The importer never resolves `$ref` or remote URLs; unsupported features fail closed. Contract diffs classify endpoint, request/response schema, enum/status, and provider-pack capability drift as breaking, non-breaking, or uncertain, and can be included in `ghostapi evidence generate` for CI policy enforcement. See the [contract guide](docs/usage.md#contract-import-and-drift).
+
 ## What GhostAPI Does
 
 GhostAPI is a local API control layer for agent-driven development.
@@ -276,6 +278,7 @@ curl -X POST http://127.0.0.1:8080/tasks \
 | `.ghostapi/events.jsonl` | Captured local request events; 5 MiB active file plus two archives. |
 | `.ghostapi/reports/` | Versioned evidence reports; 512 KiB per artifact with latest-20 local retention. |
 | `.ghostapi/scenarios/*.bundle.json` | Sanitized, versioned record/replay bundles; no raw temporary capture is retained. |
+| `.ghostapi/contracts/*.contract.json` | Bounded deterministic OpenAPI/HAR contract snapshots for offline drift checks. |
 | `.ghostapi/behaviors.json` | Deterministic behavior overrides. |
 | `.ghostapi/cache/` | Local response cache. |
 | `.ghostapi/fault-lab.json` | Persisted Fault Lab configuration shared with MCP. |
@@ -296,6 +299,8 @@ npx @yiaany/ghostapi evidence view .ghostapi/reports/latest.json
 npx @yiaany/ghostapi evidence compare .ghostapi/reports/base.json .ghostapi/reports/head.json
 npx @yiaany/ghostapi record --input capture.har --allow-sandbox-host api.sandbox.example --approve
 npx @yiaany/ghostapi replay .ghostapi/scenarios/sandbox-recording.bundle.json --requests requests.json
+npx @yiaany/ghostapi contract import-openapi --input openapi.json
+npx @yiaany/ghostapi contract diff --baseline base.contract.json --candidate head.contract.json --policy ghostapi.policy.yaml --ci
 npx @yiaany/ghostapi doctor --port 8080
 npx @yiaany/ghostapi clear cache|state|events|all
 npx @yiaany/ghostapi providers list

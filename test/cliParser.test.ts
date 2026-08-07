@@ -76,9 +76,9 @@ describe("CLI parser", () => {
   });
 
   it("parses evidence commands", () => {
-    expect(parseCliArgs(["evidence", "generate", "--policy", "ghostapi.policy.yaml", "--run", ".ghostapi/runs/1/run.json", "--out", ".ghostapi/reports/1.json", "--ci", "--json"])).toEqual({
+    expect(parseCliArgs(["evidence", "generate", "--policy", "ghostapi.policy.yaml", "--run", ".ghostapi/runs/1/run.json", "--out", ".ghostapi/reports/1.json", "--contract-baseline", "base.contract.json", "--contract-candidate", "head.contract.json", "--ci", "--json"])).toEqual({
       name: "evidence-generate",
-      options: { policyPath: "ghostapi.policy.yaml", runPath: ".ghostapi/runs/1/run.json", outPath: ".ghostapi/reports/1.json", ci: true, json: true }
+      options: { policyPath: "ghostapi.policy.yaml", runPath: ".ghostapi/runs/1/run.json", outPath: ".ghostapi/reports/1.json", contractBaselinePath: "base.contract.json", contractCandidatePath: "head.contract.json", ci: true, json: true }
     });
     expect(parseCliArgs(["evidence", "view", ".ghostapi/reports/1.json", "--json"])).toEqual({ name: "evidence-view", options: { path: ".ghostapi/reports/1.json", json: true } });
     expect(parseCliArgs(["evidence", "compare", "left.json", "right.json"])).toEqual({ name: "evidence-compare", options: { leftPath: "left.json", rightPath: "right.json" } });
@@ -99,6 +99,21 @@ describe("CLI parser", () => {
     expect(parseCliArgs(["replay", "payment.bundle.json", "--requests", "requests.json", "--json"])).toEqual({ name: "replay", options: { bundlePath: "payment.bundle.json", requestsPath: "requests.json", json: true } });
   });
 
+  it("parses bounded local contract import and CI diff commands", () => {
+    expect(parseCliArgs(["contract", "import-openapi", "--input", "openapi.json", "--out", ".ghostapi/contracts/openapi.contract.json", "--title", "Orders"])).toEqual({
+      name: "contract-import-openapi",
+      options: { inputPath: "openapi.json", outPath: ".ghostapi/contracts/openapi.contract.json", title: "Orders" }
+    });
+    expect(parseCliArgs(["contract", "import-har", "--input", "capture.har", "--allow-sandbox-host", "api.sandbox.example", "--contract-out", "contract.json", "--approve"])).toEqual({
+      name: "contract-import-har",
+      options: { inputPath: "capture.har", allowedSandboxHosts: ["api.sandbox.example"], contractOutPath: "contract.json", approve: true }
+    });
+    expect(parseCliArgs(["contract", "diff", "--baseline", "base.contract.json", "--candidate", "head.contract.json", "--policy", "ghostapi.policy.yaml", "--ci", "--json"])).toEqual({
+      name: "contract-diff",
+      options: { baselinePath: "base.contract.json", candidatePath: "head.contract.json", policyPath: "ghostapi.policy.yaml", ci: true, json: true }
+    });
+  });
+
   it("throws actionable errors for invalid user input", () => {
     expect(() => parseCliArgs(["start", "--port", "nope"])).toThrow(CliError);
     expect(() => parseCliArgs(["clear", "logs"])).toThrow("Unknown clear target");
@@ -110,11 +125,13 @@ describe("CLI parser", () => {
     expect(() => parseCliArgs(["run", "--allow-host", "localhost", "--unknown", "--", "node"])).toThrow("Unknown run option");
     expect(() => parseCliArgs(["policy", "validate", "--wat"])).toThrow("Unexpected policy argument");
     expect(() => parseCliArgs(["policy", "explain", "network"])).toThrow("Missing network host");
-    expect(() => parseCliArgs(["policy", "explain", "report", "-1", "0"])).toThrow("Report explain requires two non-negative integer counts");
+    expect(() => parseCliArgs(["policy", "explain", "report", "-1", "0"])).toThrow("Report explain requires two or three non-negative integer counts");
     expect(() => parseCliArgs(["evidence", "view"])).toThrow("Missing evidence report path");
     expect(() => parseCliArgs(["evidence", "compare", "left.json"])).toThrow("Missing evidence report paths");
     expect(() => parseCliArgs(["record", "--input", "capture.json"])).toThrow("sandbox host allowlist");
     expect(() => parseCliArgs(["record", "--input", "capture.json", "--allow-sandbox-host", "api.sandbox.example", "--pii", "names"])).toThrow("Invalid --pii");
     expect(() => parseCliArgs(["replay", "bundle.json"])).toThrow("Missing replay requests input");
+    expect(() => parseCliArgs(["evidence", "generate", "--contract-baseline", "base.contract.json"])).toThrow("requires both contract paths");
+    expect(() => parseCliArgs(["contract", "diff", "--baseline", "base.contract.json"])).toThrow("requires baseline and candidate");
   });
 });

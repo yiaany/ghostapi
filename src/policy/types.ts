@@ -24,6 +24,7 @@ export type GhostApiPolicy = {
   reports: {
     maxProductionEgressAttempts: number;
     maxForbiddenCredentialMatches: number;
+    maxBreakingContractChanges: number;
   };
 };
 
@@ -32,7 +33,7 @@ export type PolicyEvent =
   | { type: "credential"; value: string }
   | { type: "scenario"; scenarioId: string; completedScenarioIds: readonly string[] }
   | { type: "enforcement"; mode: EnforcementMode }
-  | { type: "report"; productionEgressAttempts: number; forbiddenCredentialMatches: number };
+  | { type: "report"; productionEgressAttempts: number; forbiddenCredentialMatches: number; breakingContractChanges?: number };
 
 export type PolicyDecision = {
   allowed: boolean;

@@ -26,6 +26,7 @@ import { generateRepoSetup, writeRepoSetup } from "../setup/setupGenerator.js";
 import { generateSafetyReport } from "../report/safetyReport.js";
 import { compareEvidenceReports, formatEvidenceCompare, formatEvidenceReport, generateEvidenceReport, loadEvidenceReport, EvidenceReportError } from "../evidence/index.js";
 import { createScenarioReplayer, formatScenarioSanitizationSummary, loadScenarioBundle, prepareScenarioRecordingFromFile, ScenarioBundleError, writeScenarioBundle, type ScenarioPiiRules, type ScenarioReplayRequest } from "../scenarios/scenarioBundle.js";
+import { ContractError, diffContracts, formatContractDiff, importHarContractFromFile, importOpenApiContractFromFile, loadContract, writeContract } from "../contracts/index.js";
 
 async function main(): Promise<void> {
   const command = parseCliArgs(process.argv.slice(2));
@@ -79,6 +80,15 @@ async function main(): Promise<void> {
       return;
     case "replay":
       await replayBundle(command.options);
+      return;
+    case "contract-import-openapi":
+      await importOpenApi(command.options);
+      return;
+    case "contract-import-har":
+      await importHar(command.options);
+      return;
+    case "contract-diff":
+      await diffContractFiles(command.options);
       return;
     case "init":
       await initProject();
@@ -309,8 +319,8 @@ async function explainPolicy(file: string | undefined, event: Parameters<typeof 
   console.log(formatPolicyDecision(evaluatePolicy(loaded.policy, event)));
 }
 
-async function generateEvidence(options: { policyPath?: string; runPath?: string; outPath?: string; ci?: boolean; json?: boolean }): Promise<void> {
-  const { report, path } = await generateEvidenceReport({ policyPath: options.policyPath, runPath: options.runPath, outPath: options.outPath });
+async function generateEvidence(options: { policyPath?: string; runPath?: string; outPath?: string; contractBaselinePath?: string; contractCandidatePath?: string; ci?: boolean; json?: boolean }): Promise<void> {
+  const { report, path } = await generateEvidenceReport({ policyPath: options.policyPath, runPath: options.runPath, outPath: options.outPath, contractBaselinePath: options.contractBaselinePath, contractCandidatePath: options.contractCandidatePath });
   if (options.json) console.log(JSON.stringify({ path, report }, null, 2));
   else {
     console.log(formatEvidenceReport(report));
@@ -357,6 +367,45 @@ async function replayBundle(options: { bundlePath: string; requestsPath: string;
     console.log(`Replay matched ${responses.length} interaction${responses.length === 1 ? "" : "s"}.`);
     for (const response of responses) console.log(`  ${response.index}: ${response.status}`);
   }
+}
+
+async function importOpenApi(options: { inputPath: string; outPath?: string; title?: string }): Promise<void> {
+  const contract = await importOpenApiContractFromFile(options.inputPath, { title: options.title });
+  const path = await writeContract(contract, options.outPath);
+  console.log(`Contract: ${path}`);
+  console.log(`Operations: ${contract.operations.length}`);
+}
+
+async function importHar(options: { inputPath: string; outPath?: string; contractOutPath?: string; title?: string; allowedSandboxHosts: string[]; pii?: string; approve?: boolean }): Promise<void> {
+  const { bundle, contract } = await importHarContractFromFile(options.inputPath, {
+    title: options.title,
+    allowedSandboxHosts: options.allowedSandboxHosts,
+    pii: parsePiiRules(options.pii)
+  });
+  console.log(formatScenarioSanitizationSummary(bundle.sanitization));
+  if (bundle.sanitization.requiresApproval && !options.approve) {
+    throw new CliError("HAR import was not saved because sanitization found potentially sensitive traffic.", "Review the summary, then re-run the exact command with --approve to save the sanitized bundle and contract.");
+  }
+  const bundlePath = await writeScenarioBundle(bundle, options.outPath);
+  const contractPath = await writeContract(contract, options.contractOutPath);
+  console.log(`Bundle: ${bundlePath}`);
+  console.log(`Contract: ${contractPath}`);
+}
+
+async function diffContractFiles(options: { baselinePath: string; candidatePath: string; policyPath?: string; ci?: boolean; json?: boolean }): Promise<void> {
+  const [baseline, candidate, loadedPolicy] = await Promise.all([
+    loadContract(options.baselinePath),
+    loadContract(options.candidatePath),
+    options.policyPath === undefined ? Promise.resolve(null) : loadPolicyFile(options.policyPath, process.cwd(), true)
+  ]);
+  const diff = diffContracts(baseline, candidate);
+  const decision = loadedPolicy === null ? null : evaluatePolicy(loadedPolicy.policy, { type: "report", productionEgressAttempts: 0, forbiddenCredentialMatches: 0, breakingContractChanges: diff.summary.breaking });
+  if (options.json) console.log(JSON.stringify({ diff, policy: decision }, null, 2));
+  else {
+    console.log(formatContractDiff(diff));
+    if (decision !== null) console.log(`Policy: ${decision.allowed ? "PASS" : "FAIL"} - ${decision.reason}`);
+  }
+  if (options.ci && (decision === null ? diff.summary.breaking > 0 : !decision.allowed)) process.exitCode = 2;
 }
 
 function parsePiiRules(value: string | undefined): Partial<ScenarioPiiRules> | undefined {
@@ -444,11 +493,14 @@ Usage:
   ghostapi run [--port 8080] [--allow-host localhost] [--policy ghostapi.policy.yaml] -- <command> [args...]
   ghostapi policy validate [--file ghostapi.policy.yaml]
   ghostapi policy explain <scenario-id>|network <host>|credential <value>|enforcement <mode>|report <production-attempts> <credential-matches> [--file ghostapi.policy.yaml]
-  ghostapi evidence generate [--policy ghostapi.policy.yaml] [--run .ghostapi/runs/<id>/run.json] [--out .ghostapi/reports/report.json] [--ci] [--json]
+  ghostapi evidence generate [--policy ghostapi.policy.yaml] [--run .ghostapi/runs/<id>/run.json] [--out .ghostapi/reports/report.json] [--contract-baseline base.contract.json --contract-candidate head.contract.json] [--ci] [--json]
   ghostapi evidence view <report.json> [--json]
   ghostapi evidence compare <left.json> <right.json> [--json]
   ghostapi record --input <capture.json|har.json> --allow-sandbox-host <host> [--out bundle.json] [--title title] [--pii emails,phones,addresses] [--approve]
   ghostapi replay <bundle.json> --requests <requests.json> [--json]
+  ghostapi contract import-openapi --input <openapi.json> [--out contract.json] [--title title]
+  ghostapi contract import-har --input <capture.har> --allow-sandbox-host <host> [--out bundle.json] [--contract-out contract.json] [--title title] [--pii emails,phones,addresses] [--approve]
+  ghostapi contract diff --baseline <contract.json> --candidate <contract.json> [--policy ghostapi.policy.yaml] [--ci] [--json]
   ghostapi init`);
 }
 
@@ -470,6 +522,11 @@ main().catch((error: unknown) => {
   }
 
   if (error instanceof ScenarioBundleError) {
+    console.error(`Error: ${error.message}`);
+    process.exit(1);
+  }
+
+  if (error instanceof ContractError) {
     console.error(`Error: ${error.message}`);
     process.exit(1);
   }

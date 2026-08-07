@@ -7,6 +7,7 @@ import { getDataPaths } from "../src/config/dataPaths.js";
 import { buildEvidenceReport, compareEvidenceReports, formatEvidenceReport, generateEvidenceReport, loadEvidenceReport } from "../src/evidence/index.js";
 import { parsePolicyYaml } from "../src/policy/index.js";
 import { addEvent, clearEvents, type ProxyEvent } from "../src/server/eventsStore.js";
+import { diffContracts } from "../src/contracts/index.js";
 
 const cliPath = fileURLToPath(new URL("../src/cli/index.ts", import.meta.url));
 
@@ -111,7 +112,31 @@ describe("evidence reports", () => {
     expect(result.exitCode).toBe(2);
     expect(JSON.parse(result.stdout)).toMatchObject({ report: { summary: { passed: false } } });
   });
+
+  it("includes contract drift in evidence and fails policy-controlled CI on breaking changes", () => {
+    const report = buildEvidenceReport({
+      events: [],
+      policy: POLICY,
+      contractDiff: diffContracts(contract("Base", "integer"), contract("Head", "string")),
+      runEvidence: runEvidenceFixture(),
+      generatedAt: "2026-08-07T00:00:00.000Z"
+    });
+
+    expect(report.contractDrift.breaking).toBeGreaterThan(0);
+    expect(report.findings).toEqual(expect.arrayContaining([expect.objectContaining({ id: "contract-drift.breaking", severity: "fail" })]));
+    expect(report.summary.passed).toBe(false);
+  });
 });
+
+function contract(title: string, amountType: "integer" | "string") {
+  return {
+    schemaVersion: 1 as const,
+    kind: "ghostapi.contract" as const,
+    metadata: { title, source: "openapi" as const, importedAt: "2026-08-07T00:00:00.000Z" },
+    operations: [{ method: "POST", path: "/orders", request: { type: "object", properties: { amount: { type: amountType } } }, responses: { "200": { type: "object" } } }],
+    providerCapabilities: []
+  };
+}
 
 function eventFixture(): ProxyEvent {
   return {

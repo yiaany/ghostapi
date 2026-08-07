@@ -8,6 +8,7 @@ import { evaluatePolicy, loadPolicyFile, type GhostApiPolicy } from "../policy/i
 import { sanitizeSecrets, sanitizeSecretString, isSecretFieldName } from "../security/secrets.js";
 import type { ProxyEvent } from "../server/eventsStore.js";
 import { atomicWriteJson, ensurePrivateDirectory } from "../storage/fileStore.js";
+import { diffContracts, loadContract, type ContractDiff } from "../contracts/index.js";
 
 export type EvidenceFindingSeverity = "pass" | "warning" | "fail";
 
@@ -49,6 +50,13 @@ export type EvidenceReport = {
     providers: string[];
     scenarios: string[];
   };
+  contractDrift?: {
+    baselineHash?: string;
+    candidateHash?: string;
+    breaking: number;
+    nonBreaking: number;
+    uncertain: number;
+  };
   egress: {
     allowedAttempts: Array<{ provider: string; method: string; path: string; statusCode: number; source: string }>;
     blockedAttempts: Array<{ host: string; reason: string }>;
@@ -77,6 +85,8 @@ export type EvidenceGenerateOptions = {
   policyPath?: string;
   runPath?: string;
   outPath?: string;
+  contractBaselinePath?: string;
+  contractCandidatePath?: string;
   generatedAt?: string;
   ghostApiVersion?: string;
 };
@@ -119,12 +129,14 @@ export async function generateEvidenceReport(options: EvidenceGenerateOptions = 
   const run = await readRunEvidence(options.runPath, projectRoot);
   const loadedPolicy = await loadPolicyFile(options.policyPath, projectRoot, options.policyPath !== undefined);
   const events = await readPersistedEvents(run?.path);
+  const contractDiff = await loadContractDiff(options.contractBaselinePath, options.contractCandidatePath, projectRoot);
   const report = buildEvidenceReport({
     events,
     policy: loadedPolicy?.policy,
     policyHash: loadedPolicy?.hash ?? readString(run?.evidence.policy?.policyHash),
     requiredScenarios: loadedPolicy?.policy.requiredScenarios ?? readStringArray(run?.evidence.policy?.requiredScenarios),
     runEvidence: run?.evidence ?? null,
+    contractDiff,
     generatedAt: options.generatedAt ?? new Date().toISOString(),
     ghostApiVersion: options.ghostApiVersion ?? readPackageVersion()
   });
@@ -138,6 +150,7 @@ export function buildEvidenceReport(input: {
   policyHash?: string;
   requiredScenarios?: string[];
   runEvidence?: RunEvidence | null;
+  contractDiff?: ContractDiff;
   generatedAt: string;
   ghostApiVersion?: string;
 }): EvidenceReport {
@@ -166,6 +179,9 @@ export function buildEvidenceReport(input: {
   const failures = allowedAttempts.filter((attempt) => attempt.statusCode >= 400).map((attempt) => ({ provider: attempt.provider, method: attempt.method, path: attempt.path, statusCode: attempt.statusCode }));
   const retryCount = sanitizedEvents.filter((event) => event.statusCode === 429 || hasRetryAfter(event)).length;
   const productionAttempts = 0;
+  const contractDrift = input.contractDiff === undefined
+    ? { breaking: 0, nonBreaking: 0, uncertain: 0 }
+    : { baselineHash: input.contractDiff.baselineHash, candidateHash: input.contractDiff.candidateHash, ...input.contractDiff.summary };
   const findings: EvidenceFinding[] = [];
   const warnings: string[] = [];
 
@@ -181,11 +197,15 @@ export function buildEvidenceReport(input: {
       ? { id: `scenario.${scenarioId}`, severity: "pass", message: `Required scenario completed: ${scenarioId}` }
       : { id: `scenario.${scenarioId}`, severity: "fail", message: `Required scenario missing: ${scenarioId}` });
   }
-  const reportDecision = input.policy === undefined ? { allowed: productionAttempts === 0 && secretMatches === 0 } : evaluatePolicy(input.policy, { type: "report", productionEgressAttempts: productionAttempts, forbiddenCredentialMatches: secretMatches });
+  const reportDecision = input.policy === undefined ? { allowed: productionAttempts === 0 && secretMatches === 0 && contractDrift.breaking === 0 } : evaluatePolicy(input.policy, { type: "report", productionEgressAttempts: productionAttempts, forbiddenCredentialMatches: secretMatches, breakingContractChanges: contractDrift.breaking });
   findings.push(reportDecision.allowed
     ? { id: "policy.report-thresholds", severity: "pass", message: "Policy report thresholds are satisfied." }
     : { id: "policy.report-thresholds", severity: "fail", message: "Policy report thresholds are exceeded." });
   if (secretMatches > 0) findings.push({ id: "secrets.detected", severity: "fail", message: "Secret-shaped values were detected and summarized without raw values.", count: secretMatches });
+  if (input.contractDiff !== undefined) {
+    if (contractDrift.breaking > 0) findings.push({ id: "contract-drift.breaking", severity: "fail", message: "Breaking contract drift was detected.", count: contractDrift.breaking });
+    if (contractDrift.uncertain > 0) findings.push({ id: "contract-drift.uncertain", severity: "warning", message: "Contract changes need compatibility review because client tolerance is unknown.", count: contractDrift.uncertain });
+  }
   if (failures.length > 0) findings.push({ id: "provider.failures", severity: "warning", message: "Provider failures were observed.", count: failures.length });
 
   const runStatus = readRunStatus(input.runEvidence?.status);
@@ -208,6 +228,7 @@ export function buildEvidenceReport(input: {
     },
     policy: { hash: input.policyHash, requiredScenarios },
     coverage: { providers, scenarios: completedScenarios },
+    contractDrift,
     egress: { allowedAttempts, blockedAttempts: [], productionAttempts },
     secrets: { categories: [...secretCategories].sort(), matches: secretMatches },
     retriesAndFailures: { retryCount, failureCount: failures.length, failures: failures.slice(0, MAX_ATTEMPTS) },
@@ -248,6 +269,7 @@ export function formatEvidenceReport(report: EvidenceReport): string {
     `Policy hash: ${escapeTerminal(report.policy.hash ?? "none")}`,
     `Providers: ${report.coverage.providers.length > 0 ? report.coverage.providers.map(escapeTerminal).join(", ") : "none"}`,
     `Scenarios: ${report.coverage.scenarios.length > 0 ? report.coverage.scenarios.map(escapeTerminal).join(", ") : "none"}`,
+    `Contract drift: ${(report.contractDrift ?? emptyContractDrift()).breaking} breaking, ${(report.contractDrift ?? emptyContractDrift()).nonBreaking} non-breaking, ${(report.contractDrift ?? emptyContractDrift()).uncertain} uncertain`,
     `Allowed egress attempts: ${report.egress.allowedAttempts.length}`,
     `Blocked egress attempts: ${report.egress.blockedAttempts.length}`,
     `Production egress attempts: ${report.egress.productionAttempts}`,
@@ -267,6 +289,7 @@ export function compareEvidenceReports(left: EvidenceReport, right: EvidenceRepo
   if (left.summary.failCount !== right.summary.failCount) differences.push("summary.failCount differs");
   if (left.egress.productionAttempts !== right.egress.productionAttempts) differences.push("egress.productionAttempts differs");
   if (left.secrets.matches !== right.secrets.matches) differences.push("secrets.matches differs");
+  if (stableStringify(left.contractDrift ?? emptyContractDrift()) !== stableStringify(right.contractDrift ?? emptyContractDrift())) differences.push("contractDrift differs");
   if (stableStringify(left.coverage) !== stableStringify(right.coverage)) differences.push("coverage differs");
   if (stableStringify(left.findings) !== stableStringify(right.findings)) differences.push("findings differ");
   return { equal: differences.length === 0, leftHash: left.artifact.logicalHash, rightHash: right.artifact.logicalHash, differences };
@@ -324,6 +347,17 @@ async function readRunEvidence(runPath: string | undefined, projectRoot: string)
   if (path === undefined) return null;
   const resolved = runPath === undefined ? path : await resolveExistingReportPath(runPath, projectRoot);
   return { path: resolved, evidence: JSON.parse(await readFile(resolved, "utf8")) as RunEvidence };
+}
+
+async function loadContractDiff(baselinePath: string | undefined, candidatePath: string | undefined, projectRoot: string): Promise<ContractDiff | undefined> {
+  if (baselinePath === undefined && candidatePath === undefined) return undefined;
+  if (baselinePath === undefined || candidatePath === undefined) throw new EvidenceReportError("Contract drift evidence requires both --contract-baseline and --contract-candidate.");
+  try {
+    const [baseline, candidate] = await Promise.all([loadContract(baselinePath, projectRoot), loadContract(candidatePath, projectRoot)]);
+    return diffContracts(baseline, candidate);
+  } catch (error) {
+    throw new EvidenceReportError(error instanceof Error ? `Contract drift input is invalid: ${error.message}` : "Contract drift input is invalid.");
+  }
 }
 
 async function findLatestRunEvidence(): Promise<string | undefined> {
@@ -509,6 +543,10 @@ function readStringArray(value: unknown): string[] {
 
 function uniqueSorted(values: string[]): string[] {
   return [...new Set(values.map(limitText))].sort();
+}
+
+function emptyContractDrift(): NonNullable<EvidenceReport["contractDrift"]> {
+  return { breaking: 0, nonBreaking: 0, uncertain: 0 };
 }
 
 function limitText(value: string): string {

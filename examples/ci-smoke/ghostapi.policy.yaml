@@ -19,3 +19,4 @@ enforcement:
 reports:
   maxProductionEgressAttempts: 0
   maxForbiddenCredentialMatches: 0
+  maxBreakingContractChanges: 0

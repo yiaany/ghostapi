@@ -16,6 +16,9 @@ export type CliCommand =
   | { name: "evidence-compare"; options: EvidenceCompareOptions }
   | { name: "record"; options: RecordOptions }
   | { name: "replay"; options: ReplayOptions }
+  | { name: "contract-import-openapi"; options: ContractImportOpenApiOptions }
+  | { name: "contract-import-har"; options: ContractImportHarOptions }
+  | { name: "contract-diff"; options: ContractDiffOptions }
   | { name: "init" }
   | { name: "setup"; options: SetupOptions }
   | { name: "open"; options: OpenOptions }
@@ -51,12 +54,14 @@ export type PolicyExplainInput =
   | { type: "credential"; value: string }
   | { type: "scenario"; scenarioId: string; completedScenarioIds: string[] }
   | { type: "enforcement"; mode: "linux-network-namespace" | "proxy-guidance" }
-  | { type: "report"; productionEgressAttempts: number; forbiddenCredentialMatches: number };
+  | { type: "report"; productionEgressAttempts: number; forbiddenCredentialMatches: number; breakingContractChanges?: number };
 
 export type EvidenceGenerateOptions = {
   policyPath?: string;
   runPath?: string;
   outPath?: string;
+  contractBaselinePath?: string;
+  contractCandidatePath?: string;
   ci?: boolean;
   json?: boolean;
 };
@@ -84,6 +89,22 @@ export type RecordOptions = {
 export type ReplayOptions = {
   bundlePath: string;
   requestsPath: string;
+  json?: boolean;
+};
+
+export type ContractImportOpenApiOptions = {
+  inputPath: string;
+  outPath?: string;
+  title?: string;
+};
+
+export type ContractImportHarOptions = RecordOptions & { contractOutPath?: string };
+
+export type ContractDiffOptions = {
+  baselinePath: string;
+  candidatePath: string;
+  policyPath?: string;
+  ci?: boolean;
   json?: boolean;
 };
 
@@ -164,6 +185,10 @@ export function parseCliArgs(args: string[]): CliCommand {
 
   if (command === "replay") {
     return { name: "replay", options: parseReplayOptions(args.slice(1)) };
+  }
+
+  if (command === "contract") {
+    return parseContractCommand(args.slice(1));
   }
 
   if (command === "init") {
@@ -378,6 +403,16 @@ function parseEvidenceGenerateOptions(args: string[]): EvidenceGenerateOptions {
       index += 1;
       continue;
     }
+    if (arg === "--contract-baseline") {
+      options.contractBaselinePath = readValue(args, index, arg);
+      index += 1;
+      continue;
+    }
+    if (arg === "--contract-candidate") {
+      options.contractCandidatePath = readValue(args, index, arg);
+      index += 1;
+      continue;
+    }
     if (arg === "--ci") {
       options.ci = true;
       continue;
@@ -386,8 +421,9 @@ function parseEvidenceGenerateOptions(args: string[]): EvidenceGenerateOptions {
       options.json = true;
       continue;
     }
-    throw new CliError(`Unknown evidence generate option: ${arg}`, "Supported options: --policy ghostapi.policy.yaml, --run .ghostapi/runs/<id>/run.json, --out .ghostapi/reports/report.json, --ci, --json");
+    throw new CliError(`Unknown evidence generate option: ${arg}`, "Supported options: --policy ghostapi.policy.yaml, --run .ghostapi/runs/<id>/run.json, --out .ghostapi/reports/report.json, --contract-baseline base.contract.json, --contract-candidate head.contract.json, --ci, --json");
   }
+  if ((options.contractBaselinePath === undefined) !== (options.contractCandidatePath === undefined)) throw new CliError("Contract drift evidence requires both contract paths.", "Use --contract-baseline base.contract.json --contract-candidate head.contract.json.");
   return options;
 }
 
@@ -473,6 +509,49 @@ function parseReplayOptions(args: string[]): ReplayOptions {
   return options as ReplayOptions;
 }
 
+function parseContractCommand(args: string[]): CliCommand {
+  const [subcommand, ...rest] = args;
+  if (subcommand === "import-openapi") return { name: "contract-import-openapi", options: parseContractImportOpenApiOptions(rest) };
+  if (subcommand === "import-har") return { name: "contract-import-har", options: parseContractImportHarOptions(rest) };
+  if (subcommand === "diff") return { name: "contract-diff", options: parseContractDiffOptions(rest) };
+  throw new CliError(`Unknown contract command: ${subcommand ?? "<missing>"}`, "Use: ghostapi contract import-openapi|import-har|diff");
+}
+
+function parseContractImportOpenApiOptions(args: string[]): ContractImportOpenApiOptions {
+  const options: Partial<ContractImportOpenApiOptions> = {};
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index]!;
+    if (arg === "--input") { options.inputPath = readValue(args, index, arg); index += 1; continue; }
+    if (arg === "--out") { options.outPath = readValue(args, index, arg); index += 1; continue; }
+    if (arg === "--title") { options.title = readValue(args, index, arg); index += 1; continue; }
+    throw new CliError(`Unknown contract import-openapi option: ${arg}`, "Supported options: --input openapi.json, --out contract.json, --title title");
+  }
+  if (!options.inputPath) throw new CliError("Missing OpenAPI input.", "Use: ghostapi contract import-openapi --input openapi.json");
+  return options as ContractImportOpenApiOptions;
+}
+
+function parseContractImportHarOptions(args: string[]): ContractImportHarOptions {
+  const base = parseRecordOptions(args.filter((arg, index) => arg !== "--contract-out" && args[index - 1] !== "--contract-out"));
+  const contractOutIndex = args.indexOf("--contract-out");
+  if (contractOutIndex === -1) return base;
+  return { ...base, contractOutPath: readValue(args, contractOutIndex, "--contract-out") };
+}
+
+function parseContractDiffOptions(args: string[]): ContractDiffOptions {
+  const options: Partial<ContractDiffOptions> = {};
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index]!;
+    if (arg === "--baseline") { options.baselinePath = readValue(args, index, arg); index += 1; continue; }
+    if (arg === "--candidate") { options.candidatePath = readValue(args, index, arg); index += 1; continue; }
+    if (arg === "--policy") { options.policyPath = readValue(args, index, arg); index += 1; continue; }
+    if (arg === "--ci") { options.ci = true; continue; }
+    if (arg === "--json") { options.json = true; continue; }
+    throw new CliError(`Unknown contract diff option: ${arg}`, "Supported options: --baseline base.contract.json, --candidate head.contract.json, --policy ghostapi.policy.yaml, --ci, --json");
+  }
+  if (!options.baselinePath || !options.candidatePath) throw new CliError("Contract diff requires baseline and candidate paths.", "Use: ghostapi contract diff --baseline base.contract.json --candidate head.contract.json");
+  return options as ContractDiffOptions;
+}
+
 function parsePolicyExplainInput(args: string[]): PolicyExplainInput {
   const [kind, value, ...rest] = args;
   if (kind === "network") {
@@ -492,10 +571,11 @@ function parsePolicyExplainInput(args: string[]): PolicyExplainInput {
   if (kind === "report") {
     const forbiddenCredentialMatches = Number(rest[0]);
     const productionEgressAttempts = Number(value);
-    if (rest.length !== 1 || !Number.isInteger(productionEgressAttempts) || productionEgressAttempts < 0 || !Number.isInteger(forbiddenCredentialMatches) || forbiddenCredentialMatches < 0) {
-      throw new CliError("Report explain requires two non-negative integer counts.", "Use: ghostapi policy explain report 0 0");
+    const breakingContractChanges = rest.length === 2 ? Number(rest[1]) : undefined;
+    if ((rest.length !== 1 && rest.length !== 2) || !Number.isInteger(productionEgressAttempts) || productionEgressAttempts < 0 || !Number.isInteger(forbiddenCredentialMatches) || forbiddenCredentialMatches < 0 || (breakingContractChanges !== undefined && (!Number.isInteger(breakingContractChanges) || breakingContractChanges < 0))) {
+      throw new CliError("Report explain requires two or three non-negative integer counts.", "Use: ghostapi policy explain report 0 0 [0]");
     }
-    return { type: "report", productionEgressAttempts, forbiddenCredentialMatches };
+    return { type: "report", productionEgressAttempts, forbiddenCredentialMatches, ...(breakingContractChanges === undefined ? {} : { breakingContractChanges }) };
   }
   if (args.length !== 1) throw new CliError("Scenario explain accepts one scenario id.", "Use: ghostapi policy explain stripe.card_declined");
   return { type: "scenario", scenarioId: kind!, completedScenarioIds: [] };

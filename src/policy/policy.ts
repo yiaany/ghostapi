@@ -113,7 +113,7 @@ function parsePolicy(value: unknown): GhostApiPolicy {
   const enforcementRecord = recordAt(record.enforcement, "policy.enforcement");
   assertKeys(enforcementRecord, "policy.enforcement", ["allowedModes"]);
   const reportsRecord = recordAt(record.reports, "policy.reports");
-  assertKeys(reportsRecord, "policy.reports", ["maxProductionEgressAttempts", "maxForbiddenCredentialMatches"]);
+  assertKeys(reportsRecord, "policy.reports", ["maxProductionEgressAttempts", "maxForbiddenCredentialMatches", "maxBreakingContractChanges"]);
 
   return {
     version: 1,
@@ -128,7 +128,8 @@ function parsePolicy(value: unknown): GhostApiPolicy {
     enforcement: { allowedModes: arrayAt(enforcementRecord.allowedModes ?? [], "policy.enforcement.allowedModes").map((entry, index) => validateEnforcementMode(entry, `policy.enforcement.allowedModes[${index}]`)) },
     reports: {
       maxProductionEgressAttempts: nonNegativeIntegerAt(reportsRecord.maxProductionEgressAttempts, "policy.reports.maxProductionEgressAttempts"),
-      maxForbiddenCredentialMatches: nonNegativeIntegerAt(reportsRecord.maxForbiddenCredentialMatches, "policy.reports.maxForbiddenCredentialMatches")
+      maxForbiddenCredentialMatches: nonNegativeIntegerAt(reportsRecord.maxForbiddenCredentialMatches, "policy.reports.maxForbiddenCredentialMatches"),
+      maxBreakingContractChanges: nonNegativeIntegerAt(reportsRecord.maxBreakingContractChanges ?? 0, "policy.reports.maxBreakingContractChanges")
     }
   };
 }
@@ -162,9 +163,10 @@ function evaluateScenario(policy: GhostApiPolicy, scenarioId: string, completed:
 function evaluateReport(policy: GhostApiPolicy, event: Extract<PolicyEvent, { type: "report" }>): PolicyDecision {
   const trace = [
     `production egress attempts: ${event.productionEgressAttempts} <= ${policy.reports.maxProductionEgressAttempts}`,
-    `forbidden credential matches: ${event.forbiddenCredentialMatches} <= ${policy.reports.maxForbiddenCredentialMatches}`
+    `forbidden credential matches: ${event.forbiddenCredentialMatches} <= ${policy.reports.maxForbiddenCredentialMatches}`,
+    `breaking contract changes: ${event.breakingContractChanges ?? 0} <= ${policy.reports.maxBreakingContractChanges}`
   ];
-  return event.productionEgressAttempts <= policy.reports.maxProductionEgressAttempts && event.forbiddenCredentialMatches <= policy.reports.maxForbiddenCredentialMatches
+  return event.productionEgressAttempts <= policy.reports.maxProductionEgressAttempts && event.forbiddenCredentialMatches <= policy.reports.maxForbiddenCredentialMatches && (event.breakingContractChanges ?? 0) <= policy.reports.maxBreakingContractChanges
     ? allow("Report thresholds are satisfied.", trace)
     : deny("A report threshold is exceeded.", trace);
 }
