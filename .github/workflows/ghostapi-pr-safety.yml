@@ -1,0 +1,134 @@
+name: GhostAPI PR Safety
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  merge_group:
+    types: [checks_requested]
+
+permissions: {}
+
+env:
+  GHOSTAPI_VERSION: "0.1.7"
+  EVIDENCE_DIR: ${{ runner.temp }}/ghostapi-evidence
+  GHOSTAPI_DATA_DIR: ${{ runner.temp }}/ghostapi-data
+
+jobs:
+  safety:
+    name: Enforced safety check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install package dependencies
+        run: npm ci
+      - name: Build GhostAPI from this commit
+        run: npm run build
+      - name: Install the pinned GhostAPI package under test
+        run: |
+          test "$(node -p \"require('./package.json').version\")" = "$GHOSTAPI_VERSION"
+          mkdir -p "$RUNNER_TEMP/ghostapi-package"
+          npm pack --pack-destination "$RUNNER_TEMP/ghostapi-package"
+          npm install --global "$RUNNER_TEMP/ghostapi-package/yiaany-ghostapi-$GHOSTAPI_VERSION.tgz"
+      - name: Run the safe fixture through enforced mode
+        id: run
+        continue-on-error: true
+        run: |
+          ghostapi run --policy examples/ci-smoke/ghostapi.policy.yaml -- npm --prefix examples/ci-smoke run test:safe
+          evidence_path="$(find "$GHOSTAPI_DATA_DIR/runs" -mindepth 2 -maxdepth 2 -name run.json -type f -print | head -n 1)"
+          test -n "$evidence_path"
+          echo "evidence_path=$evidence_path" >> "$GITHUB_OUTPUT"
+      - name: Verify the production-egress fixture is blocked
+        id: production
+        if: ${{ steps.run.outcome == 'success' }}
+        run: |
+          if ghostapi run --policy examples/ci-smoke/ghostapi.policy.yaml -- npm --prefix examples/ci-smoke run test:production-egress; then
+            echo "Production-egress fixture unexpectedly succeeded."
+            exit 1
+          fi
+      - name: Generate sanitized evidence
+        id: evidence
+        if: ${{ always() }}
+        continue-on-error: true
+        run: |
+          mkdir -p "$EVIDENCE_DIR"
+          if [ -n "${{ steps.run.outputs.evidence_path }}" ]; then
+            ghostapi evidence generate --policy examples/ci-smoke/ghostapi.policy.yaml --run "${{ steps.run.outputs.evidence_path }}" --out "$EVIDENCE_DIR/report.json" --ci
+          else
+            ghostapi evidence generate --policy examples/ci-smoke/ghostapi.policy.yaml --out "$EVIDENCE_DIR/report.json" --ci
+          fi
+      - name: Publish concise job summary
+        if: ${{ always() }}
+        run: |
+          {
+            echo "## GhostAPI PR safety"
+            echo
+            echo "| Check | Result |"
+            echo "| --- | --- |"
+            echo "| Enforced run | ${{ steps.run.outcome }} |"
+            echo "| Production egress fixture | ${{ steps.production.outcome }} |"
+            echo "| Policy evidence | ${{ steps.evidence.outcome }} |"
+            if [ -f "$EVIDENCE_DIR/report.json" ]; then
+              echo
+              echo "### Sanitized evidence"
+              echo '```text'
+              ghostapi evidence view "$EVIDENCE_DIR/report.json"
+              echo '```'
+            else
+              echo
+              echo "No evidence artifact was created. The safety check fails closed."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload sanitized evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ghostapi-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.EVIDENCE_DIR }}/report.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Enforce GhostAPI policy result
+        if: ${{ always() }}
+        env:
+          RUN_OUTCOME: ${{ steps.run.outcome }}
+          PRODUCTION_OUTCOME: ${{ steps.production.outcome }}
+          EVIDENCE_OUTCOME: ${{ steps.evidence.outcome }}
+        run: |
+          test "$RUN_OUTCOME" = "success"
+          test "$PRODUCTION_OUTCOME" = "success"
+          test "$EVIDENCE_OUTCOME" = "success"
+
+  comment:
+    name: Update PR safety comment
+    needs: safety
+    if: ${{ always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Upsert the GhostAPI comment without running PR code
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          SAFETY_RESULT: ${{ needs.safety.result }}
+        run: |
+          marker='<!-- ghostapi-pr-safety -->'
+          body="$marker
+          ## GhostAPI PR safety
+
+          Result: **$SAFETY_RESULT**
+
+          The status check and sanitized evidence artifact are the source of truth. This comment is updated in place and contains no request traffic or secrets."
+          comment_id="$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" | head -n 1)"
+          if [ -n "$comment_id" ]; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$comment_id" -f body="$body"
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" -f body="$body"
+          fi

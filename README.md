@@ -58,6 +58,8 @@ Use [`ghostapi.policy.yaml`](docs/policy.md) to keep network, credential and req
 
 Generate CI-ready evidence with `ghostapi evidence generate --policy ghostapi.policy.yaml --ci`; the JSON artifact is redacted, canonicalized and rejected if later corrupted.
 
+Use the [GitHub Actions PR safety check](docs/github-actions.md) to make an enforced run plus sanitized evidence a required status check, or follow the [generic CI guide](docs/ci.md) on another CI platform.
+
 ## What GhostAPI Does
 
 GhostAPI is a local API control layer for agent-driven development.
@@ -313,6 +315,8 @@ mcp, ai-agents, stripe, openai, mock-server, api-testing, sandbox, proxy, local-
 
 - [MCP setup](docs/mcp.md)
 - [Usage guide](docs/usage.md)
+- [GitHub Actions PR safety check](docs/github-actions.md)
+- [Generic CI guide](docs/ci.md)
 - [Provider pack authoring](docs/providers/authoring-packs.md)
 - [Release checklist](docs/release-checklist.md)
 - [Contributing](CONTRIBUTING.md)

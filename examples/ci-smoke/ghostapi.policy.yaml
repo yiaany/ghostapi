@@ -1,0 +1,21 @@
+version: 1
+network:
+  default: deny
+  allow:
+    - host: localhost
+    - host: 127.0.0.1
+  deny:
+    - host: api.stripe.com
+  productionHosts:
+    - '*.stripe.com'
+credentials:
+  forbid:
+    - sk_live_*
+requiredScenarios:
+  - ci.safe_ghostapi
+enforcement:
+  allowedModes:
+    - linux-network-namespace
+reports:
+  maxProductionEgressAttempts: 0
+  maxForbiddenCredentialMatches: 0
