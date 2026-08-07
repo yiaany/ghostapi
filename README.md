@@ -64,6 +64,8 @@ Turn explicitly allowed sandbox JSON/HAR traffic into a portable deterministic b
 
 Import a bounded OpenAPI 3.0 JSON subset or a sanitized HAR into deterministic contracts using `ghostapi contract import-openapi` and `ghostapi contract import-har`, then run `ghostapi contract diff --baseline base.contract.json --candidate head.contract.json --policy ghostapi.policy.yaml --ci`. The importer never resolves `$ref` or remote URLs; unsupported features fail closed. Contract diffs classify endpoint, request/response schema, enum/status, and provider-pack capability drift as breaking, non-breaking, or uncertain, and can be included in `ghostapi evidence generate` for CI policy enforcement. See the [contract guide](docs/usage.md#contract-import-and-drift).
 
+Score agent behavior with deterministic evals using `ghostapi eval --template retry-after --evidence .ghostapi/reports/latest.json --ci` or a local JSON spec. Core security scoring depends only on sanitized evidence, not an LLM judge, and forbidden actions such as production egress or secret leakage override cosmetic success. See the [agent eval guide](docs/usage.md#agent-evals).
+
 ## What GhostAPI Does
 
 GhostAPI is a local API control layer for agent-driven development.

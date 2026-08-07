@@ -67,6 +67,21 @@ Artifacts use schema version `1`, a stable logical hash over sorted JSON keys, a
 
 When using `ghostapi run`, pass its exact `.ghostapi/runs/<run-id>/run.json` to `evidence generate --run`. GhostAPI then reads the isolated runtime event log for that run, rather than unrelated host/workspace events. See [`docs/github-actions.md`](github-actions.md) for the pinned GitHub Actions workflow and [`docs/ci.md`](ci.md) for generic CI integration.
 
+## Agent Evals
+
+Use `ghostapi eval` to score an agent workflow against deterministic GhostAPI evidence:
+
+```bash
+ghostapi eval --template retry-after --evidence .ghostapi/reports/latest.json --ci
+ghostapi eval --spec examples/evals/retry-after.eval.json --evidence .ghostapi/reports/latest.json --json
+```
+
+Without `--evidence`, the eval command launches `task.command` through the existing `ghostapi run` boundary and then generates evidence for that run. It does not execute an unknown command directly. On unsupported hosts, `ghostapi run` still fails closed instead of falling back to a proxy-only mode.
+
+Eval specs are local JSON data only. Schema v1 describes `syntheticWorld`, `task.command`, `injectedFailures`, deterministic `expectations`, `forbidden` actions, `limits`, and a points `rubric`. Unknown fields, oversized specs, symlinks, path traversal, and enabled LLM judge settings are rejected. Built-in templates cover retry honoring `Retry-After`, duplicate payment prevention, webhook signature validation, no secret in logs, timeout recovery, and no production bypass.
+
+Core security score uses facts from sanitized evidence only. LLM-as-judge is optional future commentary and is never part of the core score. Forbidden actions such as production egress or secret leakage override cosmetic success and force the core score to `0`. Eval reports include a stable logical hash, evidence hash/link, component-level reasons, repeatability notes, and no raw secrets.
+
 ## Policy As Code
 
 Use a strict local `ghostapi.policy.yaml` to make network, credential, scenario, enforcement and report decisions deterministic:
