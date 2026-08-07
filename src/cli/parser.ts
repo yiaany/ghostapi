@@ -11,6 +11,9 @@ export type CliCommand =
   | { name: "run"; options: RunOptions }
   | { name: "policy-validate"; file?: string }
   | { name: "policy-explain"; file?: string; event: PolicyExplainInput }
+  | { name: "evidence-generate"; options: EvidenceGenerateOptions }
+  | { name: "evidence-view"; options: EvidenceViewOptions }
+  | { name: "evidence-compare"; options: EvidenceCompareOptions }
   | { name: "init" }
   | { name: "setup"; options: SetupOptions }
   | { name: "open"; options: OpenOptions }
@@ -47,6 +50,25 @@ export type PolicyExplainInput =
   | { type: "scenario"; scenarioId: string; completedScenarioIds: string[] }
   | { type: "enforcement"; mode: "linux-network-namespace" | "proxy-guidance" }
   | { type: "report"; productionEgressAttempts: number; forbiddenCredentialMatches: number };
+
+export type EvidenceGenerateOptions = {
+  policyPath?: string;
+  runPath?: string;
+  outPath?: string;
+  ci?: boolean;
+  json?: boolean;
+};
+
+export type EvidenceViewOptions = {
+  path: string;
+  json?: boolean;
+};
+
+export type EvidenceCompareOptions = {
+  leftPath: string;
+  rightPath: string;
+  json?: boolean;
+};
 
 export type SetupOptions = {
   write?: boolean;
@@ -113,6 +135,10 @@ export function parseCliArgs(args: string[]): CliCommand {
 
   if (command === "policy") {
     return parsePolicyCommand(args.slice(1));
+  }
+
+  if (command === "evidence") {
+    return parseEvidenceCommand(args.slice(1));
   }
 
   if (command === "init") {
@@ -298,6 +324,65 @@ function parsePolicyFileOption(args: string[]): string | undefined {
   if (args.length === 0) return undefined;
   if (args.length === 2 && args[0] === "--file") return readValue(args, 0, "--file");
   throw new CliError(`Unexpected policy argument: ${args[0]}`, "Use: ghostapi policy validate [--file ghostapi.policy.yaml]");
+}
+
+function parseEvidenceCommand(args: string[]): CliCommand {
+  const [subcommand, ...rest] = args;
+  if (subcommand === "generate") return { name: "evidence-generate", options: parseEvidenceGenerateOptions(rest) };
+  if (subcommand === "view") return { name: "evidence-view", options: parseEvidenceViewOptions(rest) };
+  if (subcommand === "compare") return { name: "evidence-compare", options: parseEvidenceCompareOptions(rest) };
+  throw new CliError(`Unknown evidence command: ${subcommand ?? "<missing>"}`, "Use: ghostapi evidence generate|view|compare");
+}
+
+function parseEvidenceGenerateOptions(args: string[]): EvidenceGenerateOptions {
+  const options: EvidenceGenerateOptions = {};
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index]!;
+    if (arg === "--policy") {
+      options.policyPath = readValue(args, index, arg);
+      index += 1;
+      continue;
+    }
+    if (arg === "--run") {
+      options.runPath = readValue(args, index, arg);
+      index += 1;
+      continue;
+    }
+    if (arg === "--out") {
+      options.outPath = readValue(args, index, arg);
+      index += 1;
+      continue;
+    }
+    if (arg === "--ci") {
+      options.ci = true;
+      continue;
+    }
+    if (arg === "--json") {
+      options.json = true;
+      continue;
+    }
+    throw new CliError(`Unknown evidence generate option: ${arg}`, "Supported options: --policy ghostapi.policy.yaml, --run .ghostapi/runs/<id>/run.json, --out .ghostapi/reports/report.json, --ci, --json");
+  }
+  return options;
+}
+
+function parseEvidenceViewOptions(args: string[]): EvidenceViewOptions {
+  const path = args[0];
+  if (!path) throw new CliError("Missing evidence report path.", "Use: ghostapi evidence view <report.json> [--json]");
+  const rest = args.slice(1);
+  if (rest.length === 0) return { path };
+  if (rest.length === 1 && rest[0] === "--json") return { path, json: true };
+  throw new CliError(`Unexpected evidence view argument: ${rest[0]}`, "Use: ghostapi evidence view <report.json> [--json]");
+}
+
+function parseEvidenceCompareOptions(args: string[]): EvidenceCompareOptions {
+  const leftPath = args[0];
+  const rightPath = args[1];
+  if (!leftPath || !rightPath) throw new CliError("Missing evidence report paths.", "Use: ghostapi evidence compare <left.json> <right.json> [--json]");
+  const rest = args.slice(2);
+  if (rest.length === 0) return { leftPath, rightPath };
+  if (rest.length === 1 && rest[0] === "--json") return { leftPath, rightPath, json: true };
+  throw new CliError(`Unexpected evidence compare argument: ${rest[0]}`, "Use: ghostapi evidence compare <left.json> <right.json> [--json]");
 }
 
 function parsePolicyExplainInput(args: string[]): PolicyExplainInput {

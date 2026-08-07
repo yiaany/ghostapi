@@ -75,6 +75,15 @@ describe("CLI parser", () => {
     expect(parseCliArgs(["report"])).toEqual({ name: "report" });
   });
 
+  it("parses evidence commands", () => {
+    expect(parseCliArgs(["evidence", "generate", "--policy", "ghostapi.policy.yaml", "--run", ".ghostapi/runs/1/run.json", "--out", ".ghostapi/reports/1.json", "--ci", "--json"])).toEqual({
+      name: "evidence-generate",
+      options: { policyPath: "ghostapi.policy.yaml", runPath: ".ghostapi/runs/1/run.json", outPath: ".ghostapi/reports/1.json", ci: true, json: true }
+    });
+    expect(parseCliArgs(["evidence", "view", ".ghostapi/reports/1.json", "--json"])).toEqual({ name: "evidence-view", options: { path: ".ghostapi/reports/1.json", json: true } });
+    expect(parseCliArgs(["evidence", "compare", "left.json", "right.json"])).toEqual({ name: "evidence-compare", options: { leftPath: "left.json", rightPath: "right.json" } });
+  });
+
   it("throws actionable errors for invalid user input", () => {
     expect(() => parseCliArgs(["start", "--port", "nope"])).toThrow(CliError);
     expect(() => parseCliArgs(["clear", "logs"])).toThrow("Unknown clear target");
@@ -87,5 +96,7 @@ describe("CLI parser", () => {
     expect(() => parseCliArgs(["policy", "validate", "--wat"])).toThrow("Unexpected policy argument");
     expect(() => parseCliArgs(["policy", "explain", "network"])).toThrow("Missing network host");
     expect(() => parseCliArgs(["policy", "explain", "report", "-1", "0"])).toThrow("Report explain requires two non-negative integer counts");
+    expect(() => parseCliArgs(["evidence", "view"])).toThrow("Missing evidence report path");
+    expect(() => parseCliArgs(["evidence", "compare", "left.json"])).toThrow("Missing evidence report paths");
   });
 });

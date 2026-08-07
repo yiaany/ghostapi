@@ -51,6 +51,20 @@ The target and all ordinary descendants have no external route, DNS path or non-
 
 Each run writes sanitized lifecycle evidence under `.ghostapi/runs/<run-id>/run.json`. The command, argument values and environment secrets are not persisted there; allowed GhostAPI request traffic remains in the run's isolated GhostAPI event log.
 
+## Evidence Reports
+
+Turn run lifecycle evidence, persisted traffic events and an optional policy into a canonical JSON artifact:
+
+```bash
+ghostapi evidence generate --policy ghostapi.policy.yaml --ci
+ghostapi evidence view .ghostapi/reports/latest.json
+ghostapi evidence compare .ghostapi/reports/base.json .ghostapi/reports/head.json
+```
+
+The report includes run identity, timestamps, GhostAPI version, enforcement capability, policy hash, covered providers/scenarios, allowed GhostAPI attempts, secret categories, retry/failure counts, findings and incomplete-evidence warnings. It intentionally does not include request authorization, cookies, raw body secrets, command arguments or raw policy content.
+
+Artifacts use schema version `1`, a stable logical hash over sorted JSON keys, a 512 KiB file limit and local retention of the latest 20 generated reports under `.ghostapi/reports/`. `ghostapi evidence view` rejects corrupted artifacts whose logical hash no longer matches their contents. `--ci` exits non-zero when fail findings are present.
+
 ## Policy As Code
 
 Use a strict local `ghostapi.policy.yaml` to make network, credential, scenario, enforcement and report decisions deterministic:

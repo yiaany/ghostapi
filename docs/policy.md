@@ -13,6 +13,8 @@ ghostapi policy explain report 0 0
 
 `ghostapi run --policy ghostapi.policy.yaml -- <command>` loads and validates the file once before any namespace preflight or target spawn. The run evidence records only the policy SHA-256 and required scenario IDs, not policy file content or command arguments. Policy changes during a run do not reload or alter that run.
 
+`ghostapi evidence generate --policy ghostapi.policy.yaml --ci` evaluates required scenarios and report thresholds against the generated evidence artifact. CI mode exits non-zero when required scenarios are missing, production-egress or forbidden-credential thresholds are exceeded, or other fail findings are present.
+
 ## Schema V1
 
 ```yaml
@@ -43,7 +45,7 @@ reports:
 - `network.allow` and `network.deny`: rules contain exactly one `host` or `provider` field.
 - `network.productionHosts`: classifies hostnames for decision traces and CI/report evaluation.
 - `credentials.forbid`: bounded `*` globs matched against an explicit input; GhostAPI never expands environment variables in policy.
-- `requiredScenarios`: scenario IDs a future report/CI integration must mark complete.
+- `requiredScenarios`: scenario IDs the evidence report must mark complete.
 - `enforcement.allowedModes`: currently `linux-network-namespace` or `proxy-guidance`.
 - `reports`: maximum allowed production-egress attempts and forbidden-credential matches for a report decision.
 
