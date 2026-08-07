@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -78,6 +78,22 @@ describe("evidence reports", () => {
     const corruptedPath = join(getDataPaths().reports, "corrupted.json");
     await writeFile(corruptedPath, JSON.stringify({ ...report, summary: { ...report.summary, passed: !report.summary.passed } }), "utf8");
     await expect(loadEvidenceReport(corruptedPath)).rejects.toThrow("logical hash");
+  });
+
+  it("uses the isolated run event log when a run evidence path is supplied", async () => {
+    await addEvent({ ...eventFixture(), provider: "global" });
+    const runDirectory = join(getDataPaths().root, "runs", "run-runtime-events");
+    const runtimeDirectory = join(runDirectory, "runtime");
+    const runPath = join(runDirectory, "run.json");
+    await mkdir(runtimeDirectory, { recursive: true });
+    await writeFile(runPath, JSON.stringify(runEvidenceFixture()), "utf8");
+    await writeFile(join(runtimeDirectory, "events.jsonl"), `${JSON.stringify({ ...eventFixture(), request: { body: { scenario: "ci.safe_ghostapi" } } })}\n`, "utf8");
+
+    const { report } = await generateEvidenceReport({ runPath, generatedAt: "2026-08-07T00:00:00.000Z", ghostApiVersion: "0.0.0-test" });
+
+    expect(report.coverage.providers).toEqual(["stripe"]);
+    expect(report.coverage.scenarios).toEqual(["ci.safe_ghostapi"]);
+    expect(report.egress.allowedAttempts).toHaveLength(1);
   });
 
   it("rejects output path traversal and strips terminal escapes in the human summary", async () => {

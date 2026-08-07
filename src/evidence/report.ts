@@ -116,15 +116,15 @@ export class EvidenceReportError extends Error {
 
 export async function generateEvidenceReport(options: EvidenceGenerateOptions = {}): Promise<{ report: EvidenceReport; path: string }> {
   const projectRoot = await realProjectRoot(options.projectRoot ?? process.cwd());
-  const runEvidence = await readRunEvidence(options.runPath, projectRoot);
+  const run = await readRunEvidence(options.runPath, projectRoot);
   const loadedPolicy = await loadPolicyFile(options.policyPath, projectRoot, options.policyPath !== undefined);
-  const events = await readPersistedEvents();
+  const events = await readPersistedEvents(run?.path);
   const report = buildEvidenceReport({
     events,
     policy: loadedPolicy?.policy,
-    policyHash: loadedPolicy?.hash ?? readString(runEvidence?.policy?.policyHash),
-    requiredScenarios: loadedPolicy?.policy.requiredScenarios ?? readStringArray(runEvidence?.policy?.requiredScenarios),
-    runEvidence,
+    policyHash: loadedPolicy?.hash ?? readString(run?.evidence.policy?.policyHash),
+    requiredScenarios: loadedPolicy?.policy.requiredScenarios ?? readStringArray(run?.evidence.policy?.requiredScenarios),
+    runEvidence: run?.evidence ?? null,
     generatedAt: options.generatedAt ?? new Date().toISOString(),
     ghostApiVersion: options.ghostApiVersion ?? readPackageVersion()
   });
@@ -290,13 +290,18 @@ async function writeEvidenceReport(report: EvidenceReport, projectRoot: string, 
   return target;
 }
 
-async function readPersistedEvents(): Promise<ProxyEvent[]> {
-  const paths = [getDataPaths().events, `${getDataPaths().events}.1`, `${getDataPaths().events}.2`];
+async function readPersistedEvents(runEvidencePath?: string): Promise<ProxyEvent[]> {
+  const eventsPath = runEvidencePath === undefined
+    ? getDataPaths().events
+    : join(dirname(runEvidencePath), "runtime", "events.jsonl");
+  const paths = [eventsPath, `${eventsPath}.1`, `${eventsPath}.2`];
   const events: ProxyEvent[] = [];
   let bytes = 0;
   for (const path of paths.reverse()) {
     let source: string;
     try {
+      const info = await lstat(path);
+      if (!info.isFile() || info.isSymbolicLink()) throw new EvidenceReportError("Event evidence must be a regular non-symlink file.");
       source = await readFile(path, "utf8");
     } catch (error) {
       if (isErrorCode(error, "ENOENT")) continue;
@@ -314,11 +319,11 @@ async function readPersistedEvents(): Promise<ProxyEvent[]> {
   return events;
 }
 
-async function readRunEvidence(runPath: string | undefined, projectRoot: string): Promise<RunEvidence | null> {
+async function readRunEvidence(runPath: string | undefined, projectRoot: string): Promise<{ path: string; evidence: RunEvidence } | null> {
   const path = runPath ?? await findLatestRunEvidence();
   if (path === undefined) return null;
   const resolved = runPath === undefined ? path : await resolveExistingReportPath(runPath, projectRoot);
-  return JSON.parse(await readFile(resolved, "utf8")) as RunEvidence;
+  return { path: resolved, evidence: JSON.parse(await readFile(resolved, "utf8")) as RunEvidence };
 }
 
 async function findLatestRunEvidence(): Promise<string | undefined> {

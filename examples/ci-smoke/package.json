@@ -1,0 +1,9 @@
+{
+  "name": "ghostapi-ci-smoke-fixtures",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:safe": "node safe.mjs",
+    "test:production-egress": "node production-egress.mjs"
+  }
+}

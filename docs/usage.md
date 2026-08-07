@@ -65,6 +65,8 @@ The report includes run identity, timestamps, GhostAPI version, enforcement capa
 
 Artifacts use schema version `1`, a stable logical hash over sorted JSON keys, a 512 KiB file limit and local retention of the latest 20 generated reports under `.ghostapi/reports/`. `ghostapi evidence view` rejects corrupted artifacts whose logical hash no longer matches their contents. `--ci` exits non-zero when fail findings are present.
 
+When using `ghostapi run`, pass its exact `.ghostapi/runs/<run-id>/run.json` to `evidence generate --run`. GhostAPI then reads the isolated runtime event log for that run, rather than unrelated host/workspace events. See [`docs/github-actions.md`](github-actions.md) for the pinned GitHub Actions workflow and [`docs/ci.md`](ci.md) for generic CI integration.
+
 ## Policy As Code
 
 Use a strict local `ghostapi.policy.yaml` to make network, credential, scenario, enforcement and report decisions deterministic:
