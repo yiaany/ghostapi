@@ -56,6 +56,8 @@ On supported Linux hosts, `ghostapi run -- <command>` adds a loopback-only names
 
 Use [`ghostapi.policy.yaml`](docs/policy.md) to keep network, credential and required-scenario decisions versioned, deterministic and reviewable.
 
+Generate CI-ready evidence with `ghostapi evidence generate --policy ghostapi.policy.yaml --ci`; the JSON artifact is redacted, canonicalized and rejected if later corrupted.
+
 ## What GhostAPI Does
 
 GhostAPI is a local API control layer for agent-driven development.
@@ -268,6 +270,7 @@ curl -X POST http://127.0.0.1:8080/tasks \
 | `.ghostapi/config.json` | Local GhostAPI config. |
 | `.ghostapi/state.json` | Simulated API object state. |
 | `.ghostapi/events.jsonl` | Captured local request events; 5 MiB active file plus two archives. |
+| `.ghostapi/reports/` | Versioned evidence reports; 512 KiB per artifact with latest-20 local retention. |
 | `.ghostapi/behaviors.json` | Deterministic behavior overrides. |
 | `.ghostapi/cache/` | Local response cache. |
 | `.ghostapi/fault-lab.json` | Persisted Fault Lab configuration shared with MCP. |
@@ -283,6 +286,9 @@ npx @yiaany/ghostapi open
 npx @yiaany/ghostapi setup --write
 npx @yiaany/ghostapi mcp
 npx @yiaany/ghostapi report
+npx @yiaany/ghostapi evidence generate --policy ghostapi.policy.yaml --ci
+npx @yiaany/ghostapi evidence view .ghostapi/reports/latest.json
+npx @yiaany/ghostapi evidence compare .ghostapi/reports/base.json .ghostapi/reports/head.json
 npx @yiaany/ghostapi doctor --port 8080
 npx @yiaany/ghostapi clear cache|state|events|all
 npx @yiaany/ghostapi providers list

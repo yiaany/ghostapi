@@ -7,6 +7,7 @@ export type DataPaths = {
   behaviors: string;
   cache: string;
   events: string;
+  reports: string;
   scenarios: string;
   faultLab: string;
 };
@@ -36,6 +37,7 @@ export function getDataPaths(): DataPaths {
     behaviors: resolveDataPath("behaviors.json"),
     cache: resolveDataPath("cache"),
     events: resolveDataPath("events.jsonl"),
+    reports: resolveDataPath("reports"),
     scenarios: resolveDataPath("scenarios"),
     faultLab: resolveDataPath("fault-lab.json")
   };

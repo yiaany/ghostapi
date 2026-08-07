@@ -1,0 +1,19 @@
+version: 1
+network:
+  default: deny
+  allow:
+    - host: localhost
+  deny: []
+  productionHosts:
+    - '*.stripe.com'
+credentials:
+  forbid:
+    - sk_live_*
+requiredScenarios:
+  - stripe.not_completed
+enforcement:
+  allowedModes:
+    - linux-network-namespace
+reports:
+  maxProductionEgressAttempts: 0
+  maxForbiddenCredentialMatches: 0

@@ -23,6 +23,7 @@ import { CliError } from "./errors.js";
 import { startMcpServer } from "../mcp/server.js";
 import { generateRepoSetup, writeRepoSetup } from "../setup/setupGenerator.js";
 import { generateSafetyReport } from "../report/safetyReport.js";
+import { compareEvidenceReports, formatEvidenceCompare, formatEvidenceReport, generateEvidenceReport, loadEvidenceReport, EvidenceReportError } from "../evidence/index.js";
 
 async function main(): Promise<void> {
   const command = parseCliArgs(process.argv.slice(2));
@@ -61,6 +62,15 @@ async function main(): Promise<void> {
       return;
     case "policy-explain":
       await explainPolicy(command.file, command.event);
+      return;
+    case "evidence-generate":
+      await generateEvidence(command.options);
+      return;
+    case "evidence-view":
+      await viewEvidence(command.options);
+      return;
+    case "evidence-compare":
+      await compareEvidence(command.options);
       return;
     case "init":
       await initProject();
@@ -291,6 +301,29 @@ async function explainPolicy(file: string | undefined, event: Parameters<typeof 
   console.log(formatPolicyDecision(evaluatePolicy(loaded.policy, event)));
 }
 
+async function generateEvidence(options: { policyPath?: string; runPath?: string; outPath?: string; ci?: boolean; json?: boolean }): Promise<void> {
+  const { report, path } = await generateEvidenceReport({ policyPath: options.policyPath, runPath: options.runPath, outPath: options.outPath });
+  if (options.json) console.log(JSON.stringify({ path, report }, null, 2));
+  else {
+    console.log(formatEvidenceReport(report));
+    console.log(`Artifact: ${path}`);
+  }
+  if (options.ci && !report.summary.passed) process.exitCode = 2;
+}
+
+async function viewEvidence(options: { path: string; json?: boolean }): Promise<void> {
+  const report = await loadEvidenceReport(options.path);
+  console.log(options.json ? JSON.stringify(report, null, 2) : formatEvidenceReport(report));
+}
+
+async function compareEvidence(options: { leftPath: string; rightPath: string; json?: boolean }): Promise<void> {
+  const left = await loadEvidenceReport(options.leftPath);
+  const right = await loadEvidenceReport(options.rightPath);
+  const result = compareEvidenceReports(left, right);
+  console.log(options.json ? JSON.stringify(result, null, 2) : formatEvidenceCompare(result));
+  if (!result.equal) process.exitCode = 1;
+}
+
 async function canWriteGhostApiDir(): Promise<boolean> {
   const dataDir = getDataPaths().root;
   try {
@@ -330,6 +363,9 @@ Usage:
   ghostapi run [--port 8080] [--allow-host localhost] [--policy ghostapi.policy.yaml] -- <command> [args...]
   ghostapi policy validate [--file ghostapi.policy.yaml]
   ghostapi policy explain <scenario-id>|network <host>|credential <value>|enforcement <mode>|report <production-attempts> <credential-matches> [--file ghostapi.policy.yaml]
+  ghostapi evidence generate [--policy ghostapi.policy.yaml] [--run .ghostapi/runs/<id>/run.json] [--out .ghostapi/reports/report.json] [--ci] [--json]
+  ghostapi evidence view <report.json> [--json]
+  ghostapi evidence compare <left.json> <right.json> [--json]
   ghostapi init`);
 }
 
@@ -341,6 +377,11 @@ main().catch((error: unknown) => {
   }
 
   if (error instanceof PolicyValidationError) {
+    console.error(`Error: ${error.message}`);
+    process.exit(1);
+  }
+
+  if (error instanceof EvidenceReportError) {
     console.error(`Error: ${error.message}`);
     process.exit(1);
   }
