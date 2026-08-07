@@ -48,6 +48,17 @@ describe("CLI parser", () => {
         command: ["node", "script.mjs", "--secret=sk_live_fixture"]
       }
     });
+    expect(parseCliArgs(["run", "--policy", "ghostapi.policy.yaml", "--", "node", "script.mjs"])).toEqual({
+      name: "run",
+      options: { allowHosts: [], policyPath: "ghostapi.policy.yaml", command: ["node", "script.mjs"] }
+    });
+  });
+
+  it("parses policy validation and explain commands", () => {
+    expect(parseCliArgs(["policy", "validate", "--file", "configs/ghostapi.policy.yaml"])).toEqual({ name: "policy-validate", file: "configs/ghostapi.policy.yaml" });
+    expect(parseCliArgs(["policy", "explain", "network", "api.stripe.com", "--provider", "stripe"])).toEqual({ name: "policy-explain", event: { type: "network", host: "api.stripe.com", provider: "stripe" } });
+    expect(parseCliArgs(["policy", "explain", "stripe.card_declined"])).toEqual({ name: "policy-explain", event: { type: "scenario", scenarioId: "stripe.card_declined", completedScenarioIds: [] } });
+    expect(parseCliArgs(["policy", "explain", "report", "1", "0"])).toEqual({ name: "policy-explain", event: { type: "report", productionEgressAttempts: 1, forbiddenCredentialMatches: 0 } });
   });
 
   it("parses setup and mcp", () => {
@@ -73,5 +84,8 @@ describe("CLI parser", () => {
     expect(() => parseCliArgs(["run", "node", "script.mjs"])).toThrow("Missing command separator");
     expect(() => parseCliArgs(["run", "--"])).toThrow("Missing command for ghostapi run");
     expect(() => parseCliArgs(["run", "--allow-host", "localhost", "--unknown", "--", "node"])).toThrow("Unknown run option");
+    expect(() => parseCliArgs(["policy", "validate", "--wat"])).toThrow("Unexpected policy argument");
+    expect(() => parseCliArgs(["policy", "explain", "network"])).toThrow("Missing network host");
+    expect(() => parseCliArgs(["policy", "explain", "report", "-1", "0"])).toThrow("Report explain requires two non-negative integer counts");
   });
 });

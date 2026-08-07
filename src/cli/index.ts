@@ -15,6 +15,7 @@ import { initializeLocalConfig, readLocalConfig, writeLocalConfig } from "../con
 import { getDataPaths } from "../config/dataPaths.js";
 import { detectEgressCapabilities, formatEgressCapabilityReport } from "../egress/capabilities.js";
 import { EgressRunError, runEgressCommand } from "../egress/run.js";
+import { PolicyValidationError, evaluatePolicy, formatPolicyDecision, loadPolicyFile } from "../policy/index.js";
 import { isLoopbackHost } from "../server/accessControl.js";
 import { getProviderManifests, isRegisteredProvider, providerRegistry } from "../providers/registry.js";
 import { parseCliArgs, type ClearTarget, type OpenOptions } from "./parser.js";
@@ -55,6 +56,12 @@ async function main(): Promise<void> {
       process.exitCode = result.exitCode;
       return;
     }
+    case "policy-validate":
+      await validatePolicy(command.file);
+      return;
+    case "policy-explain":
+      await explainPolicy(command.file, command.event);
+      return;
     case "init":
       await initProject();
       return;
@@ -270,6 +277,20 @@ async function runDoctor(options: { port?: number; egress?: boolean; json?: bool
   if (failed > 0) throw new CliError(`Doctor found ${failed} issue${failed === 1 ? "" : "s"}.`);
 }
 
+async function validatePolicy(file: string | undefined): Promise<void> {
+  const loaded = await loadPolicyFile(file, process.cwd(), true);
+  if (loaded === null) throw new CliError("Policy file was not found.");
+  console.log(`Policy valid: ${loaded.path}`);
+  console.log(`Schema version: ${loaded.policy.version}`);
+  console.log(`SHA-256: ${loaded.hash}`);
+}
+
+async function explainPolicy(file: string | undefined, event: Parameters<typeof evaluatePolicy>[1]): Promise<void> {
+  const loaded = await loadPolicyFile(file, process.cwd(), true);
+  if (loaded === null) throw new CliError("Policy file was not found.");
+  console.log(formatPolicyDecision(evaluatePolicy(loaded.policy, event)));
+}
+
 async function canWriteGhostApiDir(): Promise<boolean> {
   const dataDir = getDataPaths().root;
   try {
@@ -306,7 +327,9 @@ Usage:
   ghostapi mcp
   ghostapi doctor [--port 8080]
   ghostapi doctor --egress [--json]
-  ghostapi run [--port 8080] [--allow-host localhost] -- <command> [args...]
+  ghostapi run [--port 8080] [--allow-host localhost] [--policy ghostapi.policy.yaml] -- <command> [args...]
+  ghostapi policy validate [--file ghostapi.policy.yaml]
+  ghostapi policy explain <scenario-id>|network <host>|credential <value>|enforcement <mode>|report <production-attempts> <credential-matches> [--file ghostapi.policy.yaml]
   ghostapi init`);
 }
 
@@ -314,6 +337,11 @@ main().catch((error: unknown) => {
   if (error instanceof CliError || error instanceof EgressRunError) {
     console.error(`Error: ${error.message}`);
     if (error.hint) console.error(`Hint: ${error.hint}`);
+    process.exit(1);
+  }
+
+  if (error instanceof PolicyValidationError) {
+    console.error(`Error: ${error.message}`);
     process.exit(1);
   }
 

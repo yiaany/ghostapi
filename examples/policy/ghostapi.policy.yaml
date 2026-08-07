@@ -1,0 +1,26 @@
+version: 1
+network:
+  default: deny
+  allow:
+    - host: localhost
+    - host: 127.0.0.1
+  deny:
+    - host: api.stripe.com
+    - host: api.openai.com
+  productionHosts:
+    - '*.stripe.com'
+    - '*.openai.com'
+credentials:
+  forbid:
+    - sk_live_*
+    - rk_live_*
+    - ghp_*
+requiredScenarios:
+  - stripe-payment-intent-card-declined
+  - stripe-subscription-payment-failed
+enforcement:
+  allowedModes:
+    - linux-network-namespace
+reports:
+  maxProductionEgressAttempts: 0
+  maxForbiddenCredentialMatches: 0
