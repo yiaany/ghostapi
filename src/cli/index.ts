@@ -27,6 +27,7 @@ import { generateSafetyReport } from "../report/safetyReport.js";
 import { compareEvidenceReports, formatEvidenceCompare, formatEvidenceReport, generateEvidenceReport, loadEvidenceReport, EvidenceReportError } from "../evidence/index.js";
 import { createScenarioReplayer, formatScenarioSanitizationSummary, loadScenarioBundle, prepareScenarioRecordingFromFile, ScenarioBundleError, writeScenarioBundle, type ScenarioPiiRules, type ScenarioReplayRequest } from "../scenarios/scenarioBundle.js";
 import { ContractError, diffContracts, formatContractDiff, importHarContractFromFile, importOpenApiContractFromFile, loadContract, writeContract } from "../contracts/index.js";
+import { EvalError, formatEvalReport, runEval } from "../evals/index.js";
 
 async function main(): Promise<void> {
   const command = parseCliArgs(process.argv.slice(2));
@@ -89,6 +90,9 @@ async function main(): Promise<void> {
       return;
     case "contract-diff":
       await diffContractFiles(command.options);
+      return;
+    case "eval":
+      await runEvalCommand(command.options);
       return;
     case "init":
       await initProject();
@@ -408,6 +412,16 @@ async function diffContractFiles(options: { baselinePath: string; candidatePath:
   if (options.ci && (decision === null ? diff.summary.breaking > 0 : !decision.allowed)) process.exitCode = 2;
 }
 
+async function runEvalCommand(options: { specPath?: string; template?: "retry-after" | "duplicate-payment" | "webhook-signature" | "no-secret-logs" | "timeout-recovery" | "no-production-bypass"; evidencePath?: string; outPath?: string; ci?: boolean; json?: boolean }): Promise<void> {
+  const { report, path } = await runEval({ specPath: options.specPath, template: options.template, evidencePath: options.evidencePath, outPath: options.outPath });
+  if (options.json) console.log(JSON.stringify({ path, report }, null, 2));
+  else {
+    console.log(formatEvalReport(report));
+    console.log(`Artifact: ${path}`);
+  }
+  if (options.ci && !report.score.passed) process.exitCode = 2;
+}
+
 function parsePiiRules(value: string | undefined): Partial<ScenarioPiiRules> | undefined {
   if (value === undefined) return undefined;
   const selected = new Set(value === "none" ? [] : value.split(","));
@@ -501,6 +515,7 @@ Usage:
   ghostapi contract import-openapi --input <openapi.json> [--out contract.json] [--title title]
   ghostapi contract import-har --input <capture.har> --allow-sandbox-host <host> [--out bundle.json] [--contract-out contract.json] [--title title] [--pii emails,phones,addresses] [--approve]
   ghostapi contract diff --baseline <contract.json> --candidate <contract.json> [--policy ghostapi.policy.yaml] [--ci] [--json]
+  ghostapi eval --spec <eval.json>|--template <name> [--evidence report.json] [--out report.eval.json] [--ci] [--json]
   ghostapi init`);
 }
 
@@ -527,6 +542,11 @@ main().catch((error: unknown) => {
   }
 
   if (error instanceof ContractError) {
+    console.error(`Error: ${error.message}`);
+    process.exit(1);
+  }
+
+  if (error instanceof EvalError) {
     console.error(`Error: ${error.message}`);
     process.exit(1);
   }

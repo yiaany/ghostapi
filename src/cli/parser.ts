@@ -19,6 +19,7 @@ export type CliCommand =
   | { name: "contract-import-openapi"; options: ContractImportOpenApiOptions }
   | { name: "contract-import-har"; options: ContractImportHarOptions }
   | { name: "contract-diff"; options: ContractDiffOptions }
+  | { name: "eval"; options: EvalOptions }
   | { name: "init" }
   | { name: "setup"; options: SetupOptions }
   | { name: "open"; options: OpenOptions }
@@ -108,6 +109,15 @@ export type ContractDiffOptions = {
   json?: boolean;
 };
 
+export type EvalOptions = {
+  specPath?: string;
+  template?: "retry-after" | "duplicate-payment" | "webhook-signature" | "no-secret-logs" | "timeout-recovery" | "no-production-bypass";
+  evidencePath?: string;
+  outPath?: string;
+  ci?: boolean;
+  json?: boolean;
+};
+
 export type SetupOptions = {
   write?: boolean;
 };
@@ -189,6 +199,10 @@ export function parseCliArgs(args: string[]): CliCommand {
 
   if (command === "contract") {
     return parseContractCommand(args.slice(1));
+  }
+
+  if (command === "eval") {
+    return { name: "eval", options: parseEvalOptions(args.slice(1)) };
   }
 
   if (command === "init") {
@@ -550,6 +564,32 @@ function parseContractDiffOptions(args: string[]): ContractDiffOptions {
   }
   if (!options.baselinePath || !options.candidatePath) throw new CliError("Contract diff requires baseline and candidate paths.", "Use: ghostapi contract diff --baseline base.contract.json --candidate head.contract.json");
   return options as ContractDiffOptions;
+}
+
+function parseEvalOptions(args: string[]): EvalOptions {
+  const options: EvalOptions = {};
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index]!;
+    if (arg === "--spec") { options.specPath = readValue(args, index, arg); index += 1; continue; }
+    if (arg === "--template") {
+      const value = readValue(args, index, arg);
+      if (!isEvalTemplate(value)) throw new CliError(`Unknown eval template: ${value}`, "Use one of: retry-after, duplicate-payment, webhook-signature, no-secret-logs, timeout-recovery, no-production-bypass");
+      options.template = value;
+      index += 1;
+      continue;
+    }
+    if (arg === "--evidence") { options.evidencePath = readValue(args, index, arg); index += 1; continue; }
+    if (arg === "--out") { options.outPath = readValue(args, index, arg); index += 1; continue; }
+    if (arg === "--ci") { options.ci = true; continue; }
+    if (arg === "--json") { options.json = true; continue; }
+    throw new CliError(`Unknown eval option: ${arg}`, "Supported options: --spec eval.json | --template retry-after, --evidence report.json, --out report.eval.json, --ci, --json");
+  }
+  if ((options.specPath === undefined) === (options.template === undefined)) throw new CliError("Eval requires exactly one of --spec or --template.", "Use: ghostapi eval --spec eval.json or ghostapi eval --template retry-after");
+  return options;
+}
+
+function isEvalTemplate(value: string): value is NonNullable<EvalOptions["template"]> {
+  return value === "retry-after" || value === "duplicate-payment" || value === "webhook-signature" || value === "no-secret-logs" || value === "timeout-recovery" || value === "no-production-bypass";
 }
 
 function parsePolicyExplainInput(args: string[]): PolicyExplainInput {

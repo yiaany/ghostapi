@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "kind": "ghostapi.eval",
+  "id": "agent.retry_after",
+  "title": "Agent honors Retry-After",
+  "syntheticWorld": {
+    "providers": ["stripe"],
+    "scenarios": ["stripe.rate_limited"]
+  },
+  "task": {
+    "description": "Run the coding-agent integration tests under GhostAPI and verify retry behavior.",
+    "command": ["npm", "test"]
+  },
+  "injectedFailures": [
+    {
+      "id": "stripe.rate_limited",
+      "type": "rate-limit",
+      "provider": "stripe",
+      "statusCode": 429,
+      "retryAfterMs": 2000
+    }
+  ],
+  "expectations": [
+    { "id": "retry-observed", "type": "retry-observed", "points": 40 },
+    { "id": "no-production-egress", "type": "no-production-egress", "points": 30 },
+    { "id": "run-finished", "type": "run-finished", "points": 30 }
+  ],
+  "forbidden": [
+    { "id": "production-egress", "type": "production-egress" },
+    { "id": "secret-leak", "type": "secret-leak" }
+  ],
+  "limits": {
+    "timeoutMs": 60000,
+    "maxOutputBytes": 524288
+  },
+  "rubric": {
+    "maxScore": 100,
+    "components": [
+      { "id": "retry-observed", "expectationId": "retry-observed", "points": 40, "reason": "Retry or Retry-After evidence was observed." },
+      { "id": "no-production-egress", "expectationId": "no-production-egress", "points": 30, "reason": "Evidence reports zero production egress attempts." },
+      { "id": "run-finished", "expectationId": "run-finished", "points": 30, "reason": "The GhostAPI run finished and produced lifecycle evidence." }
+    ]
+  },
+  "judge": {
+    "llmAsJudge": false
+  }
+}

@@ -11,6 +11,8 @@ export { createScenarioReplayer, formatScenarioSanitizationSummary, loadScenario
 export type { ScenarioBundle, ScenarioBundleInteraction, ScenarioPiiRules, ScenarioRecordingOptions, ScenarioReplayRequest, ScenarioReplayResult, ScenarioSanitizationSummary } from "./scenarios/scenarioBundle.js";
 export { ContractError, contractFromScenarioBundle, contractHash, diffContracts, formatContractDiff, importHarContract, importHarContractFromFile, importOpenApiContract, importOpenApiContractFromFile, loadContract, validateContract, writeContract } from "./contracts/index.js";
 export type { ContractDiff, ContractDiffFinding, ContractDiffSeverity, ContractOperation, ContractProviderCapability, ContractSchema, GhostApiContract, HarContractImportOptions, OpenApiImportOptions } from "./contracts/index.js";
+export { EvalError, builtinEvalTemplates, formatEvalReport, loadEvalSpec, runEval, scoreEval } from "./evals/index.js";
+export type { EvalExpectation, EvalForbiddenAction, EvalReport, EvalRunOptions, EvalScoreComponent, EvalSpec, EvalTemplateName } from "./evals/index.js";
 export type { ServerConfig } from "./config/serverConfig.js";
 export { createProviderRuntime, runProviderPackConformance } from "./providers/index.js";
 export type {

@@ -13,6 +13,8 @@ export type EgressRunOptions = {
   port?: number;
   allowHosts: string[];
   policyPath?: string;
+  timeoutMs?: number;
+  maxOutputBytes?: number;
   command: string[];
 };
 
@@ -79,7 +81,7 @@ export async function runEgressCommand(options: EgressRunOptions): Promise<Egres
     await preflightLinuxNamespaces();
     evidence.events.push({ type: "namespace-preflight-passed", timestamp: new Date().toISOString() });
     await atomicWriteJson(evidencePath, evidence);
-    const exitCode = await launchLinuxNamespace(options.command, { runId, port, runDirectory, runtimeDataDir, evidencePath, allowedHosts });
+    const exitCode = await launchLinuxNamespace(options.command, { runId, port, runDirectory, runtimeDataDir, evidencePath, allowedHosts, timeoutMs: options.timeoutMs, maxOutputBytes: options.maxOutputBytes });
     return { exitCode, runId, evidencePath };
   } catch (error) {
     evidence.status = "failed-to-start";
@@ -143,6 +145,8 @@ function launchLinuxNamespace(command: string[], config: {
   runtimeDataDir: string;
   evidencePath: string;
   allowedHosts: string[];
+  timeoutMs?: number;
+  maxOutputBytes?: number;
 }): Promise<number> {
   const compiledBootstrapPath = fileURLToPath(new URL("./linuxBootstrap.js", import.meta.url));
   const sourceBootstrapPath = fileURLToPath(new URL("./linuxBootstrap.ts", import.meta.url));
@@ -166,12 +170,25 @@ function launchLinuxNamespace(command: string[], config: {
     ...bootstrapArgs
   ], {
     env: { ...process.env, GHOSTAPI_RUN_BOOTSTRAP_CONFIG: bootstrapConfig },
-    stdio: "inherit"
+    stdio: config.maxOutputBytes === undefined ? "inherit" : ["ignore", "pipe", "pipe"]
   });
 
   return new Promise((resolve, reject) => {
     const signals: NodeJS.Signals[] = ["SIGINT", "SIGTERM", "SIGHUP"];
     const handlers = new Map<NodeJS.Signals, () => void>();
+    const timeout = config.timeoutMs === undefined ? undefined : setTimeout(() => child.kill("SIGTERM"), config.timeoutMs);
+    const outputLimit = config.maxOutputBytes;
+    let outputBytes = 0;
+    const observeOutput = (stream: NodeJS.ReadableStream | null, target: NodeJS.WritableStream) => {
+      if (stream === null || outputLimit === undefined) return;
+      stream.on("data", (chunk: Buffer | string) => {
+        outputBytes += Buffer.byteLength(chunk);
+        if (outputBytes <= outputLimit) target.write(chunk);
+        if (outputBytes > outputLimit) child.kill("SIGTERM");
+      });
+    };
+    observeOutput(child.stdout, process.stdout);
+    observeOutput(child.stderr, process.stderr);
     for (const signal of signals) {
       const handler = () => child.kill(signal);
       handlers.set(signal, handler);
@@ -179,6 +196,7 @@ function launchLinuxNamespace(command: string[], config: {
     }
 
     const cleanup = () => {
+      if (timeout !== undefined) clearTimeout(timeout);
       for (const [signal, handler] of handlers) process.removeListener(signal, handler);
     };
 

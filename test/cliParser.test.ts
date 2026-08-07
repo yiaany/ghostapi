@@ -114,6 +114,14 @@ describe("CLI parser", () => {
     });
   });
 
+  it("parses eval commands", () => {
+    expect(parseCliArgs(["eval", "--template", "retry-after", "--evidence", ".ghostapi/reports/latest.json", "--out", ".ghostapi/reports/retry.eval.json", "--ci", "--json"])).toEqual({
+      name: "eval",
+      options: { template: "retry-after", evidencePath: ".ghostapi/reports/latest.json", outPath: ".ghostapi/reports/retry.eval.json", ci: true, json: true }
+    });
+    expect(parseCliArgs(["eval", "--spec", "agent.eval.json"])).toEqual({ name: "eval", options: { specPath: "agent.eval.json" } });
+  });
+
   it("throws actionable errors for invalid user input", () => {
     expect(() => parseCliArgs(["start", "--port", "nope"])).toThrow(CliError);
     expect(() => parseCliArgs(["clear", "logs"])).toThrow("Unknown clear target");
@@ -133,5 +141,7 @@ describe("CLI parser", () => {
     expect(() => parseCliArgs(["replay", "bundle.json"])).toThrow("Missing replay requests input");
     expect(() => parseCliArgs(["evidence", "generate", "--contract-baseline", "base.contract.json"])).toThrow("requires both contract paths");
     expect(() => parseCliArgs(["contract", "diff", "--baseline", "base.contract.json"])).toThrow("requires baseline and candidate");
+    expect(() => parseCliArgs(["eval", "--template", "unknown"])).toThrow("Unknown eval template");
+    expect(() => parseCliArgs(["eval", "--template", "retry-after", "--spec", "agent.eval.json"])).toThrow("exactly one");
   });
 });
