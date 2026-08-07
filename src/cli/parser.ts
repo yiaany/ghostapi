@@ -14,6 +14,8 @@ export type CliCommand =
   | { name: "evidence-generate"; options: EvidenceGenerateOptions }
   | { name: "evidence-view"; options: EvidenceViewOptions }
   | { name: "evidence-compare"; options: EvidenceCompareOptions }
+  | { name: "record"; options: RecordOptions }
+  | { name: "replay"; options: ReplayOptions }
   | { name: "init" }
   | { name: "setup"; options: SetupOptions }
   | { name: "open"; options: OpenOptions }
@@ -67,6 +69,21 @@ export type EvidenceViewOptions = {
 export type EvidenceCompareOptions = {
   leftPath: string;
   rightPath: string;
+  json?: boolean;
+};
+
+export type RecordOptions = {
+  inputPath: string;
+  outPath?: string;
+  title?: string;
+  allowedSandboxHosts: string[];
+  pii?: string;
+  approve?: boolean;
+};
+
+export type ReplayOptions = {
+  bundlePath: string;
+  requestsPath: string;
   json?: boolean;
 };
 
@@ -139,6 +156,14 @@ export function parseCliArgs(args: string[]): CliCommand {
 
   if (command === "evidence") {
     return parseEvidenceCommand(args.slice(1));
+  }
+
+  if (command === "record") {
+    return { name: "record", options: parseRecordOptions(args.slice(1)) };
+  }
+
+  if (command === "replay") {
+    return { name: "replay", options: parseReplayOptions(args.slice(1)) };
   }
 
   if (command === "init") {
@@ -385,6 +410,69 @@ function parseEvidenceCompareOptions(args: string[]): EvidenceCompareOptions {
   throw new CliError(`Unexpected evidence compare argument: ${rest[0]}`, "Use: ghostapi evidence compare <left.json> <right.json> [--json]");
 }
 
+function parseRecordOptions(args: string[]): RecordOptions {
+  const options: Partial<RecordOptions> & { allowedSandboxHosts: string[] } = { allowedSandboxHosts: [] };
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index]!;
+    if (arg === "--input") {
+      options.inputPath = readValue(args, index, arg);
+      index += 1;
+      continue;
+    }
+    if (arg === "--out") {
+      options.outPath = readValue(args, index, arg);
+      index += 1;
+      continue;
+    }
+    if (arg === "--title") {
+      options.title = readValue(args, index, arg);
+      index += 1;
+      continue;
+    }
+    if (arg === "--allow-sandbox-host") {
+      options.allowedSandboxHosts.push(readValue(args, index, arg));
+      index += 1;
+      continue;
+    }
+    if (arg === "--pii") {
+      const value = readValue(args, index, arg);
+      if (!isPiiRuleSet(value)) throw new CliError(`Invalid --pii value: ${value}`, "Use: --pii emails,phones,addresses | emails | phones | addresses | none");
+      options.pii = value;
+      index += 1;
+      continue;
+    }
+    if (arg === "--approve") {
+      options.approve = true;
+      continue;
+    }
+    throw new CliError(`Unknown record option: ${arg}`, "Supported options: --input capture.json, --allow-sandbox-host api.sandbox.example, --out bundle.json, --title title, --pii emails,phones,addresses, --approve");
+  }
+  if (!options.inputPath) throw new CliError("Missing recording input.", "Use: ghostapi record --input capture.json --allow-sandbox-host api.sandbox.example");
+  if (options.allowedSandboxHosts.length === 0) throw new CliError("Recording requires an explicit sandbox host allowlist.", "Use: --allow-sandbox-host api.sandbox.example");
+  return options as RecordOptions;
+}
+
+function parseReplayOptions(args: string[]): ReplayOptions {
+  const bundlePath = args[0];
+  if (!bundlePath) throw new CliError("Missing scenario bundle path.", "Use: ghostapi replay <bundle.json> --requests requests.json [--json]");
+  const options: Partial<ReplayOptions> = { bundlePath };
+  for (let index = 1; index < args.length; index += 1) {
+    const arg = args[index]!;
+    if (arg === "--requests") {
+      options.requestsPath = readValue(args, index, arg);
+      index += 1;
+      continue;
+    }
+    if (arg === "--json") {
+      options.json = true;
+      continue;
+    }
+    throw new CliError(`Unknown replay option: ${arg}`, "Supported options: --requests requests.json, --json");
+  }
+  if (!options.requestsPath) throw new CliError("Missing replay requests input.", "Use: ghostapi replay <bundle.json> --requests requests.json [--json]");
+  return options as ReplayOptions;
+}
+
 function parsePolicyExplainInput(args: string[]): PolicyExplainInput {
   const [kind, value, ...rest] = args;
   if (kind === "network") {
@@ -419,6 +507,12 @@ function readValue(args: string[], index: number, flag: string): string {
     throw new CliError(`Missing value for ${flag}.`, `Use ${flag} <value>.`);
   }
   return value;
+}
+
+function isPiiRuleSet(value: string): boolean {
+  if (value === "none") return true;
+  const selected = value.split(",");
+  return selected.length > 0 && selected.length === new Set(selected).size && selected.every((entry) => entry === "emails" || entry === "phones" || entry === "addresses");
 }
 
 export function parsePort(value: string, label: string): number {
