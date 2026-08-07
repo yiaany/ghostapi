@@ -80,6 +80,32 @@ ghostapi run --policy ghostapi.policy.yaml -- npm test
 
 See [`docs/policy.md`](policy.md) and the safe [`examples/policy/ghostapi.policy.yaml`](../examples/policy/ghostapi.policy.yaml). The policy language has no remote includes, interpolation, or executable expressions.
 
+## Record And Replay Sandbox Traffic
+
+Record only an explicit, reviewed sandbox host. GhostAPI accepts a bounded JSON capture with either an `interactions` array or HAR `log.entries`; it does not use a recording proxy and never stores a raw temporary capture:
+
+```bash
+ghostapi record \
+  --input stripe-sandbox.har \
+  --allow-sandbox-host api.stripe.com \
+  --title "Checkout retry" \
+  --approve
+```
+
+`api.stripe.com` is accepted only when captured requests carry a Stripe test/restricted-test key. Other hosts must both be explicitly allowlisted and look sandbox/test-like. HTTPS is required. Production-looking, unknown, direct-IP, HTTP, and wildcard hosts fail closed.
+
+Before writing the portable schema-v1 bundle, GhostAPI structurally removes authorization, cookies, secret-shaped fields and known keys; redacts emails, phones and address fields by default; turns known unstable IDs/timestamps into deterministic variables; drops multipart/binary bodies; and blocks external redirect targets. It prints a summary and requires `--approve` whenever any potentially sensitive category was found. `--pii none` or a narrower comma-separated list is available only for a deliberate, reviewed capture; it does not make secret masking optional.
+
+Replay is entirely offline and sequence-strict. It accepts a JSON request array (or `{ "requests": [...] }`) and never scans ahead for a later matching interaction:
+
+```bash
+ghostapi replay .ghostapi/scenarios/checkout-retry.bundle.json --requests replay-requests.json --json
+```
+
+The first matched request can bind a recorded variable; later requests and synthetic responses reuse that binding. A mismatch, missing request, extra request, ambiguous alternate order, invalid schema, symlink, oversized file, secret-bearing bundle value, or executable/unknown field fails with diagnostics. Bundle files are limited to 512 KiB, captures and replay input to 1 MiB, and bundles contain data only: no hooks, filesystem paths, commands, or executable expressions. Schema v0 uses the documented local migration to v1 and is marked `legacy-bundle` for review; unsupported versions fail closed.
+
+PII detection is intentionally heuristic, not a guarantee of anonymization. Review the summary and the saved sanitized bundle before sharing it. Do not capture production traffic.
+
 ## Send A Local Request
 
 ```bash

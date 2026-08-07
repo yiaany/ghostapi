@@ -2,7 +2,8 @@
 import http from "node:http";
 import https from "node:https";
 import net from "node:net";
-import { access, mkdir } from "node:fs/promises";
+import { access, lstat, mkdir, readFile, realpath } from "node:fs/promises";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import { constants } from "node:fs";
 import { spawn } from "node:child_process";
 import { generate } from "selfsigned";
@@ -24,6 +25,7 @@ import { startMcpServer } from "../mcp/server.js";
 import { generateRepoSetup, writeRepoSetup } from "../setup/setupGenerator.js";
 import { generateSafetyReport } from "../report/safetyReport.js";
 import { compareEvidenceReports, formatEvidenceCompare, formatEvidenceReport, generateEvidenceReport, loadEvidenceReport, EvidenceReportError } from "../evidence/index.js";
+import { createScenarioReplayer, formatScenarioSanitizationSummary, loadScenarioBundle, prepareScenarioRecordingFromFile, ScenarioBundleError, writeScenarioBundle, type ScenarioPiiRules, type ScenarioReplayRequest } from "../scenarios/scenarioBundle.js";
 
 async function main(): Promise<void> {
   const command = parseCliArgs(process.argv.slice(2));
@@ -71,6 +73,12 @@ async function main(): Promise<void> {
       return;
     case "evidence-compare":
       await compareEvidence(command.options);
+      return;
+    case "record":
+      await recordScenario(command.options);
+      return;
+    case "replay":
+      await replayBundle(command.options);
       return;
     case "init":
       await initProject();
@@ -324,6 +332,79 @@ async function compareEvidence(options: { leftPath: string; rightPath: string; j
   if (!result.equal) process.exitCode = 1;
 }
 
+async function recordScenario(options: { inputPath: string; outPath?: string; title?: string; allowedSandboxHosts: string[]; pii?: string; approve?: boolean }): Promise<void> {
+  const bundle = await prepareScenarioRecordingFromFile(options.inputPath, {
+    title: options.title,
+    allowedSandboxHosts: options.allowedSandboxHosts,
+    pii: parsePiiRules(options.pii)
+  });
+  console.log(formatScenarioSanitizationSummary(bundle.sanitization));
+  if (bundle.sanitization.requiresApproval && !options.approve) {
+    throw new CliError("Recording was not saved because sanitization found potentially sensitive traffic.", "Review the summary, then re-run the exact command with --approve to save the sanitized bundle.");
+  }
+  const path = await writeScenarioBundle(bundle, options.outPath);
+  console.log(`Bundle: ${path}`);
+}
+
+async function replayBundle(options: { bundlePath: string; requestsPath: string; json?: boolean }): Promise<void> {
+  const bundle = await loadScenarioBundle(options.bundlePath);
+  const requests = await loadReplayRequests(options.requestsPath);
+  const replayer = createScenarioReplayer(bundle);
+  const responses = requests.map((request) => replayer.replay(request));
+  if (replayer.remaining !== 0) throw new CliError(`Replay ended with ${replayer.remaining} interaction${replayer.remaining === 1 ? "" : "s"} remaining.`, "Provide the complete ordered request sequence; GhostAPI never guesses a later match.");
+  if (options.json) console.log(JSON.stringify({ responses }, null, 2));
+  else {
+    console.log(`Replay matched ${responses.length} interaction${responses.length === 1 ? "" : "s"}.`);
+    for (const response of responses) console.log(`  ${response.index}: ${response.status}`);
+  }
+}
+
+function parsePiiRules(value: string | undefined): Partial<ScenarioPiiRules> | undefined {
+  if (value === undefined) return undefined;
+  const selected = new Set(value === "none" ? [] : value.split(","));
+  return { emails: selected.has("emails"), phones: selected.has("phones"), addresses: selected.has("addresses") };
+}
+
+async function loadReplayRequests(path: string): Promise<ScenarioReplayRequest[]> {
+  const target = isAbsolute(path) ? resolve(path) : resolve(process.cwd(), path);
+  if (!isInsideAllowedRoots(target)) throw new CliError("Replay requests path traversal outside the project root or GHOSTAPI_DATA_DIR is not allowed.");
+  const info = await lstat(target);
+  if (!info.isFile() || info.isSymbolicLink()) throw new CliError("Replay requests input must be a regular non-symlink file.");
+  if (!await isRealPathInsideAllowedRoots(target)) throw new CliError("Replay requests input resolves outside the project root or GHOSTAPI_DATA_DIR through a symlink.");
+  const source = await readFile(target, "utf8");
+  if (Buffer.byteLength(source, "utf8") > 1024 * 1024) throw new CliError("Replay requests input exceeds 1048576 bytes.");
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(source);
+  } catch {
+    throw new CliError("Replay requests input is not valid JSON.");
+  }
+  const requests = Array.isArray(parsed) ? parsed : parsed !== null && typeof parsed === "object" && Array.isArray((parsed as { requests?: unknown }).requests) ? (parsed as { requests: unknown[] }).requests : null;
+  if (requests === null || requests.length === 0 || requests.length > 100) throw new CliError("Replay requests input must contain 1-100 requests.");
+  return requests.map((request) => {
+    if (request === null || typeof request !== "object" || Array.isArray(request)) throw new CliError("Replay request must be an object.");
+    const candidate = request as Record<string, unknown>;
+    if (typeof candidate.method !== "string" || typeof candidate.path !== "string") throw new CliError("Replay request requires string method and path.");
+    return { method: candidate.method, path: candidate.path, headers: candidate.headers as ScenarioReplayRequest["headers"], body: candidate.body };
+  });
+}
+
+function isInsideAllowedRoots(target: string): boolean {
+  return isInside(process.cwd(), target) || isInside(getDataPaths().root, target);
+}
+
+function isInside(root: string, target: string): boolean {
+  const relativePath = relative(resolve(root), target);
+  return relativePath !== ".." && !relativePath.startsWith(`..${sep}`) && !isAbsolute(relativePath);
+}
+
+async function isRealPathInsideAllowedRoots(target: string): Promise<boolean> {
+  const realTarget = await realpath(target);
+  const realProjectRoot = await realpath(process.cwd());
+  const dataRoot = await realpath(getDataPaths().root).catch(() => null);
+  return isInside(realProjectRoot, realTarget) || (dataRoot !== null && isInside(dataRoot, realTarget));
+}
+
 async function canWriteGhostApiDir(): Promise<boolean> {
   const dataDir = getDataPaths().root;
   try {
@@ -366,6 +447,8 @@ Usage:
   ghostapi evidence generate [--policy ghostapi.policy.yaml] [--run .ghostapi/runs/<id>/run.json] [--out .ghostapi/reports/report.json] [--ci] [--json]
   ghostapi evidence view <report.json> [--json]
   ghostapi evidence compare <left.json> <right.json> [--json]
+  ghostapi record --input <capture.json|har.json> --allow-sandbox-host <host> [--out bundle.json] [--title title] [--pii emails,phones,addresses] [--approve]
+  ghostapi replay <bundle.json> --requests <requests.json> [--json]
   ghostapi init`);
 }
 
@@ -382,6 +465,11 @@ main().catch((error: unknown) => {
   }
 
   if (error instanceof EvidenceReportError) {
+    console.error(`Error: ${error.message}`);
+    process.exit(1);
+  }
+
+  if (error instanceof ScenarioBundleError) {
     console.error(`Error: ${error.message}`);
     process.exit(1);
   }

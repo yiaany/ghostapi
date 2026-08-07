@@ -84,6 +84,21 @@ describe("CLI parser", () => {
     expect(parseCliArgs(["evidence", "compare", "left.json", "right.json"])).toEqual({ name: "evidence-compare", options: { leftPath: "left.json", rightPath: "right.json" } });
   });
 
+  it("parses explicit recording approval and offline replay commands", () => {
+    expect(parseCliArgs(["record", "--input", "capture.har", "--allow-sandbox-host", "api.stripe.com", "--allow-sandbox-host", "payments.sandbox.example", "--out", ".ghostapi/scenarios/payment.bundle.json", "--title", "Payment flow", "--pii", "emails,phones", "--approve"])).toEqual({
+      name: "record",
+      options: {
+        inputPath: "capture.har",
+        allowedSandboxHosts: ["api.stripe.com", "payments.sandbox.example"],
+        outPath: ".ghostapi/scenarios/payment.bundle.json",
+        title: "Payment flow",
+        pii: "emails,phones",
+        approve: true
+      }
+    });
+    expect(parseCliArgs(["replay", "payment.bundle.json", "--requests", "requests.json", "--json"])).toEqual({ name: "replay", options: { bundlePath: "payment.bundle.json", requestsPath: "requests.json", json: true } });
+  });
+
   it("throws actionable errors for invalid user input", () => {
     expect(() => parseCliArgs(["start", "--port", "nope"])).toThrow(CliError);
     expect(() => parseCliArgs(["clear", "logs"])).toThrow("Unknown clear target");
@@ -98,5 +113,8 @@ describe("CLI parser", () => {
     expect(() => parseCliArgs(["policy", "explain", "report", "-1", "0"])).toThrow("Report explain requires two non-negative integer counts");
     expect(() => parseCliArgs(["evidence", "view"])).toThrow("Missing evidence report path");
     expect(() => parseCliArgs(["evidence", "compare", "left.json"])).toThrow("Missing evidence report paths");
+    expect(() => parseCliArgs(["record", "--input", "capture.json"])).toThrow("sandbox host allowlist");
+    expect(() => parseCliArgs(["record", "--input", "capture.json", "--allow-sandbox-host", "api.sandbox.example", "--pii", "names"])).toThrow("Invalid --pii");
+    expect(() => parseCliArgs(["replay", "bundle.json"])).toThrow("Missing replay requests input");
   });
 });
