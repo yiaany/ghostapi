@@ -101,6 +101,26 @@ describe("local team control-plane security prototype", () => {
     await expect(plane.authenticateToken(active.token)).rejects.toThrow("Invalid or expired token");
   });
 
+  it("does not allow an authenticated service actor to be mutated into a human actor", async () => {
+    const plane = teamPlane("immutable-service");
+    const owner = { organizationId: "immutable-team", memberId: "owner" };
+    await plane.bootstrapOrganization({ organizationId: "immutable-team", name: "Immutable Team", ownerId: "owner" });
+    await prepareProject(plane, owner, "project", "ci");
+    await plane.createServiceAccount(owner, { serviceAccountId: "ci-bot", name: "CI bot" });
+    const issued = await plane.issueServiceToken(owner, { serviceAccountId: "ci-bot", expiresAt: "2026-08-09T00:00:00.000Z", scope: [{ projectId: "project", environmentId: "ci", permissions: ["scenario.publish"] }] });
+    const service = await plane.authenticateToken(issued.token);
+    const compromised = service as unknown as { actorType?: undefined; memberId?: string };
+
+    expect(Object.isFrozen(service)).toBe(true);
+    try {
+      compromised.actorType = undefined;
+      compromised.memberId = "owner";
+    } catch {
+      // Frozen capability objects reject property changes in strict-mode callers.
+    }
+    await expect(plane.deleteProject(service, "project")).rejects.toThrow("Access denied");
+  });
+
   it("exports a SHA-256 audit chain that detects public-export tampering and retains a safe anchor", async () => {
     let now = new Date("2026-08-08T00:00:00.000Z");
     const path = join(getDataPaths().root, "team-control-audit.json");

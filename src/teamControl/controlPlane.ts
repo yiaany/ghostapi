@@ -267,7 +267,7 @@ export class LocalTeamControlPlane {
     }
     if (!state.serviceAccounts.some((account) => account.organizationId === record.organizationId && account.id === record.subjectId && account.disabledAt === undefined)) throw new TeamControlPlaneError("Invalid or expired token.");
     validateTokenScope(record.scope, state, record.organizationId);
-    const actor: TeamActor = { organizationId: record.organizationId, serviceAccountId: record.subjectId, actorType: "service_account", tokenId: record.id };
+    const actor: TeamActor = Object.freeze({ organizationId: record.organizationId, serviceAccountId: record.subjectId, actorType: "service_account", tokenId: record.id });
     authenticatedServiceActors.set(actor, this.now);
     return actor;
   }
@@ -396,10 +396,9 @@ export class LocalTeamControlPlane {
       const beforeEvidence = state.evidence.length;
       const beforeAudit = state.audit.length;
       retain(state, now);
-      const auditRemoved = beforeAudit - state.audit.length;
       appendAudit(state, actor.organizationId, actorId(actor), "retention.prune", "team-control-plane", now);
       retain(state, now);
-      return { evidenceRemoved: beforeEvidence - state.evidence.length, auditRemoved };
+      return { evidenceRemoved: beforeEvidence - state.evidence.length, auditRemoved: beforeAudit + 1 - state.audit.length };
     }, false);
   }
 
