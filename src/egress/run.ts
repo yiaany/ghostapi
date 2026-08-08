@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { basename, join } from "node:path";
@@ -31,6 +31,7 @@ type RunEvidence = {
   status: "preparing" | "running" | "failed-to-start" | "finished";
   command: { executable: string; argumentCount: number };
   policy: { default: "deny"; allowedHosts: string[]; ghostApiOrigin: string; policyHash?: string; requiredScenarios: string[] };
+  output?: { bytesObserved: number; secretMatches: number; limitExceeded: boolean; timedOut: boolean };
   networkAttemptAttribution: "allowed GhostAPI requests appear in the GhostAPI event log; denied kernel socket attempts are not attributable by this backend";
   events: Array<{ type: string; timestamp: string; detail?: string; exitCode?: number }>;
 };
@@ -81,8 +82,13 @@ export async function runEgressCommand(options: EgressRunOptions): Promise<Egres
     await preflightLinuxNamespaces();
     evidence.events.push({ type: "namespace-preflight-passed", timestamp: new Date().toISOString() });
     await atomicWriteJson(evidencePath, evidence);
-    const exitCode = await launchLinuxNamespace(options.command, { runId, port, runDirectory, runtimeDataDir, evidencePath, allowedHosts, timeoutMs: options.timeoutMs, maxOutputBytes: options.maxOutputBytes });
-    return { exitCode, runId, evidencePath };
+    const result = await launchLinuxNamespace(options.command, { runId, port, runDirectory, runtimeDataDir, evidencePath, allowedHosts, timeoutMs: options.timeoutMs, maxOutputBytes: options.maxOutputBytes });
+    const finishedEvidence = JSON.parse(await readFile(evidencePath, "utf8")) as RunEvidence;
+    finishedEvidence.output = { bytesObserved: result.outputBytes, secretMatches: result.outputSecretMatches, limitExceeded: result.outputLimitExceeded, timedOut: result.timedOut };
+    if (result.timedOut) finishedEvidence.events.push({ type: "run-timeout", timestamp: new Date().toISOString() });
+    if (result.outputLimitExceeded) finishedEvidence.events.push({ type: "run-output-limit-exceeded", timestamp: new Date().toISOString() });
+    await atomicWriteJson(evidencePath, finishedEvidence);
+    return { exitCode: result.exitCode, runId, evidencePath };
   } catch (error) {
     evidence.status = "failed-to-start";
     evidence.events.push({ type: "run-failed-to-start", timestamp: new Date().toISOString(), detail: safeErrorMessage(error) });
@@ -94,6 +100,12 @@ export async function runEgressCommand(options: EgressRunOptions): Promise<Egres
 function validateOptions(options: EgressRunOptions, policy: GhostApiPolicy | undefined): void {
   if (options.command.length === 0 || options.command[0] === undefined || options.command[0].trim() === "") {
     throw new EgressRunError("ghostapi run requires a command.", "Use: ghostapi run -- <command> [args...]");
+  }
+  if (options.timeoutMs !== undefined && (!Number.isInteger(options.timeoutMs) || options.timeoutMs < 100 || options.timeoutMs > 300_000)) {
+    throw new EgressRunError("Run timeout must be an integer between 100 and 300000 ms.", "Set timeoutMs only through a validated eval spec or public API call.");
+  }
+  if (options.maxOutputBytes !== undefined && (!Number.isInteger(options.maxOutputBytes) || options.maxOutputBytes < 0 || options.maxOutputBytes > 10 * 1024 * 1024)) {
+    throw new EgressRunError("Run output limit must be an integer between 0 and 10485760 bytes.", "Set maxOutputBytes only through a validated eval spec or public API call.");
   }
 
   for (const host of options.allowHosts) {
@@ -147,7 +159,7 @@ function launchLinuxNamespace(command: string[], config: {
   allowedHosts: string[];
   timeoutMs?: number;
   maxOutputBytes?: number;
-}): Promise<number> {
+}): Promise<{ exitCode: number; timedOut: boolean; outputLimitExceeded: boolean; outputBytes: number; outputSecretMatches: number }> {
   const compiledBootstrapPath = fileURLToPath(new URL("./linuxBootstrap.js", import.meta.url));
   const sourceBootstrapPath = fileURLToPath(new URL("./linuxBootstrap.ts", import.meta.url));
   const bootstrapArgs = existsSync(compiledBootstrapPath)
@@ -176,15 +188,30 @@ function launchLinuxNamespace(command: string[], config: {
   return new Promise((resolve, reject) => {
     const signals: NodeJS.Signals[] = ["SIGINT", "SIGTERM", "SIGHUP"];
     const handlers = new Map<NodeJS.Signals, () => void>();
-    const timeout = config.timeoutMs === undefined ? undefined : setTimeout(() => child.kill("SIGTERM"), config.timeoutMs);
+    let timedOut = false;
+    let outputLimitExceeded = false;
+    let escalation: NodeJS.Timeout | undefined;
+    const terminate = (reason: "timeout" | "output") => {
+      if (reason === "timeout") timedOut = true;
+      else outputLimitExceeded = true;
+      child.kill("SIGTERM");
+      escalation = setTimeout(() => child.kill("SIGKILL"), 5_000);
+    };
+    const timeout = config.timeoutMs === undefined ? undefined : setTimeout(() => terminate("timeout"), config.timeoutMs);
     const outputLimit = config.maxOutputBytes;
     let outputBytes = 0;
+    let outputSecretMatches = 0;
+    let outputTail = "";
     const observeOutput = (stream: NodeJS.ReadableStream | null, target: NodeJS.WritableStream) => {
       if (stream === null || outputLimit === undefined) return;
       stream.on("data", (chunk: Buffer | string) => {
+        const text = String(chunk);
         outputBytes += Buffer.byteLength(chunk);
+        const inspectable = `${outputTail}${text}`;
+        if (sanitizeSecretString(inspectable) !== inspectable) outputSecretMatches += 1;
+        outputTail = inspectable.slice(-512);
         if (outputBytes <= outputLimit) target.write(chunk);
-        if (outputBytes > outputLimit) child.kill("SIGTERM");
+        if (outputBytes > outputLimit && !outputLimitExceeded) terminate("output");
       });
     };
     observeOutput(child.stdout, process.stdout);
@@ -197,6 +224,7 @@ function launchLinuxNamespace(command: string[], config: {
 
     const cleanup = () => {
       if (timeout !== undefined) clearTimeout(timeout);
+      if (escalation !== undefined) clearTimeout(escalation);
       for (const [signal, handler] of handlers) process.removeListener(signal, handler);
     };
 
@@ -206,7 +234,7 @@ function launchLinuxNamespace(command: string[], config: {
     });
     child.once("exit", (code, signal) => {
       cleanup();
-      resolve(code ?? signalExitCode(signal));
+      resolve({ exitCode: code ?? signalExitCode(signal), timedOut, outputLimitExceeded, outputBytes, outputSecretMatches });
     });
   });
 }

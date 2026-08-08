@@ -21,4 +21,4 @@ ghostapi eval --template retry-after --evidence .ghostapi/reports/agent.json --c
 ghostapi eval --spec examples/evals/retry-after.eval.json --evidence .ghostapi/reports/agent.json --json
 ```
 
-If `--evidence` is omitted, `ghostapi eval --spec ...` launches `task.command` through `ghostapi run`; it never executes the command outside that boundary. Core score is deterministic and evidence-based. LLM judging is not required and does not affect the security score.
+If `--evidence` is omitted, `ghostapi eval --spec ...` launches `task.command` through `ghostapi run`; it never executes the command outside that boundary. Specs that declare `injectedFailures` require pre-generated evidence until the declared synthetic-world setup can be applied automatically. Core score is deterministic and evidence-based. LLM judging is not required and does not affect the security score.

@@ -115,6 +115,7 @@ type RunEvidence = {
   status?: unknown;
   policy?: { policyHash?: unknown; requiredScenarios?: unknown };
   events?: Array<{ type?: unknown; timestamp?: unknown; exitCode?: unknown }>;
+  output?: { secretMatches?: unknown; limitExceeded?: unknown; timedOut?: unknown };
 };
 
 export class EvidenceReportError extends Error {
@@ -157,6 +158,8 @@ export function buildEvidenceReport(input: {
   const sanitizedEvents = input.events.slice(0, MAX_EVENTS_FOR_REPORT).map((event) => sanitizeEvent(event));
   const capability = detectEgressCapabilities();
   const runEvents = Array.isArray(input.runEvidence?.events) ? input.runEvidence.events : [];
+  const runStatus = readRunStatus(input.runEvidence?.status);
+  const runUsedNamespace = input.runEvidence?.backend === "linux-network-namespace" && runStatus === "finished";
   const completedScenarios = detectScenarios(sanitizedEvents);
   const requiredScenarios = uniqueSorted(input.requiredScenarios ?? []);
   const providers = uniqueSorted(sanitizedEvents.map((event) => event.provider).filter(Boolean));
@@ -168,6 +171,8 @@ export function buildEvidenceReport(input: {
     for (const category of result.categories) secretCategories.add(category);
     secretMatches += result.matches;
   }
+  const runOutputSecretMatches = readNonNegativeInteger(input.runEvidence?.output?.secretMatches) ?? 0;
+  secretMatches += runOutputSecretMatches;
 
   const allowedAttempts = sanitizedEvents.map((event) => ({
     provider: limitText(event.provider),
@@ -187,7 +192,9 @@ export function buildEvidenceReport(input: {
 
   if (sanitizedEvents.length < input.events.length) warnings.push(`Event evidence was truncated to ${MAX_EVENTS_FOR_REPORT} events.`);
   if (input.runEvidence === null) warnings.push("Run evidence is missing; report cannot prove launcher lifecycle or blocked kernel egress attempts.");
-  if (capability.isolated) findings.push({ id: "enforcement.isolated", severity: "pass", message: "Egress enforcement reports an isolated backend." });
+  if (readBoolean(input.runEvidence?.output?.timedOut)) warnings.push("Target exceeded the configured run timeout.");
+  if (readBoolean(input.runEvidence?.output?.limitExceeded)) warnings.push("Target exceeded the configured output limit.");
+  if (runUsedNamespace) findings.push({ id: "enforcement.isolated", severity: "pass", message: "Run evidence reports a completed Linux namespace boundary." });
   else findings.push({ id: "enforcement.degraded", severity: "warning", message: "Egress enforcement is degraded or unavailable on this host." });
   if (input.runEvidence?.status === "finished") findings.push({ id: "run.finished", severity: "pass", message: "Run evidence reached finished status." });
   else findings.push({ id: "run.incomplete", severity: "warning", message: "Run evidence is absent or incomplete." });
@@ -208,7 +215,6 @@ export function buildEvidenceReport(input: {
   }
   if (failures.length > 0) findings.push({ id: "provider.failures", severity: "warning", message: "Provider failures were observed.", count: failures.length });
 
-  const runStatus = readRunStatus(input.runEvidence?.status);
   const reportWithoutHash: EvidenceReport = {
     schemaVersion: 1,
     artifact: { generatedAt: input.generatedAt, logicalHash: "", canonicalization: "json-stable-sorted-keys-v1" },
@@ -222,9 +228,9 @@ export function buildEvidenceReport(input: {
     ghostapi: { version: input.ghostApiVersion ?? "unknown" },
     enforcement: {
       capability: capability.summary,
-      mode: input.runEvidence?.backend === "linux-network-namespace" ? "linux-network-namespace" : capability.isolated ? "linux-network-namespace" : "proxy-guidance",
-      isolated: capability.isolated,
-      degraded: !capability.isolated
+      mode: input.runEvidence?.backend === "linux-network-namespace" ? "linux-network-namespace" : "proxy-guidance",
+      isolated: runUsedNamespace,
+      degraded: !runUsedNamespace
     },
     policy: { hash: input.policyHash, requiredScenarios },
     coverage: { providers, scenarios: completedScenarios },
@@ -539,6 +545,14 @@ function readString(value: unknown): string | undefined {
 
 function readStringArray(value: unknown): string[] {
   return Array.isArray(value) ? uniqueSorted(value.filter((entry): entry is string => typeof entry === "string").map(limitText)) : [];
+}
+
+function readNonNegativeInteger(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : undefined;
+}
+
+function readBoolean(value: unknown): boolean {
+  return value === true;
 }
 
 function uniqueSorted(values: string[]): string[] {

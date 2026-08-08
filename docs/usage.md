@@ -76,11 +76,11 @@ ghostapi eval --template retry-after --evidence .ghostapi/reports/latest.json --
 ghostapi eval --spec examples/evals/retry-after.eval.json --evidence .ghostapi/reports/latest.json --json
 ```
 
-Without `--evidence`, the eval command launches `task.command` through the existing `ghostapi run` boundary and then generates evidence for that run. It does not execute an unknown command directly. On unsupported hosts, `ghostapi run` still fails closed instead of falling back to a proxy-only mode.
+Without `--evidence`, the eval command launches `task.command` through the existing `ghostapi run` boundary and then generates evidence for that run. It does not execute an unknown command directly. Specs that declare `injectedFailures` currently require pre-generated evidence: GhostAPI rejects execution rather than pretending those failures were applied. On unsupported hosts, `ghostapi run` still fails closed instead of falling back to a proxy-only mode.
 
-Eval specs are local JSON data only. Schema v1 describes `syntheticWorld`, `task.command`, `injectedFailures`, deterministic `expectations`, `forbidden` actions, `limits`, and a points `rubric`. Unknown fields, oversized specs, symlinks, path traversal, and enabled LLM judge settings are rejected. Built-in templates cover retry honoring `Retry-After`, duplicate payment prevention, webhook signature validation, no secret in logs, timeout recovery, and no production bypass.
+Eval specs are local JSON data only. Schema v1 describes `syntheticWorld`, `task.command`, `injectedFailures`, deterministic `expectations`, `forbidden` actions, `limits`, and a points `rubric`. Unknown fields, oversized specs, symlinks, path traversal, enabled LLM judge settings, duplicate rubric references, and incomplete point totals are rejected. Built-in templates cover retry honoring `Retry-After`, duplicate payment prevention, webhook signature validation, no secret in logs, timeout recovery, and no production bypass.
 
-Core security score uses facts from sanitized evidence only. LLM-as-judge is optional future commentary and is never part of the core score. Forbidden actions such as production egress or secret leakage override cosmetic success and force the core score to `0`. Eval reports include a stable logical hash, evidence hash/link, component-level reasons, repeatability notes, and no raw secrets.
+Core security score uses facts from sanitized evidence only. LLM-as-judge is optional future commentary and is never part of the core score. Forbidden actions such as production egress or secret leakage override cosmetic success and force the core score to `0`. A zero production-egress score requires completed Linux namespace run evidence; a retry score requires a retryable response followed by a matching later request. Eval reports include a stable logical hash, evidence hash/link, component-level reasons, repeatability notes, and no raw secrets.
 
 ## Policy As Code
 
