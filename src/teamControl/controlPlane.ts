@@ -85,11 +85,11 @@ const DEVELOPER_PERMISSIONS: TeamPermission[] = [...READ_PERMISSIONS, ...PUBLISH
 const VIEWER_PERMISSIONS: TeamPermission[] = [...READ_PERMISSIONS];
 const SERVICE_ACCOUNT_PERMISSIONS: TeamPermission[] = [...DEVELOPER_PERMISSIONS.filter((permission) => permission !== "policy.read")];
 export const TEAM_PERMISSION_MATRIX: Readonly<Record<TeamRole, readonly TeamPermission[]>> = Object.freeze({
-  owner: OWNER_PERMISSIONS,
-  admin: ADMIN_PERMISSIONS,
-  developer: DEVELOPER_PERMISSIONS,
-  viewer: VIEWER_PERMISSIONS,
-  service_account: SERVICE_ACCOUNT_PERMISSIONS
+  owner: Object.freeze([...OWNER_PERMISSIONS]),
+  admin: Object.freeze([...ADMIN_PERMISSIONS]),
+  developer: Object.freeze([...DEVELOPER_PERMISSIONS]),
+  viewer: Object.freeze([...VIEWER_PERMISSIONS]),
+  service_account: Object.freeze([...SERVICE_ACCOUNT_PERMISSIONS])
 });
 
 export class TeamControlPlaneError extends Error {
@@ -703,14 +703,15 @@ function requireEnvironment(state: TeamControlPlaneState, organizationId: string
 }
 
 function issueTokenRecord(state: TeamControlPlaneState, input: { organizationId: string; type: "user" | "service"; subjectId: string; issuedBy: string; expiresAt: string; scope?: TeamTokenScope[] }, issuedAt: string, random: (size: number) => Buffer): { tokenId: string; token: string; expiresAt: string } {
-  let tokenId = `tok_${random(8).toString("hex")}`;
-  for (let attempts = 0; state.tokens.some((token) => token.id === tokenId); attempts += 1) {
-    if (attempts >= 8) throw new TeamControlPlaneError("Unable to allocate a unique token id.");
-    tokenId = `tok_${random(8).toString("hex")}`;
+  for (let attempts = 0; attempts < 8; attempts += 1) {
+    const tokenId = `tok_${random(8).toString("hex")}`;
+    const token = `${TOKEN_PREFIX}${random(32).toString("base64url")}`;
+    const digest = hash(token);
+    if (state.tokens.some((candidate) => candidate.id === tokenId || equalHash(candidate.digest, digest))) continue;
+    state.tokens.push({ id: tokenId, organizationId: input.organizationId, type: input.type, subjectId: input.subjectId, digest, issuedBy: input.issuedBy, issuedAt, expiresAt: input.expiresAt, ...(input.scope === undefined ? {} : { scope: structuredClone(input.scope) }) });
+    return { tokenId, token, expiresAt: input.expiresAt };
   }
-  const token = `${TOKEN_PREFIX}${random(32).toString("base64url")}`;
-  state.tokens.push({ id: tokenId, organizationId: input.organizationId, type: input.type, subjectId: input.subjectId, digest: hash(token), issuedBy: input.issuedBy, issuedAt, expiresAt: input.expiresAt, ...(input.scope === undefined ? {} : { scope: structuredClone(input.scope) }) });
-  return { tokenId, token, expiresAt: input.expiresAt };
+  throw new TeamControlPlaneError("Unable to allocate a unique token.");
 }
 
 function appendAudit(state: TeamControlPlaneState, organizationId: string, actorIdValue: string, action: string, resource: string, timestampValue: string): void {
