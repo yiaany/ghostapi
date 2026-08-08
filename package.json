@@ -10,7 +10,7 @@
   "bugs": {
     "url": "https://github.com/yiaany/ghostapi/issues"
   },
-  "homepage": "https://github.com/yiaany/ghostweb#readme",
+  "homepage": "https://github.com/yiaany/ghostapi#readme",
   "bin": {
     "ghostapi": "dist/cli/index.js"
   },
@@ -30,7 +30,8 @@
     "build:static": "node -e \"const {cpSync, mkdirSync} = require('fs'); mkdirSync('dist/dashboard', {recursive:true}); cpSync('src/dashboard/index.html', 'dist/dashboard/index.html'); cpSync('src/dashboard/styles.css', 'dist/dashboard/styles.css'); cpSync('src/dashboard/app.js', 'dist/dashboard/app.js');\"",
     "start": "node dist/cli/index.js start",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "smoke:package": "node scripts/package-smoke.mjs"
   },
   "keywords": [
     "mcp",

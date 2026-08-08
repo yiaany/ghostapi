@@ -25,7 +25,8 @@ View on GitHub
 #### Hero Command
 
 ```bash
-npx @yiaany/ghostapi start --open
+npx @yiaany/ghostapi init
+npx @yiaany/ghostapi run -- npm test
 ```
 
 #### Visual Placeholder Copy
@@ -63,10 +64,12 @@ AI agents are writing integration code, but production APIs are the wrong place 
 #### Step 1: Start GhostAPI
 
 ```bash
+npx @yiaany/ghostapi init
+npx @yiaany/ghostapi doctor
 npx @yiaany/ghostapi start --open
 ```
 
-GhostAPI runs locally and opens the dashboard.
+GhostAPI initializes local config, checks the environment, then runs locally and opens the dashboard.
 
 #### Step 2: Point Your App At Localhost
 
@@ -135,6 +138,8 @@ Create repeatable local scenarios, generate tests from traffic, and keep integra
 #### Start Instantly
 
 ```bash
+npx @yiaany/ghostapi init
+npx @yiaany/ghostapi doctor
 npx @yiaany/ghostapi start --open
 ```
 
@@ -142,6 +147,8 @@ npx @yiaany/ghostapi start --open
 
 ```bash
 npm install -g @yiaany/ghostapi
+ghostapi init
+ghostapi doctor
 ghostapi start --open
 ```
 
@@ -154,10 +161,10 @@ ghostapi mcp
 #### Generate Agent Setup
 
 ```bash
-ghostapi setup --write
+ghostapi init
 ```
 
-This generates agent instructions and MCP snippets without overwriting existing files.
+This generates local config, policy, agent instructions and MCP snippets without overwriting existing files.
 
 ### 7. Proof / Screenshot / GIF
 
@@ -175,6 +182,8 @@ One-frame requirement:
 Required storyboard:
 
 - `npx @yiaany/ghostapi start --open`
+- `npx @yiaany/ghostapi init`
+- `npx @yiaany/ghostapi doctor`
 - dashboard opens;
 - Cursor or another agent writes/calls a Stripe integration;
 - a request appears in live traffic;

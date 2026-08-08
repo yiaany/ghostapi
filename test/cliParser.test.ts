@@ -34,6 +34,7 @@ describe("CLI parser", () => {
 
   it("parses doctor and init", () => {
     expect(parseCliArgs(["doctor", "--port", "8081"])).toEqual({ name: "doctor", options: { port: 8081 } });
+    expect(parseCliArgs(["doctor", "--json"])).toEqual({ name: "doctor", options: { json: true } });
     expect(parseCliArgs(["doctor", "--egress"])).toEqual({ name: "doctor", options: { egress: true } });
     expect(parseCliArgs(["doctor", "--egress", "--json"])).toEqual({ name: "doctor", options: { egress: true, json: true } });
     expect(parseCliArgs(["init"])).toEqual({ name: "init" });
@@ -137,7 +138,7 @@ describe("CLI parser", () => {
     expect(() => parseCliArgs(["clear", "logs"])).toThrow("Unknown clear target");
     expect(() => parseCliArgs(["model", "set"])).toThrow("Missing model name");
     expect(() => parseCliArgs(["providers", "inspect"])).toThrow("Missing provider name");
-    expect(() => parseCliArgs(["doctor", "--json"])).toThrow("--json requires --egress");
+    expect(() => parseCliArgs(["doctor", "--port", "nope"])).toThrow("Invalid --port");
     expect(() => parseCliArgs(["run", "node", "script.mjs"])).toThrow("Missing command separator");
     expect(() => parseCliArgs(["run", "--"])).toThrow("Missing command for ghostapi run");
     expect(() => parseCliArgs(["run", "--allow-host", "localhost", "--unknown", "--", "node"])).toThrow("Unknown run option");

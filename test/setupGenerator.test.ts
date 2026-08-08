@@ -20,7 +20,10 @@ describe("repo setup generator", () => {
 
     expect(setup.detected).toEqual(["stripe", "openai"]);
     expect(setup.commands).toContain("ghostapi doctor");
+    expect(setup.commands).toContain("ghostapi run -- npm test");
     expect(setup.files.map((file) => file.path)).toEqual(expect.arrayContaining([
+      "ghostapi.policy.yaml",
+      ".gitignore",
       ".cursorrules",
       "AGENTS.md",
       ".cursor/mcp.json",
@@ -38,8 +41,11 @@ describe("repo setup generator", () => {
       ".ghostapi/agent-configs/hermes-desktop.json",
       ".ghostapi/agent-configs/universal-mcp.json"
     ]));
-    expect(setup.files.find((file) => file.path === ".cursor/mcp.json")?.content).toContain('"command": "ghostapi"');
+    expect(setup.files.find((file) => file.path === ".cursor/mcp.json")?.content).toContain('"command": "npx"');
+    expect(setup.files.find((file) => file.path === ".cursor/mcp.json")?.content).toContain('"@yiaany/ghostapi"');
     expect(setup.files.find((file) => file.path === "AGENTS.md")?.content).toContain("ghostapi mcp");
+    expect(setup.files.find((file) => file.path === "AGENTS.md")?.content).toContain("ghostapi run -- npm test");
+    expect(setup.files.find((file) => file.path === "ghostapi.policy.yaml")?.content).toContain("maxProductionEgressAttempts: 0");
     expect(setup.patches.map((patch) => patch.title)).toEqual(expect.arrayContaining(["Stripe client patch", "OpenAI client patch"]));
   });
 
@@ -51,7 +57,7 @@ describe("repo setup generator", () => {
     const { result } = await writeRepoSetup(tempDir);
 
     expect(result.skipped).toContain(".cursorrules");
-    expect(result.created).toEqual(expect.arrayContaining(["AGENTS.md", ".cursor/mcp.json", "cline_mcp_settings.json", "claude_desktop_config.json", ".ghostapi/agent-configs/universal-mcp.json"]));
+    expect(result.created).toEqual(expect.arrayContaining(["ghostapi.policy.yaml", ".gitignore", "AGENTS.md", ".cursor/mcp.json", "cline_mcp_settings.json", "claude_desktop_config.json", ".ghostapi/agent-configs/universal-mcp.json"]));
     await expect(readFile(join(tempDir, ".cursorrules"), "utf8")).resolves.toBe("existing");
   });
 });

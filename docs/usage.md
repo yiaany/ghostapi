@@ -1,5 +1,17 @@
 # GhostAPI Usage Guide
 
+## First Ten Minutes
+
+Use these commands in a fresh project. They do not require production credentials:
+
+```bash
+npx @yiaany/ghostapi init
+npx @yiaany/ghostapi doctor
+npx @yiaany/ghostapi run -- npm test
+```
+
+`init` writes `.ghostapi/config.json`, `ghostapi.policy.yaml`, MCP snippets, and agent instructions without overwriting existing files. On Linux, `run` performs a fail-closed namespace preflight before launching the target. On Windows and macOS, `run` is unsupported/experimental and fails closed; use `start --open` for local provider simulation and run enforced CI on Linux.
+
 ## Start The Local API
 
 ```bash
@@ -33,9 +45,10 @@ Before relying on `ghostapi run`, inspect the host-specific boundary that GhostA
 ```bash
 ghostapi doctor --egress
 ghostapi doctor --egress --json
+ghostapi doctor --json
 ```
 
-The diagnostic is stable for CI/tooling and identifies platform primitives, required setup, and remaining bypasses without probing production network access. It is not proof that a run succeeded. See [`docs/security/egress-threat-model.md`](security/egress-threat-model.md) for the security model.
+The diagnostic is stable for CI/tooling and identifies Node version, data-directory write permission, port availability, TLS bypass settings, config problems, platform primitives, required setup, and remaining bypasses without probing production network access. It is not proof that a run succeeded. See [`docs/security/egress-threat-model.md`](security/egress-threat-model.md) for the security model.
 
 ## Run With Linux Egress Enforcement
 
@@ -221,6 +234,18 @@ export const openai = new OpenAI({
 
 The `OPENAI_API_KEY` above belongs to the application being pointed at the local GhostAPI endpoint; use a fake local value. It does not enable GhostAPI's own external LLM access.
 
+## Starter Examples
+
+- Stripe checkout and billing: [`examples/stripe-node`](../examples/stripe-node)
+- OpenAI streaming/tool call: [`examples/openai-streaming`](../examples/openai-streaming)
+- CI policy failure: [`examples/ci-smoke`](../examples/ci-smoke)
+- Record/replay: [`examples/record-replay`](../examples/record-replay)
+- Agent eval: [`examples/evals`](../examples/evals)
+
+## Configuration
+
+Local runtime config lives in `.ghostapi/config.json`. Environment variables override it for the current process: `GHOSTAPI_HOST`, `GHOSTAPI_PORT`, `GHOSTAPI_MODEL`, `GHOSTAPI_OFFLINE`, `GHOSTAPI_HTTPS`, `GHOSTAPI_ALLOW_EXTERNAL_LLM`, `GHOSTAPI_LLM_API_KEY`, `GHOSTAPI_AUTH_TOKEN`, and `GHOSTAPI_DATA_DIR`.
+
 ## Optional External LLM Generation
 
 External generation is disabled by default, even when `OPENAI_API_KEY` exists in the environment. To opt in explicitly, provide both the capability flag and the GhostAPI-specific key:
@@ -238,6 +263,16 @@ When external generation is enabled on a non-loopback bind, proxy requests also 
 Runtime files default to `.ghostapi/`. Set `GHOSTAPI_DATA_DIR` to isolate tests or multiple instances. Persisted events use a 5 MiB active log plus two rotated archives, and each persisted event is capped at 256 KiB. Local JSON mutations use inter-process lock files and atomic replacement on the local filesystem.
 
 Generated Vitest files read `GHOSTAPI_BASE_URL`, falling back to `http://127.0.0.1:8080`, so CI can use an ephemeral or custom port.
+
+## Uninstall And Cleanup
+
+Remove a global install with:
+
+```bash
+npm uninstall -g @yiaany/ghostapi
+```
+
+Remove local runtime state with `rm -rf .ghostapi` on POSIX shells, or delete the `.ghostapi` directory with PowerShell/Explorer on Windows. If `init` created setup files, remove `ghostapi.policy.yaml`, generated MCP snippets, and generated agent instructions only after reviewing local edits.
 
 ## Provider Capabilities
 

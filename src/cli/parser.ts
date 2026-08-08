@@ -346,7 +346,6 @@ function parseDoctorOptions(args: string[]): DoctorOptions {
     }
     throw new CliError(`Unknown doctor option: ${arg}`, "Supported options: --port 8080, --egress, --json");
   }
-  if (options.json && !options.egress) throw new CliError("--json requires --egress.", "Use: ghostapi doctor --egress --json");
   return options;
 }
 

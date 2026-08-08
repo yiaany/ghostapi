@@ -1,0 +1,30 @@
+{
+  "log": {
+    "version": "1.2",
+    "creator": { "name": "ghostapi-starter", "version": "1.0" },
+    "entries": [
+      {
+        "request": {
+          "method": "POST",
+          "url": "https://api.stripe.com/v1/checkout/sessions",
+          "headers": [
+            { "name": "authorization", "value": "Bearer sk_test_ghostapi" },
+            { "name": "content-type", "value": "application/json" }
+          ],
+          "postData": {
+            "mimeType": "application/json",
+            "text": "{\"mode\":\"payment\",\"success_url\":\"https://sandbox.example/success\",\"cancel_url\":\"https://sandbox.example/cancel\",\"line_items\":[{\"quantity\":1,\"price_data\":{\"currency\":\"usd\",\"unit_amount\":2400,\"product_data\":{\"name\":\"Starter\"}}}]}"
+          }
+        },
+        "response": {
+          "status": 200,
+          "headers": [{ "name": "content-type", "value": "application/json" }],
+          "content": {
+            "mimeType": "application/json",
+            "text": "{\"id\":\"cs_test_starter\",\"object\":\"checkout.session\",\"mode\":\"payment\",\"livemode\":false,\"url\":\"http://127.0.0.1:8080/checkout/cs_test_starter\"}"
+          }
+        }
+      }
+    ]
+  }
+}

@@ -30,6 +30,9 @@ import { ContractError, diffContracts, formatContractDiff, importHarContractFrom
 import { EvalError, formatEvalReport, runEval } from "../evals/index.js";
 import { SyntheticWorldError, createWorld, forkWorld, formatWorld, inspectWorld, resetWorld } from "../worlds/index.js";
 
+type DoctorStatus = "ok" | "warn" | "fail";
+type DoctorCheck = { label: string; status: DoctorStatus; detail: string; remediation?: string; docs?: string };
+
 async function main(): Promise<void> {
   const command = parseCliArgs(process.argv.slice(2));
 
@@ -139,7 +142,9 @@ async function startServer(config: ServerConfig, open = false): Promise<void> {
   server.on("error", (error: NodeJS.ErrnoException) => {
     if (error.code === "EADDRINUSE") {
       console.error(`Error: Port ${config.port} is already in use.`);
-      console.error(`Hint: Run ghostapi start --port <free-port> or stop the process using ${config.port}.`);
+      console.error(`Reason: Another process is already listening on ${config.host}:${config.port}.`);
+      console.error(`Remediation: Run ghostapi start --port <free-port> or stop the process using ${config.port}.`);
+      console.error("Docs: README.md#quickstart and docs/usage.md");
       process.exit(1);
     }
     console.error(`Error: ${error.message}`);
@@ -182,9 +187,15 @@ async function clearTarget(target: ClearTarget): Promise<void> {
 
 async function initProject(): Promise<void> {
   const result = await initializeLocalConfig();
+  const setup = await writeRepoSetup();
   const configPath = getDataPaths().config;
   console.log(result.created ? `Created ${configPath}.` : `${configPath} already exists.`);
   console.log(`Model: ${result.config.model ?? DEFAULT_MODEL}`);
+  console.log(`Created setup files: ${setup.result.created.length > 0 ? setup.result.created.join(", ") : "none"}.`);
+  console.log(`Skipped existing setup files: ${setup.result.skipped.length > 0 ? setup.result.skipped.join(", ") : "none"}.`);
+  console.log("Next: ghostapi doctor");
+  console.log("Then on supported Linux hosts: ghostapi run -- npm test");
+  console.log("Otherwise: ghostapi start --open and point SDKs at http://127.0.0.1:8080.");
 }
 
 async function printRepoSetup(write: boolean): Promise<void> {
@@ -284,42 +295,72 @@ async function runDoctor(options: { port?: number; egress?: boolean; json?: bool
     return;
   }
 
-  const config = loadServerConfig(process.env, [], options.port ? { port: options.port } : {});
-  const checks: Array<{ label: string; ok: boolean; detail: string; hint?: string }> = [];
+  const checks: DoctorCheck[] = [];
+  let config: ServerConfig | null = null;
+  try {
+    config = loadServerConfig(process.env, [], options.port ? { port: options.port } : {});
+    checks.push({ label: "Config", status: "ok", detail: "loaded", docs: "docs/usage.md#configuration" });
+  } catch (error) {
+    checks.push({ label: "Config", status: "fail", detail: error instanceof Error ? error.message : "invalid configuration", remediation: "Fix GHOSTAPI_* environment values or .ghostapi/config.json, then re-run ghostapi doctor.", docs: "docs/usage.md#configuration" });
+  }
 
   const major = Number(process.versions.node.split(".")[0]);
-  checks.push({ label: "Node version", ok: major >= 20, detail: process.versions.node, hint: "Install Node.js 20 or newer." });
+  checks.push({ label: "Node version", status: major >= 20 ? "ok" : "fail", detail: process.versions.node, remediation: "Install Node.js 20 or newer.", docs: "README.md#quickstart" });
 
   const writeAccess = await canWriteGhostApiDir();
-  checks.push({ label: "GhostAPI data write access", ok: writeAccess, detail: getDataPaths().root, hint: "Check GHOSTAPI_DATA_DIR and directory permissions." });
+  checks.push({ label: "GhostAPI data write access", status: writeAccess ? "ok" : "fail", detail: getDataPaths().root, remediation: "Check GHOSTAPI_DATA_DIR and directory permissions.", docs: "README.md#local-files" });
 
-  const portAvailable = await isPortAvailable(config.host, config.port);
-  checks.push({ label: "Port availability", ok: portAvailable, detail: `${config.host}:${config.port}`, hint: `Run ghostapi start --port <free-port>.` });
+  if (config !== null) {
+    const portAvailable = await isPortAvailable(config.host, config.port);
+    checks.push({ label: "Port availability", status: portAvailable ? "ok" : "fail", detail: `${config.host}:${config.port}`, remediation: `Run ghostapi start --port <free-port> or stop the process using ${config.port}.`, docs: "README.md#quickstart" });
 
-  checks.push({ label: "Model config", ok: config.model.trim() !== "", detail: config.model, hint: "Run ghostapi model set <model>." });
+    checks.push({ label: "Model config", status: config.model.trim() !== "" ? "ok" : "fail", detail: config.model, remediation: "Run ghostapi model set <model>.", docs: "docs/usage.md#configuration" });
 
-  const hasApiKey = Boolean(config.apiKey);
-  checks.push({
-    label: "LLM API key",
-    ok: true,
-    detail: config.offline ? "offline mode" : config.allowExternalLlm ? hasApiKey ? "explicitly enabled" : "enabled without GHOSTAPI_LLM_API_KEY" : "disabled; deterministic provider mocks enabled",
-    hint: config.allowExternalLlm && !hasApiKey ? "Set GHOSTAPI_LLM_API_KEY or remove the external LLM opt-in." : undefined
-  });
+    const hasApiKey = Boolean(config.apiKey);
+    checks.push({
+      label: "LLM API key",
+      status: config.allowExternalLlm && !hasApiKey ? "fail" : "ok",
+      detail: config.offline ? "offline mode" : config.allowExternalLlm ? hasApiKey ? "explicitly enabled" : "enabled without GHOSTAPI_LLM_API_KEY" : "disabled; deterministic provider mocks enabled",
+      remediation: config.allowExternalLlm && !hasApiKey ? "Set GHOSTAPI_LLM_API_KEY or remove the external LLM opt-in." : undefined,
+      docs: "README.md#safety-model"
+    });
+
+    const remote = !isLoopbackHost(config.host);
+    checks.push({
+      label: "Remote bind auth",
+      status: !remote || (config.authToken !== undefined && config.authToken.length >= 24) ? "ok" : "fail",
+      detail: remote ? "non-loopback host configured" : "loopback only",
+      remediation: remote ? "Set a strong GHOSTAPI_AUTH_TOKEN and use HTTPS or a secure tunnel." : undefined,
+      docs: "README.md#safety-model"
+    });
+  }
 
   const tlsBypass = process.env.NODE_TLS_REJECT_UNAUTHORIZED === "0";
-  checks.push({ label: "TLS safety", ok: !tlsBypass, detail: tlsBypass ? "NODE_TLS_REJECT_UNAUTHORIZED=0" : "safe", hint: "Unset NODE_TLS_REJECT_UNAUTHORIZED." });
+  checks.push({ label: "TLS safety", status: !tlsBypass ? "ok" : "fail", detail: tlsBypass ? "NODE_TLS_REJECT_UNAUTHORIZED=0" : "safe", remediation: "Unset NODE_TLS_REJECT_UNAUTHORIZED.", docs: "SECURITY.md" });
 
-  let failed = 0;
-  for (const check of checks) {
-    const marker = check.ok ? "ok" : "fail";
-    console.log(`${marker.padEnd(4)} ${check.label}: ${check.detail}`);
-    if (!check.ok) {
-      failed += 1;
-      if (check.hint) console.log(`     Hint: ${check.hint}`);
+  const egress = detectEgressCapabilities();
+  const linuxNamespace = egress.capabilities.find((capability) => capability.id === "linux-network-namespace");
+  const enforcementAvailable = process.platform === "linux" && linuxNamespace !== undefined;
+  checks.push({
+    label: "Enforcement capability",
+    status: enforcementAvailable ? "warn" : "warn",
+    detail: enforcementAvailable ? linuxNamespace.detail : `ghostapi run process isolation is unsupported/experimental on ${process.platform}`,
+    remediation: enforcementAvailable ? "Run ghostapi run to execute the real preflight; doctor does not launch the target." : "Use ghostapi start --open for local provider simulation, or run enforced tests on Linux.",
+    docs: "docs/security/egress-threat-model.md"
+  });
+
+  if (options.json) {
+    console.log(JSON.stringify({ schemaVersion: 1, checks, egress }, null, 2));
+  } else {
+    for (const check of checks) {
+      console.log(`${check.status.padEnd(4)} ${check.label}: ${check.detail}`);
+      if (check.status !== "ok" && check.remediation) console.log(`     Remediation: ${check.remediation}`);
+      if (check.status !== "ok" && check.docs) console.log(`     Docs: ${check.docs}`);
     }
   }
 
-  if (failed > 0) throw new CliError(`Doctor found ${failed} issue${failed === 1 ? "" : "s"}.`);
+  const failed = checks.filter((check) => check.status === "fail").length;
+  if (failed > 0) throw new CliError(`Doctor found ${failed} issue${failed === 1 ? "" : "s"}.`, "Fix the failed checks above, then re-run ghostapi doctor.");
 }
 
 async function validatePolicy(file: string | undefined): Promise<void> {
@@ -535,7 +576,7 @@ Usage:
   ghostapi setup [--write]
   ghostapi report
   ghostapi mcp
-  ghostapi doctor [--port 8080]
+  ghostapi doctor [--port 8080] [--json]
   ghostapi doctor --egress [--json]
   ghostapi run [--port 8080] [--allow-host localhost] [--policy ghostapi.policy.yaml] -- <command> [args...]
   ghostapi policy validate [--file ghostapi.policy.yaml]
