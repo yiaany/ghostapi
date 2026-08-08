@@ -68,7 +68,7 @@ Score agent behavior with deterministic evals using `ghostapi eval --template re
 
 Create a deterministic, local shared state with `ghostapi world create --id subscription-recovery --seed demo-seed`. A world uses one canonical synthetic identity across Stripe, GitHub, email, and generic REST projections; it supports atomic local transitions, reset, and snapshot forks without cloud tenancy or real PII. See the [synthetic world guide](docs/usage.md#stateful-synthetic-worlds) and [end-to-end example](examples/worlds/README.md).
 
-The team-control-plane gate is not yet met because GhostAPI has no recorded active projects or confirmed CI/shared-scenario design partner. The local typed [team-control-plane prototype](docs/team-control-plane.md) validates tenant-scoped authorization, managed service-account token scopes, SHA-256 audit-chain export verification, sanitized evidence deletion/retention, migrations, and future transport controls, without adding a hosted or public endpoint, deployment, SSO, cloud sync, raw uploads, or a speculative dashboard.
+A design partner has confirmed the shared-scenarios and CI/PR-report workflow. The local typed [team-control-plane prototype](docs/team-control-plane.md) remains local-first, while the separate [hosted pilot architecture](docs/hosted-pilot.md) defines a Bun/Elysia, PostgreSQL outbox, scoped CI-ingest, and queue-worker design. No hosted service is deployed yet, and the stated RPO/RTO targets remain unproven until production-equivalent load and disaster-recovery drills pass.
 
 ## What GhostAPI Does
 
