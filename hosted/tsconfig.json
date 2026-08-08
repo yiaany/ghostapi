@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "Preserve",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "noUncheckedIndexedAccess": true,
+    "types": ["bun"]
+  },
+  "include": ["src/**/*.ts"]
+}

@@ -111,7 +111,7 @@ World transitions use one local file lock and same-directory atomic replacement.
 
 ## Team Control-Plane Prototype
 
-The team-control-plane gate is not currently met: GhostAPI has no recorded active-project count or confirmed CI/shared-scenario design partner. The included prototype is therefore a local typed library, not a hosted account system or web UI. It models organizations, members/roles, projects, environments, versioned scenario metadata, sanitized CI evidence summaries, distributed policy versions, short-lived revocable tokens, audit metadata, migrations, and bounded retention.
+One design partner has confirmed a need for shared scenarios and CI/PR reports. The included prototype remains a local typed library, not a hosted account system or web UI. It models organizations, members/roles, projects, environments, versioned scenario metadata, sanitized CI evidence summaries, distributed policy versions, short-lived revocable tokens, audit metadata, migrations, and bounded retention. The separate hosted pilot skeleton and its explicit deployment limits are documented in [`docs/hosted-pilot.md`](hosted-pilot.md).
 
 Local runtime behavior is unchanged and does not require login. Cloud sync is not implemented. The prototype never uploads raw traffic, code, secrets, request bodies, or provider credentials; evidence is accepted only after GhostAPI schema/hash validation and stored as a restricted summary. Read [`docs/team-control-plane.md`](team-control-plane.md) for the tenant model, API, storage limitations, incident response, and design-partner onboarding workflow.
 
