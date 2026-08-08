@@ -29,7 +29,8 @@
 </p>
 
 ```bash
-npx @yiaany/ghostapi start --open
+npx @yiaany/ghostapi init
+npx @yiaany/ghostapi run -- npm test
 ```
 
 <p align="center">
@@ -91,7 +92,17 @@ GhostAPI is a local API control layer for agent-driven development.
 
 ## Quickstart
 
-Run GhostAPI instantly:
+Initialize a project without production credentials:
+
+```bash
+npx @yiaany/ghostapi init
+npx @yiaany/ghostapi doctor
+npx @yiaany/ghostapi run -- npm test
+```
+
+`init` creates `.ghostapi/config.json`, `ghostapi.policy.yaml`, MCP snippets, and agent instructions without overwriting existing files. `run` is enforced only on supported Linux hosts; on Windows and macOS it fails closed instead of pretending to isolate the process.
+
+If `doctor` reports unsupported enforcement, start the local provider-shaped API directly:
 
 ```bash
 npx @yiaany/ghostapi start --open
@@ -141,7 +152,7 @@ http://127.0.0.1:8080/dashboard
 
 ## One-Command Repo Setup
 
-Run setup inside any project:
+Run setup inside any project if you want to regenerate setup assets without touching `.ghostapi/config.json`:
 
 ```bash
 npx @yiaany/ghostapi setup --write
@@ -275,6 +286,16 @@ curl -X POST http://127.0.0.1:8080/tasks \
 - Non-loopback dashboard access requires a strong `GHOSTAPI_AUTH_TOKEN` and should use HTTPS or a secure tunnel.
 - GhostAPI is not a host-level network-isolation boundary; provider simulation routes follow the configured bind address. On a remote bind with external LLM generation enabled, proxy requests also require the dashboard token.
 
+## Platform Support
+
+| Platform | `start` / local provider simulation | `run` process egress enforcement |
+| --- | --- | --- |
+| Linux | Supported on Node.js 20+ | Experimental/supported only when `unshare`, `iproute2`, and user/mount/network/PID namespace preflight pass. |
+| Windows | Supported on Node.js 20+ | Unsupported; AppContainer launcher is not implemented. |
+| macOS | Supported on Node.js 20+ | Unsupported/experimental; arbitrary-child App Sandbox enforcement is not implemented. |
+
+Run `npx @yiaany/ghostapi doctor --json` for machine-readable environment checks and `npx @yiaany/ghostapi doctor --egress` for detailed enforcement capability diagnostics.
+
 ## Local Files
 
 | Path | Purpose |
@@ -291,10 +312,22 @@ curl -X POST http://127.0.0.1:8080/tasks \
 
 On POSIX systems GhostAPI requests owner-only permissions. On Windows, effective permissions inherit from the data directory ACL. Local lock files coordinate cooperating processes on one filesystem, not distributed or synchronized copies.
 
+## Uninstall And Cleanup
+
+```bash
+npm uninstall -g @yiaany/ghostapi
+rm -rf .ghostapi
+```
+
+If `init` created repo setup files you no longer want, remove `ghostapi.policy.yaml`, generated MCP snippets, and generated agent instruction files after reviewing any local edits. On Windows, delete `.ghostapi` with Explorer or PowerShell if `rm` is unavailable.
+
 ## CLI Reference
 
 ```bash
 npx @yiaany/ghostapi start --open
+npx @yiaany/ghostapi init
+npx @yiaany/ghostapi doctor --json
+npx @yiaany/ghostapi run -- npm test
 npx @yiaany/ghostapi start --allow-external-llm
 npx @yiaany/ghostapi open
 npx @yiaany/ghostapi setup --write
@@ -333,6 +366,7 @@ mcp, ai-agents, stripe, openai, mock-server, api-testing, sandbox, proxy, local-
 - [Usage guide](docs/usage.md)
 - [GitHub Actions PR safety check](docs/github-actions.md)
 - [Generic CI guide](docs/ci.md)
+- [Starter examples](examples/README.md)
 - [Provider pack authoring](docs/providers/authoring-packs.md)
 - [Release checklist](docs/release-checklist.md)
 - [Contributing](CONTRIBUTING.md)

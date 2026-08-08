@@ -38,6 +38,8 @@ export async function generateRepoSetup(projectRoot = process.cwd()): Promise<Re
   const mcpServers = { mcpServers: { ghostapi: mcpConfig } };
   const autoApprovedMcpServers = { mcpServers: { ghostapi: { ...mcpConfig, disabled: false, autoApprove: ["inspect_state", "get_traffic_logs"] } } };
   const files: SetupFile[] = [
+    { path: "ghostapi.policy.yaml", description: "Default local safety policy for GhostAPI run and CI evidence.", content: buildDefaultPolicy() },
+    { path: ".gitignore", description: "Keeps local GhostAPI runtime state out of Git if your repo has no ignore file yet.", content: buildGitIgnore() },
     { path: ".cursorrules", description: "Cursor agent rules for GhostAPI-first local API development.", content: rules.content },
     { path: "AGENTS.md", description: "Universal agent instructions for Aider, Codex-style agents, Gemini CLI, OpenCode, Goose, OpenClaw, and Hermes.", content: buildAgentInstructions(detected) },
     { path: ".cursor/mcp.json", description: "Cursor MCP server config.", content: JSON.stringify(mcpServers, null, 2) },
@@ -61,7 +63,7 @@ export async function generateRepoSetup(projectRoot = process.cwd()): Promise<Re
   return {
     projectRoot,
     detected,
-    commands: ["ghostapi init", "ghostapi doctor", "ghostapi start --open", "ghostapi mcp"],
+    commands: ["ghostapi init", "ghostapi doctor", "ghostapi run -- npm test", "ghostapi start --open", "ghostapi mcp"],
     files,
     patches: buildPatches(detected),
     summary: buildSummary(detected)
@@ -91,7 +93,7 @@ export async function writeRepoSetup(projectRoot = process.cwd()): Promise<{ set
 }
 
 function buildMcpConfig() {
-  return { command: "ghostapi", args: ["mcp"] };
+  return { command: "npx", args: ["-y", "@yiaany/ghostapi", "mcp"] };
 }
 
 function buildOpenCodeConfig() {
@@ -109,7 +111,7 @@ function buildOpenCodeConfig() {
 
 function buildSummary(detected: DetectedSdk[]): string {
   const sdkText = detected.length > 0 ? detected.join(", ") : "no known provider SDKs";
-  return `Detected ${sdkText}. Copy the generated files into your repo, run ghostapi start --open, and point local SDK clients at http://127.0.0.1:8080.`;
+  return `Detected ${sdkText}. Run ghostapi doctor, then use ghostapi run -- npm test on supported Linux hosts or ghostapi start --open for local provider-shaped development.`;
 }
 
 function buildAgentInstructions(detected: DetectedSdk[]): string {
@@ -128,9 +130,14 @@ function buildClientInstructions(clientName: string, detected: DetectedSdk[]): s
     "Use GhostAPI as the local API layer for third-party integrations.",
     "",
     "```bash",
+    "ghostapi init",
+    "ghostapi doctor",
+    "ghostapi run -- npm test",
     "ghostapi start --open",
     "ghostapi mcp",
     "```",
+    "",
+    "Use `ghostapi run -- npm test` only where `ghostapi doctor` reports Linux namespace enforcement is available. On Windows and macOS, use `ghostapi start --open` and route SDKs to `http://127.0.0.1:8080`; process egress isolation is unsupported/experimental there.",
     "",
     "Route local SDKs and HTTP clients to `http://127.0.0.1:8080` instead of live providers during development and tests.",
     "",
@@ -148,8 +155,36 @@ function buildClientInstructions(clientName: string, detected: DetectedSdk[]): s
     "",
     `Detected: ${sdkText}.`,
     "",
-    "Never use production API keys or live provider endpoints unless the user explicitly asks."
+    "Never use production API keys or live provider endpoints unless the user explicitly asks and the policy/evidence workflow has been reviewed."
   ].join("\n");
+}
+
+function buildDefaultPolicy(): string {
+  return [
+    "version: 1",
+    "network:",
+    "  default: deny",
+    "  allow:",
+    "    - host: 127.0.0.1",
+    "    - host: localhost",
+    "credentials:",
+    "  forbid:",
+    "    - sk_live_*",
+    "    - rk_live_*",
+    "requiredScenarios: []",
+    "enforcement:",
+    "  allowedModes:",
+    "    - linux-network-namespace",
+    "reports:",
+    "  maxProductionEgressAttempts: 0",
+    "  maxForbiddenCredentialMatches: 0",
+    "  maxBreakingContractChanges: 0",
+    ""
+  ].join("\n");
+}
+
+function buildGitIgnore(): string {
+  return [".ghostapi/", ""].join("\n");
 }
 
 function buildPatches(detected: DetectedSdk[]): SetupPatch[] {
