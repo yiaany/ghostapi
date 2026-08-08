@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { getDataPaths } from "../src/config/dataPaths.js";
 import { buildEvidenceReport } from "../src/evidence/index.js";
-import { createDisabledIdentityProvider, createLocalTeamControlPlane, createTeamControlPlaneSecurityHeaders, migrateTeamControlPlane, TeamControlPlaneError, TeamControlPlaneRateLimiter, TEAM_CONTROL_PLANE_SECURITY_HEADERS, verifyAuditExport } from "../src/teamControl/index.js";
+import { createDisabledIdentityProvider, createLocalTeamControlPlane, createTeamControlPlaneSecurityHeaders, migrateTeamControlPlane, TeamControlPlaneError, TeamControlPlaneRateLimiter, TEAM_CONTROL_PLANE_SECURITY_HEADERS, TEAM_PERMISSION_MATRIX, verifyAuditExport } from "../src/teamControl/index.js";
 
 describe("local team control-plane security prototype", () => {
   it("enforces tenant boundaries and the owner/admin/developer/viewer permission matrix", async () => {
@@ -70,6 +70,15 @@ describe("local team control-plane security prototype", () => {
     now = new Date("2026-08-10T00:00:00.000Z");
     await expect(plane.authenticateToken(rotated.token)).rejects.toThrow("Invalid or expired token");
     await expect(plane.issueToken({ organizationId: "rotation-team", serviceAccountId: "not-human", actorType: "service_account", tokenId: "tok_missing" }, { expiresAt: "2026-08-11T00:00:00.000Z" })).rejects.toThrow("Access denied");
+  });
+
+  it("freezes published role permissions and bounds duplicate token allocation", async () => {
+    expect(Object.isFrozen(TEAM_PERMISSION_MATRIX.owner)).toBe(true);
+    const plane = createLocalTeamControlPlane({ path: join(getDataPaths().root, "team-control-collision.json"), randomTokenBytes: (size) => Buffer.alloc(size, 5) });
+    const owner = { organizationId: "collision-team", memberId: "owner" };
+    await plane.bootstrapOrganization({ organizationId: "collision-team", name: "Collision Team", ownerId: "owner" });
+    await plane.issueToken(owner, { expiresAt: "2026-08-09T00:00:00.000Z" });
+    await expect(plane.issueToken(owner, { expiresAt: "2026-08-09T00:00:00.000Z" })).rejects.toThrow("Unable to allocate a unique token");
   });
 
   it("expires and disables authenticated service accounts before every side effect", async () => {
