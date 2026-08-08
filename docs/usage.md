@@ -109,6 +109,12 @@ The included [`examples/worlds/subscription-recovery.mjs`](../examples/worlds/su
 
 World transitions use one local file lock and same-directory atomic replacement. They are strongly consistent only for processes using the same world file on one local filesystem; GhostAPI does not claim distributed coordination, cloud tenancy, provider parity, or external delivery. Worlds are data only, capped at 512 KiB and 100 receipts, reject symlink files, secret-shaped values/fields, and non-`ghostapi.invalid` email addresses. `reset` restores the original baseline; `fork` snapshots the source's current state with lineage and then evolves independently.
 
+## Team Control-Plane Prototype
+
+The team-control-plane gate is not currently met: GhostAPI has no recorded active-project count or confirmed CI/shared-scenario design partner. The included prototype is therefore a local typed library, not a hosted account system or web UI. It models organizations, members/roles, projects, environments, versioned scenario metadata, sanitized CI evidence summaries, distributed policy versions, short-lived revocable tokens, audit metadata, migrations, and bounded retention.
+
+Local runtime behavior is unchanged and does not require login. Cloud sync is not implemented. The prototype never uploads raw traffic, code, secrets, request bodies, or provider credentials; evidence is accepted only after GhostAPI schema/hash validation and stored as a restricted summary. Read [`docs/team-control-plane.md`](team-control-plane.md) for the tenant model, API, storage limitations, incident response, and design-partner onboarding workflow.
+
 ## Policy As Code
 
 Use a strict local `ghostapi.policy.yaml` to make network, credential, scenario, enforcement and report decisions deterministic:

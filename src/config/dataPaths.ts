@@ -11,6 +11,7 @@ export type DataPaths = {
   scenarios: string;
   contracts: string;
   worlds: string;
+  teamControlPlane: string;
   faultLab: string;
 };
 
@@ -43,6 +44,7 @@ export function getDataPaths(): DataPaths {
     scenarios: resolveDataPath("scenarios"),
     contracts: resolveDataPath("contracts"),
     worlds: resolveDataPath("worlds"),
+    teamControlPlane: resolveDataPath("team-control-plane.json"),
     faultLab: resolveDataPath("fault-lab.json")
   };
 }

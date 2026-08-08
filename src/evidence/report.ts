@@ -259,7 +259,11 @@ export async function loadEvidenceReport(path: string, projectRoot = process.cwd
   } catch {
     throw new EvidenceReportError("Evidence report is not valid JSON.");
   }
-  const report = normalizeEvidenceReport(parsed);
+  return validateEvidenceReport(parsed);
+}
+
+export function validateEvidenceReport(value: unknown): EvidenceReport {
+  const report = normalizeEvidenceReport(value);
   const expectedHash = hashLogicalReport(report);
   if (report.artifact.logicalHash !== expectedHash) throw new EvidenceReportError("Evidence report logical hash does not match its contents.");
   return report;
