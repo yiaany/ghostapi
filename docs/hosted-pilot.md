@@ -42,6 +42,10 @@ The API hashes the canonical request. In one primary-Postgres transaction it val
 
 If the API crashes after commit but before replying, the CI runner retries with the same idempotency key and receives the original report id. If the same key has a different body, it receives `409`.
 
+### CI Ingest Keys
+
+Project developers provision a key with `POST /v1/projects/:projectId/ingest-keys` and an `expiresInDays` value from 1 to 90. The response returns an id, non-sensitive prefix, expiry, and a plaintext secret exactly once. Only the SHA-256 digest is written to PostgreSQL. Developers revoke a key with `POST /v1/projects/:projectId/ingest-keys/:keyId/revoke`; create and revoke actions write tenant audit events. The dashboard/client must not persist, log, or re-display the plaintext secret.
+
 ### Scenario Reads
 
 Scenario versions are immutable. Publishing creates a new `{ scenario_key, version }` row. CI runs pin a scenario version; agents read by key/version or a selected current version. Cursor pagination and a read cache belong at the API edge only after primary-query correctness is load-tested.

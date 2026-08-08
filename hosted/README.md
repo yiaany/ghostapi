@@ -8,7 +8,7 @@ This is a separate Bun/Elysia deployment boundary for the hosted pilot. It does 
 2. Run `npm install --package-lock-only --ignore-scripts` after each dependency change and commit `package-lock.json`. The Bun image installs from that reviewed npm lockfile.
 3. Use a PostgreSQL connection URL with `search_path=auth` for `AUTH_DATABASE_URL`, then run `bunx auth@latest migrate --config src/auth.ts --yes` against that schema.
 4. Apply `migrations/001_core.sql` with a migration role that owns the `app` schema.
-5. Create CI ingest keys out of band. Persist only their SHA-256 hashes in `app.ci_ingest_keys`; return plaintext keys once.
+5. Provision CI ingest keys through the authenticated `POST /v1/projects/:projectId/ingest-keys` endpoint. It persists only their SHA-256 hashes and returns each plaintext secret exactly once.
 6. Configure Fly secrets from `.env.example`. Do not put database, OAuth, QStash, Redis, or ingest credentials in `fly.toml`.
 
 `Dockerfile` copies the reviewed `package-lock.json` before installation. Do not build from an uncommitted dependency change.
