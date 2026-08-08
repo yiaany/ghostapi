@@ -3,6 +3,7 @@ import { Elysia, t } from "elysia";
 import { loadConfig } from "./config.js";
 import { createAuth } from "./auth.js";
 import { createDatabase, type Database } from "./db.js";
+import { createIngestKey, revokeIngestKey } from "./ingestKeys.js";
 import { authenticateIngestKey, acceptReport, IdempotencyConflictError, ReportAuthenticationError, ReportInputError, type ReportPayload } from "./reports.js";
 import { createQueue, JobLeaseActiveError, processReportEvent, type ReportEvent } from "./worker.js";
 import { createRateLimiter, RateLimitError, RateLimitUnavailableError } from "./rateLimit.js";
@@ -16,6 +17,10 @@ const reportBody = t.Object({
 const scenarioBody = t.Object({
   version: t.Integer({ minimum: 1, maximum: 100_000 }),
   definition: t.Record(t.String(), t.Unknown())
+});
+
+const ingestKeyBody = t.Object({
+  expiresInDays: t.Integer({ minimum: 1, maximum: 90 })
 });
 
 type Dependencies = {
@@ -109,6 +114,27 @@ export function createHostedApp(config: ReturnType<typeof loadConfig>, dependenc
         throw error;
       }
     }, { body: scenarioBody })
+    .post("/v1/projects/:projectId/ingest-keys", async ({ body, params, request, status }) => {
+      const member = await requireProjectMember(dependencies, request, params.projectId, "developer");
+      if (member === null) return status(404, { error: "not_found" });
+      const key = await dependencies.database.transaction((client) => createIngestKey(client, {
+        projectId: params.projectId,
+        actorId: member.userId,
+        expiresInDays: body.expiresInDays
+      }));
+      return status(201, key);
+    }, { body: ingestKeyBody })
+    .post("/v1/projects/:projectId/ingest-keys/:keyId/revoke", async ({ params, request, status }) => {
+      const member = await requireProjectMember(dependencies, request, params.projectId, "developer");
+      if (member === null) return status(404, { error: "not_found" });
+      const revoked = await dependencies.database.transaction((client) => revokeIngestKey(client, {
+        projectId: params.projectId,
+        keyId: params.keyId,
+        actorId: member.userId
+      }));
+      if (!revoked) return status(404, { error: "not_found" });
+      return status(200, { status: "revoked" });
+    })
     .post("/internal/jobs/process-report", async ({ request, status }) => {
       const signature = request.headers.get("upstash-signature");
       const rawBody = await request.text();
