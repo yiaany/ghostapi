@@ -5,6 +5,7 @@ export {
   formatEvidenceCompare,
   formatEvidenceReport,
   generateEvidenceReport,
-  loadEvidenceReport
+  loadEvidenceReport,
+  validateEvidenceReport
 } from "./report.js";
 export type { EvidenceCompareResult, EvidenceFinding, EvidenceFindingSeverity, EvidenceGenerateOptions, EvidenceReport } from "./report.js";
