@@ -13,6 +13,8 @@ export { ContractError, contractFromScenarioBundle, contractHash, diffContracts,
 export type { ContractDiff, ContractDiffFinding, ContractDiffSeverity, ContractOperation, ContractProviderCapability, ContractSchema, GhostApiContract, HarContractImportOptions, OpenApiImportOptions } from "./contracts/index.js";
 export { EvalError, builtinEvalTemplates, formatEvalReport, loadEvalSpec, runEval, scoreEval } from "./evals/index.js";
 export type { EvalExpectation, EvalForbiddenAction, EvalReport, EvalRunOptions, EvalScoreComponent, EvalSpec, EvalTemplateName } from "./evals/index.js";
+export { SyntheticWorldError, createSyntheticWorld, createWorld, forkWorld, formatWorld, getWorldPath, inspectWorld, resetWorld, runSubscriptionFailureWorkflow, validateSyntheticWorld } from "./worlds/index.js";
+export type { CreateWorldOptions, SyntheticWorld, SyntheticWorldManifest, SyntheticWorldState, WorldScenarioReference, WorldWorkflowReceipt } from "./worlds/index.js";
 export type { ServerConfig } from "./config/serverConfig.js";
 export { createProviderRuntime, runProviderPackConformance } from "./providers/index.js";
 export type {

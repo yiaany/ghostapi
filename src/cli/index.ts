@@ -28,6 +28,7 @@ import { compareEvidenceReports, formatEvidenceCompare, formatEvidenceReport, ge
 import { createScenarioReplayer, formatScenarioSanitizationSummary, loadScenarioBundle, prepareScenarioRecordingFromFile, ScenarioBundleError, writeScenarioBundle, type ScenarioPiiRules, type ScenarioReplayRequest } from "../scenarios/scenarioBundle.js";
 import { ContractError, diffContracts, formatContractDiff, importHarContractFromFile, importOpenApiContractFromFile, loadContract, writeContract } from "../contracts/index.js";
 import { EvalError, formatEvalReport, runEval } from "../evals/index.js";
+import { SyntheticWorldError, createWorld, forkWorld, formatWorld, inspectWorld, resetWorld } from "../worlds/index.js";
 
 async function main(): Promise<void> {
   const command = parseCliArgs(process.argv.slice(2));
@@ -93,6 +94,18 @@ async function main(): Promise<void> {
       return;
     case "eval":
       await runEvalCommand(command.options);
+      return;
+    case "world-create":
+      await createWorldCommand(command.options);
+      return;
+    case "world-inspect":
+      await inspectWorldCommand(command.id, command.json === true);
+      return;
+    case "world-reset":
+      await resetWorldCommand(command.id, command.json === true);
+      return;
+    case "world-fork":
+      await forkWorldCommand(command.sourceId, command.options);
       return;
     case "init":
       await initProject();
@@ -422,6 +435,26 @@ async function runEvalCommand(options: { specPath?: string; template?: "retry-af
   if (options.ci && !report.score.passed) process.exitCode = 2;
 }
 
+async function createWorldCommand(options: { id: string; seed: string; title?: string; json?: boolean }): Promise<void> {
+  const world = await createWorld(options);
+  console.log(options.json ? JSON.stringify(world, null, 2) : `${formatWorld(world)}\nPath: ${getDataPaths().worlds}`);
+}
+
+async function inspectWorldCommand(id: string, json: boolean): Promise<void> {
+  const world = await inspectWorld(id);
+  console.log(json ? JSON.stringify(world, null, 2) : formatWorld(world));
+}
+
+async function resetWorldCommand(id: string, json: boolean): Promise<void> {
+  const world = await resetWorld(id);
+  console.log(json ? JSON.stringify(world, null, 2) : `${formatWorld(world)}\nReset: restored baseline state.`);
+}
+
+async function forkWorldCommand(sourceId: string, options: { id: string; title?: string; json?: boolean }): Promise<void> {
+  const world = await forkWorld(sourceId, options);
+  console.log(options.json ? JSON.stringify(world, null, 2) : `${formatWorld(world)}\nForked from: ${sourceId}`);
+}
+
 function parsePiiRules(value: string | undefined): Partial<ScenarioPiiRules> | undefined {
   if (value === undefined) return undefined;
   const selected = new Set(value === "none" ? [] : value.split(","));
@@ -516,6 +549,10 @@ Usage:
   ghostapi contract import-har --input <capture.har> --allow-sandbox-host <host> [--out bundle.json] [--contract-out contract.json] [--title title] [--pii emails,phones,addresses] [--approve]
   ghostapi contract diff --baseline <contract.json> --candidate <contract.json> [--policy ghostapi.policy.yaml] [--ci] [--json]
   ghostapi eval --spec <eval.json>|--template <name> [--evidence report.json] [--out report.eval.json] [--ci] [--json]
+  ghostapi world create --id <world-id> --seed <seed> [--title title] [--json]
+  ghostapi world inspect <world-id> [--json]
+  ghostapi world reset <world-id> [--json]
+  ghostapi world fork <source-world-id> --id <fork-world-id> [--title title] [--json]
   ghostapi init`);
 }
 
@@ -547,6 +584,11 @@ main().catch((error: unknown) => {
   }
 
   if (error instanceof EvalError) {
+    console.error(`Error: ${error.message}`);
+    process.exit(1);
+  }
+
+  if (error instanceof SyntheticWorldError) {
     console.error(`Error: ${error.message}`);
     process.exit(1);
   }

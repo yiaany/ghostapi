@@ -20,6 +20,10 @@ export type CliCommand =
   | { name: "contract-import-har"; options: ContractImportHarOptions }
   | { name: "contract-diff"; options: ContractDiffOptions }
   | { name: "eval"; options: EvalOptions }
+  | { name: "world-create"; options: WorldCreateOptions }
+  | { name: "world-inspect"; id: string; json?: boolean }
+  | { name: "world-reset"; id: string; json?: boolean }
+  | { name: "world-fork"; sourceId: string; options: WorldForkOptions }
   | { name: "init" }
   | { name: "setup"; options: SetupOptions }
   | { name: "open"; options: OpenOptions }
@@ -118,6 +122,19 @@ export type EvalOptions = {
   json?: boolean;
 };
 
+export type WorldCreateOptions = {
+  id: string;
+  seed: string;
+  title?: string;
+  json?: boolean;
+};
+
+export type WorldForkOptions = {
+  id: string;
+  title?: string;
+  json?: boolean;
+};
+
 export type SetupOptions = {
   write?: boolean;
 };
@@ -203,6 +220,10 @@ export function parseCliArgs(args: string[]): CliCommand {
 
   if (command === "eval") {
     return { name: "eval", options: parseEvalOptions(args.slice(1)) };
+  }
+
+  if (command === "world") {
+    return parseWorldCommand(args.slice(1));
   }
 
   if (command === "init") {
@@ -586,6 +607,51 @@ function parseEvalOptions(args: string[]): EvalOptions {
   }
   if ((options.specPath === undefined) === (options.template === undefined)) throw new CliError("Eval requires exactly one of --spec or --template.", "Use: ghostapi eval --spec eval.json or ghostapi eval --template retry-after");
   return options;
+}
+
+function parseWorldCommand(args: string[]): CliCommand {
+  const [subcommand, ...rest] = args;
+  if (subcommand === "create") return { name: "world-create", options: parseWorldCreateOptions(rest) };
+  if (subcommand === "inspect" || subcommand === "reset") {
+    const id = rest[0];
+    if (!id) throw new CliError(`Missing world id for ${subcommand}.`, `Use: ghostapi world ${subcommand} <world-id> [--json]`);
+    if (rest.length === 1) return { name: subcommand === "inspect" ? "world-inspect" : "world-reset", id };
+    if (rest.length === 2 && rest[1] === "--json") return { name: subcommand === "inspect" ? "world-inspect" : "world-reset", id, json: true };
+    throw new CliError(`Unexpected world ${subcommand} argument: ${rest[1]}`, `Use: ghostapi world ${subcommand} <world-id> [--json]`);
+  }
+  if (subcommand === "fork") {
+    const sourceId = rest[0];
+    if (!sourceId) throw new CliError("Missing source world id.", "Use: ghostapi world fork <source-world-id> --id <fork-world-id> [--title title] [--json]");
+    return { name: "world-fork", sourceId, options: parseWorldForkOptions(rest.slice(1)) };
+  }
+  throw new CliError(`Unknown world command: ${subcommand ?? "<missing>"}`, "Use: ghostapi world create|inspect|reset|fork");
+}
+
+function parseWorldCreateOptions(args: string[]): WorldCreateOptions {
+  const options: Partial<WorldCreateOptions> = {};
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index]!;
+    if (arg === "--id") { options.id = readValue(args, index, arg); index += 1; continue; }
+    if (arg === "--seed") { options.seed = readValue(args, index, arg); index += 1; continue; }
+    if (arg === "--title") { options.title = readValue(args, index, arg); index += 1; continue; }
+    if (arg === "--json") { options.json = true; continue; }
+    throw new CliError(`Unknown world create option: ${arg}`, "Supported options: --id <world-id>, --seed <seed>, --title <title>, --json");
+  }
+  if (!options.id || !options.seed) throw new CliError("World create requires --id and --seed.", "Use: ghostapi world create --id demo --seed stable-seed [--title title]");
+  return options as WorldCreateOptions;
+}
+
+function parseWorldForkOptions(args: string[]): WorldForkOptions {
+  const options: Partial<WorldForkOptions> = {};
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index]!;
+    if (arg === "--id") { options.id = readValue(args, index, arg); index += 1; continue; }
+    if (arg === "--title") { options.title = readValue(args, index, arg); index += 1; continue; }
+    if (arg === "--json") { options.json = true; continue; }
+    throw new CliError(`Unknown world fork option: ${arg}`, "Supported options: --id <fork-world-id>, --title <title>, --json");
+  }
+  if (!options.id) throw new CliError("World fork requires --id.", "Use: ghostapi world fork <source-world-id> --id <fork-world-id>");
+  return options as WorldForkOptions;
 }
 
 function isEvalTemplate(value: string): value is NonNullable<EvalOptions["template"]> {

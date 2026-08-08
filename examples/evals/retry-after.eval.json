@@ -4,6 +4,11 @@
   "id": "agent.retry_after",
   "title": "Agent honors Retry-After",
   "syntheticWorld": {
+    "world": {
+      "id": "subscription-recovery",
+      "version": "1.0.0",
+      "seed": "demo-seed"
+    },
     "providers": ["stripe"],
     "scenarios": ["stripe.rate_limited"]
   },

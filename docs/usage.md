@@ -82,6 +82,33 @@ Eval specs are local JSON data only. Schema v1 describes `syntheticWorld`, `task
 
 Core security score uses facts from sanitized evidence only. LLM-as-judge is optional future commentary and is never part of the core score. Forbidden actions such as production egress or secret leakage override cosmetic success and force the core score to `0`. A zero production-egress score requires completed Linux namespace run evidence; a retry score requires a retryable response followed by a matching later request. Eval reports include a stable logical hash, evidence hash/link, component-level reasons, repeatability notes, and no raw secrets.
 
+## Stateful Synthetic Worlds
+
+Create a portable, deterministic local world for multi-provider integration workflows:
+
+```bash
+ghostapi world create --id subscription-recovery --seed demo-seed
+ghostapi world inspect subscription-recovery
+ghostapi world reset subscription-recovery
+ghostapi world fork subscription-recovery --id subscription-recovery-investigation
+```
+
+Schema-v1 worlds live under `.ghostapi/worlds/<id>.world.json`. A manifest defines one canonical synthetic persona and organization, an UTC clock, relationships, provider accounts/resources, and projections for Stripe, GitHub, email, and generic REST. A fixed `id`, `title`, and `seed` always generates the same initial manifest and baseline. Use non-secret, non-PII labels and seeds. A scenario/eval can pin this deterministic input with:
+
+```json
+{
+  "syntheticWorld": {
+    "world": { "id": "subscription-recovery", "version": "1.0.0", "seed": "demo-seed" },
+    "providers": ["stripe", "github", "resend", "generic"],
+    "scenarios": ["stripe-subscription-payment-failed"]
+  }
+}
+```
+
+The included [`examples/worlds/subscription-recovery.mjs`](../examples/worlds/subscription-recovery.mjs) models an atomic recovery flow: create a synthetic Stripe customer, put its subscription into `past_due`, record a generic REST payment failure, send a synthetic `ghostapi.invalid` email, and open a GitHub recovery issue. Every projected record references the same canonical identities and subscription ID. The workflow returns a receipt and is idempotent by action ID.
+
+World transitions use one local file lock and same-directory atomic replacement. They are strongly consistent only for processes using the same world file on one local filesystem; GhostAPI does not claim distributed coordination, cloud tenancy, provider parity, or external delivery. Worlds are data only, capped at 512 KiB and 100 receipts, reject symlink files, secret-shaped values/fields, and non-`ghostapi.invalid` email addresses. `reset` restores the original baseline; `fork` snapshots the source's current state with lineage and then evolves independently.
+
 ## Policy As Code
 
 Use a strict local `ghostapi.policy.yaml` to make network, credential, scenario, enforcement and report decisions deterministic:

@@ -66,6 +66,8 @@ Import a bounded OpenAPI 3.0 JSON subset or a sanitized HAR into deterministic c
 
 Score agent behavior with deterministic evals using `ghostapi eval --template retry-after --evidence .ghostapi/reports/latest.json --ci` or a local JSON spec. Core security scoring depends only on sanitized evidence, not an LLM judge, and forbidden actions such as production egress or secret leakage override cosmetic success. See the [agent eval guide](docs/usage.md#agent-evals).
 
+Create a deterministic, local shared state with `ghostapi world create --id subscription-recovery --seed demo-seed`. A world uses one canonical synthetic identity across Stripe, GitHub, email, and generic REST projections; it supports atomic local transitions, reset, and snapshot forks without cloud tenancy or real PII. See the [synthetic world guide](docs/usage.md#stateful-synthetic-worlds) and [end-to-end example](examples/worlds/README.md).
+
 ## What GhostAPI Does
 
 GhostAPI is a local API control layer for agent-driven development.

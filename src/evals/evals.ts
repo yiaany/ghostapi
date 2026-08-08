@@ -6,6 +6,7 @@ import { runEgressCommand } from "../egress/run.js";
 import { generateEvidenceReport, loadEvidenceReport, type EvidenceReport } from "../evidence/index.js";
 import { sanitizeSecretString } from "../security/secrets.js";
 import { atomicWriteJson, ensurePrivateDirectory } from "../storage/fileStore.js";
+import type { WorldScenarioReference } from "../worlds/index.js";
 
 export type EvalTemplateName = "retry-after" | "duplicate-payment" | "webhook-signature" | "no-secret-logs" | "timeout-recovery" | "no-production-bypass";
 
@@ -40,7 +41,7 @@ export type EvalSpec = {
   kind: "ghostapi.eval";
   id: string;
   title: string;
-  syntheticWorld: { providers: string[]; scenarios: string[] };
+  syntheticWorld: { providers: string[]; scenarios: string[]; world?: WorldScenarioReference };
   task: { description: string; command: string[] };
   injectedFailures: Array<{ id: string; type: string; provider?: string; statusCode?: number; retryAfterMs?: number }>;
   expectations: EvalExpectation[];
@@ -252,9 +253,18 @@ function normalizeEvalSpec(value: unknown): EvalSpec {
 
 function normalizeSyntheticWorld(value: EvalSpec["syntheticWorld"]): void {
   if (!isPlainObject(value)) throw new EvalError("syntheticWorld must be an object.");
-  assertKeys(value, ["providers", "scenarios"], "syntheticWorld");
+  assertKeys(value, ["providers", "scenarios", "world"], "syntheticWorld");
   readIdentifierArray(value.providers, "syntheticWorld.providers");
   readIdentifierArray(value.scenarios, "syntheticWorld.scenarios");
+  if (value.world !== undefined) normalizeWorldReference(value.world);
+}
+
+function normalizeWorldReference(value: unknown): void {
+  if (!isPlainObject(value)) throw new EvalError("syntheticWorld.world must be an object.");
+  assertKeys(value, ["id", "version", "seed"], "syntheticWorld.world");
+  if (typeof value.id !== "string" || !IDENTIFIER.test(value.id) || typeof value.version !== "string" || !/^\d+\.\d+\.\d+$/.test(value.version) || typeof value.seed !== "string" || value.seed.trim() === "" || value.seed.length > 128 || /[\r\n\t]/.test(value.seed) || sanitizeSecretString(value.seed) !== value.seed) {
+    throw new EvalError("syntheticWorld.world must reference a safe world id, semantic version and non-secret seed.");
+  }
 }
 
 function normalizeTask(value: EvalSpec["task"]): void {
