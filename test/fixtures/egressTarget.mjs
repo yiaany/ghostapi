@@ -22,6 +22,12 @@ if (mode === "ghostapi") {
   process.exitCode = exitCode === 0 ? 1 : 0;
 } else if (mode === "exit") {
   process.exitCode = Number(process.argv[3] ?? "0");
+} else if (mode === "wait") {
+  await new Promise(() => undefined);
+} else if (mode === "large-output") {
+  process.stdout.write("x".repeat(16 * 1024));
+} else if (mode === "secret-output") {
+  process.stdout.write("sk_live_output_should_not_persist");
 } else {
   throw new Error(`Unknown egress target mode: ${mode}`);
 }

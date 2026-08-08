@@ -59,6 +59,26 @@ describe("ghostapi run Linux network namespace backend", () => {
     expect(exitCode).toBe(143);
     await expectEvidence(evidencePath, "finished");
   });
+
+  linuxIt("terminates the namespace process tree for eval timeout and output limits", async () => {
+    const timedOut = await runEgressCommand({ command: [process.execPath, targetPath, "wait"], allowHosts: [], timeoutMs: 100 });
+    const timeoutEvidence = JSON.parse(await readFile(timedOut.evidencePath, "utf8")) as { output?: { timedOut?: boolean }; events?: Array<{ type?: string }> };
+    expect(timeoutEvidence.output?.timedOut).toBe(true);
+    expect(timeoutEvidence.events).toEqual(expect.arrayContaining([expect.objectContaining({ type: "run-timeout" })]));
+
+    const limited = await runEgressCommand({ command: [process.execPath, targetPath, "large-output"], allowHosts: [], maxOutputBytes: 128 });
+    const outputEvidence = JSON.parse(await readFile(limited.evidencePath, "utf8")) as { output?: { limitExceeded?: boolean }; events?: Array<{ type?: string }> };
+    expect(outputEvidence.output?.limitExceeded).toBe(true);
+    expect(outputEvidence.events).toEqual(expect.arrayContaining([expect.objectContaining({ type: "run-output-limit-exceeded" })]));
+  });
+
+  linuxIt("summarizes secret-shaped target output without persisting raw output", async () => {
+    const result = await runEgressCommand({ command: [process.execPath, targetPath, "secret-output"], allowHosts: [], maxOutputBytes: 1024 });
+    const evidence = await readFile(result.evidencePath, "utf8");
+
+    expect(JSON.parse(evidence)).toMatchObject({ output: { secretMatches: 1 } });
+    expect(evidence).not.toContain("sk_live_output_should_not_persist");
+  });
 });
 
 describe("ghostapi run degraded modes", () => {
@@ -73,6 +93,17 @@ describe("ghostapi run degraded modes", () => {
     await expect(runEgressCommand({ command: [process.execPath, targetPath, "exit", "0", "sk_live_secret"], allowHosts: [], policyPath: "test/fixtures/strict.policy.yaml" })).rejects.toMatchObject({
       name: EgressRunError.name,
       message: "Policy denied credential before launching the target."
+    });
+  });
+
+  it("rejects invalid public resource limits before backend startup", async () => {
+    await expect(runEgressCommand({ command: [process.execPath, targetPath, "exit", "0"], allowHosts: [], timeoutMs: 1 })).rejects.toMatchObject({
+      name: EgressRunError.name,
+      message: "Run timeout must be an integer between 100 and 300000 ms."
+    });
+    await expect(runEgressCommand({ command: [process.execPath, targetPath, "exit", "0"], allowHosts: [], maxOutputBytes: -1 })).rejects.toMatchObject({
+      name: EgressRunError.name,
+      message: "Run output limit must be an integer between 0 and 10485760 bytes."
     });
   });
 

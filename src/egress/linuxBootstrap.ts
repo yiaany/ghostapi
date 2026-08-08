@@ -1,6 +1,7 @@
 import http from "node:http";
 import { spawn } from "node:child_process";
 import { createServer } from "../server/createServer.js";
+import { sanitizeSecretString } from "../security/secrets.js";
 import { atomicWriteJson } from "../storage/fileStore.js";
 
 type BootstrapConfig = {
@@ -43,7 +44,7 @@ async function main(): Promise<void> {
   evidence.events.push({ type: "ghostapi-ready", timestamp: new Date().toISOString(), detail: `http://127.0.0.1:${config.port}` });
   await atomicWriteJson(config.evidencePath, evidence);
 
-  const targetEnvironment = { ...process.env };
+  const targetEnvironment = createTargetEnvironment(process.env);
   delete targetEnvironment.GHOSTAPI_RUN_BOOTSTRAP_CONFIG;
   delete targetEnvironment.GHOSTAPI_LLM_API_KEY;
   delete targetEnvironment.GHOSTAPI_AUTH_TOKEN;
@@ -79,6 +80,18 @@ async function main(): Promise<void> {
     await atomicWriteJson(config.evidencePath, evidence);
     await close(server);
   }
+}
+
+function createTargetEnvironment(environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const targetEnvironment = { ...environment };
+  for (const [key, value] of Object.entries(targetEnvironment)) {
+    if (isSensitiveEnvironmentKey(key) || (value !== undefined && sanitizeSecretString(value) !== value)) delete targetEnvironment[key];
+  }
+  return targetEnvironment;
+}
+
+function isSensitiveEnvironmentKey(key: string): boolean {
+  return /(?:api[_-]?key|token|secret|password|credential|authorization|cookie)/i.test(key);
 }
 
 function parseConfig(): BootstrapConfig {

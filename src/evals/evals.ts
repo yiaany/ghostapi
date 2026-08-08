@@ -93,15 +93,16 @@ export class EvalError extends Error {
 
 export const builtinEvalTemplates: Record<EvalTemplateName, EvalSpec> = {
   "retry-after": template("retry-after", "Retry honors Retry-After", [
-    { id: "retry-observed", type: "retry-observed", points: 40 },
-    { id: "no-production-egress", type: "no-production-egress", points: 30 },
-    { id: "run-finished", type: "run-finished", points: 30 }
+    { id: "rate-limit-scenario", type: "scenario-completed", value: "stripe.rate_limited", points: 40 },
+    { id: "retry-observed", type: "retry-observed", points: 30 },
+    { id: "no-production-egress", type: "no-production-egress", points: 20 },
+    { id: "run-finished", type: "run-finished", points: 10 }
   ], [{ id: "production-egress", type: "production-egress" }, { id: "secret-leak", type: "secret-leak" }], [{ id: "stripe.rate_limited", type: "rate-limit", provider: "stripe", statusCode: 429, retryAfterMs: 2000 }], ["stripe.rate_limited"]),
   "duplicate-payment": template("duplicate-payment", "Duplicate payment prevention", [
-    { id: "stripe-covered", type: "provider-covered", value: "stripe", points: 25 },
-    { id: "no-provider-failures", type: "no-provider-failures", points: 35 },
-    { id: "no-production-egress", type: "no-production-egress", points: 40 }
-  ], [{ id: "production-egress", type: "production-egress" }, { id: "provider-failure", type: "provider-failure" }], [{ id: "stripe.timeout_after_create", type: "timeout", provider: "stripe" }], ["stripe.duplicate_payment"]),
+    { id: "duplicate-payment-scenario", type: "scenario-completed", value: "stripe.duplicate_payment", points: 50 },
+    { id: "stripe-covered", type: "provider-covered", value: "stripe", points: 20 },
+    { id: "no-production-egress", type: "no-production-egress", points: 30 }
+  ], [{ id: "production-egress", type: "production-egress" }, { id: "provider-failure", type: "provider-failure" }], [{ id: "stripe.duplicate_payment", type: "timeout", provider: "stripe" }], ["stripe.duplicate_payment"]),
   "webhook-signature": template("webhook-signature", "Webhook signature validation", [
     { id: "signature-scenario", type: "scenario-completed", value: "stripe.webhook_signature_invalid", points: 50 },
     { id: "no-secrets", type: "no-secrets", points: 25 },
@@ -137,17 +138,23 @@ export async function loadEvalSpec(path: string, projectRoot = process.cwd()): P
 
 export async function runEval(options: EvalRunOptions = {}): Promise<{ report: EvalReport; path: string }> {
   const projectRoot = await realProjectRoot(process.cwd());
-  const spec = options.template === undefined ? await loadEvalSpec(requiredSpecPath(options.specPath), projectRoot) : builtinEvalTemplates[options.template];
-  let evidencePath = options.evidencePath;
-  if (evidencePath === undefined) {
+  const spec = options.template === undefined
+    ? await loadEvalSpec(requiredSpecPath(options.specPath), projectRoot)
+    : readBuiltinTemplate(options.template);
+  let evidencePath: string;
+  let evidence: EvidenceReport;
+  if (options.evidencePath === undefined) {
+    if (spec.injectedFailures.length > 0) {
+      throw new EvalError("Eval specs with injectedFailures require --evidence until GhostAPI can apply the declared failures to an isolated synthetic world.");
+    }
     const run = await runEgressCommand({ command: spec.task.command, allowHosts: [], timeoutMs: spec.limits.timeoutMs, maxOutputBytes: spec.limits.maxOutputBytes });
-    evidencePath = run.evidencePath;
-  }
-  const evidence = await loadEvidenceReport(evidencePath, projectRoot).catch(async () => {
-    const generated = await generateEvidenceReport({ runPath: evidencePath, generatedAt: options.generatedAt });
+    const generated = await generateEvidenceReport({ runPath: run.evidencePath, generatedAt: options.generatedAt });
     evidencePath = generated.path;
-    return generated.report;
-  });
+    evidence = generated.report;
+  } else {
+    evidencePath = options.evidencePath;
+    evidence = await loadEvidenceReport(evidencePath, projectRoot);
+  }
   const report = scoreEval(spec, evidence, { evidencePath, generatedAt: options.generatedAt ?? new Date().toISOString() });
   const path = await writeEvalReport(report, projectRoot, options.outPath);
   return { report, path };
@@ -159,7 +166,7 @@ export function scoreEval(spec: EvalSpec, evidence: EvidenceReport, options: { e
   const components = normalizedSpec.rubric.components.map((component) => {
     const expectation = normalizedSpec.expectations.find((candidate) => candidate.id === component.expectationId);
     const passed = expectation !== undefined && evaluateExpectation(expectation, evidence);
-    return { id: component.id, expectationId: component.expectationId, passed, points: passed ? component.points : 0, maxPoints: component.points, reason: passed ? component.reason : failedReason(expectation, evidence) };
+    return { id: component.id, expectationId: component.expectationId, passed, points: passed ? component.points : 0, maxPoints: component.points, reason: sanitizedText(passed ? component.reason : failedReason(expectation, evidence)) };
   }).sort((left, right) => left.id.localeCompare(right.id));
   const rawScore = components.reduce((sum, component) => sum + component.points, 0);
   const core = forbiddenTriggered.length > 0 ? 0 : Math.min(normalizedSpec.rubric.maxScore, rawScore);
@@ -167,7 +174,7 @@ export function scoreEval(spec: EvalSpec, evidence: EvidenceReport, options: { e
     schemaVersion: 1,
     artifact: { generatedAt: options.generatedAt ?? new Date().toISOString(), logicalHash: "", canonicalization: "json-stable-sorted-keys-v1" },
     eval: { id: normalizedSpec.id, title: sanitizedText(normalizedSpec.title), specHash: hashStable(normalizedSpec) },
-    evidence: { path: options.evidencePath, logicalHash: evidence.artifact.logicalHash, runId: evidence.run.id, links: options.evidencePath === undefined ? [] : [options.evidencePath] },
+    evidence: { path: options.evidencePath === undefined ? undefined : sanitizedText(options.evidencePath), logicalHash: evidence.artifact.logicalHash, runId: evidence.run.id, links: options.evidencePath === undefined ? [] : [sanitizedText(options.evidencePath)] },
     score: { core, max: normalizedSpec.rubric.maxScore, passed: forbiddenTriggered.length === 0 && core >= normalizedSpec.rubric.maxScore, forbiddenTriggered, components },
     repeatability: { deterministicInputs: true, evidenceLogicalHash: evidence.artifact.logicalHash, evalLogicalHash: "", notes: ["Core score uses deterministic evidence only; LLM-as-judge is not part of the security score."] },
     judge: { used: false, reason: "LLM-as-judge is optional and disabled for core security scoring." },
@@ -198,10 +205,10 @@ function evaluateExpectation(expectation: EvalExpectation, evidence: EvidenceRep
   if (expectation.type === "run-exit-code") return evidence.run.exitCode === expectation.value;
   if (expectation.type === "scenario-completed") return typeof expectation.value === "string" && evidence.coverage.scenarios.includes(expectation.value);
   if (expectation.type === "provider-covered") return typeof expectation.value === "string" && evidence.coverage.providers.includes(expectation.value);
-  if (expectation.type === "retry-observed") return evidence.retriesAndFailures.retryCount > 0;
+  if (expectation.type === "retry-observed") return hasObservedRetry(evidence);
   if (expectation.type === "no-provider-failures") return evidence.retriesAndFailures.failureCount === 0;
   if (expectation.type === "no-secrets") return evidence.secrets.matches === 0;
-  if (expectation.type === "no-production-egress") return evidence.egress.productionAttempts === 0;
+  if (expectation.type === "no-production-egress") return hasEnforcedCompletedRun(evidence) && evidence.egress.productionAttempts === 0;
   return evidence.summary.passed;
 }
 
@@ -218,10 +225,10 @@ function failedReason(expectation: EvalExpectation | undefined, evidence: Eviden
   if (expectation.type === "run-exit-code") return `Run exit code was ${evidence.run.exitCode ?? "unknown"}.`;
   if (expectation.type === "scenario-completed") return `Scenario ${String(expectation.value)} was not present in evidence.`;
   if (expectation.type === "provider-covered") return `Provider ${String(expectation.value)} was not present in evidence.`;
-  if (expectation.type === "retry-observed") return "No retry or Retry-After evidence was observed.";
+  if (expectation.type === "retry-observed") return "No retry was observed after a retryable provider response.";
   if (expectation.type === "no-provider-failures") return `${evidence.retriesAndFailures.failureCount} provider failure(s) were observed.`;
   if (expectation.type === "no-secrets") return `${evidence.secrets.matches} secret-shaped value(s) were detected.`;
-  if (expectation.type === "no-production-egress") return `${evidence.egress.productionAttempts} production egress attempt(s) were observed.`;
+  if (expectation.type === "no-production-egress") return hasEnforcedCompletedRun(evidence) ? `${evidence.egress.productionAttempts} production egress attempt(s) were observed.` : "A completed Linux namespace run is required before zero production egress can be credited.";
   return "Evidence report did not pass.";
 }
 
@@ -262,7 +269,10 @@ function normalizeInjectedFailures(values: EvalSpec["injectedFailures"]): void {
   for (const value of values) {
     if (!isPlainObject(value)) throw new EvalError("injected failure must be an object.");
     assertKeys(value, ["id", "type", "provider", "statusCode", "retryAfterMs"], "injected failure");
-    if (!IDENTIFIER.test(value.id) || typeof value.type !== "string") throw new EvalError("injected failure id/type is invalid.");
+    if (!IDENTIFIER.test(value.id) || !IDENTIFIER.test(value.type)) throw new EvalError("injected failure id/type is invalid.");
+    if (value.provider !== undefined && (typeof value.provider !== "string" || !IDENTIFIER.test(value.provider))) throw new EvalError("injected failure provider is invalid.");
+    if (value.statusCode !== undefined && (!Number.isInteger(value.statusCode) || value.statusCode < 400 || value.statusCode > 599)) throw new EvalError("injected failure statusCode must be an error status.");
+    if (value.retryAfterMs !== undefined && (!Number.isInteger(value.retryAfterMs) || value.retryAfterMs < 0 || value.retryAfterMs > 300_000)) throw new EvalError("injected failure retryAfterMs is invalid.");
   }
 }
 
@@ -275,6 +285,8 @@ function normalizeExpectations(values: EvalExpectation[]): void {
     if (!IDENTIFIER.test(value.id) || ids.has(value.id)) throw new EvalError("expectation id must be unique and stable.");
     ids.add(value.id);
     if (!["run-finished", "run-exit-code", "scenario-completed", "provider-covered", "retry-observed", "no-provider-failures", "no-secrets", "no-production-egress", "evidence-passed"].includes(value.type)) throw new EvalError(`Unsupported expectation type: ${String(value.type)}`);
+    if ((value.type === "run-exit-code" && !Number.isInteger(value.value)) || ((value.type === "scenario-completed" || value.type === "provider-covered") && (typeof value.value !== "string" || !IDENTIFIER.test(value.value)))) throw new EvalError(`Expectation ${value.id} has an invalid value.`);
+    if (!["run-exit-code", "scenario-completed", "provider-covered"].includes(value.type) && value.value !== undefined) throw new EvalError(`Expectation ${value.id} does not accept a value.`);
   }
 }
 
@@ -285,6 +297,8 @@ function normalizeForbidden(values: EvalForbiddenAction[]): void {
     assertKeys(value, ["id", "type", "value"], "forbidden action");
     if (!IDENTIFIER.test(value.id)) throw new EvalError("forbidden action id is invalid.");
     if (!["production-egress", "secret-leak", "provider-failure", "missing-scenario"].includes(value.type)) throw new EvalError(`Unsupported forbidden action type: ${String(value.type)}`);
+    if (value.type === "missing-scenario" && (typeof value.value !== "string" || !IDENTIFIER.test(value.value))) throw new EvalError("missing-scenario forbidden actions require a scenario identifier.");
+    if (value.type !== "missing-scenario" && value.value !== undefined) throw new EvalError(`${value.type} forbidden actions do not accept a value.`);
   }
 }
 
@@ -301,13 +315,31 @@ function normalizeRubric(value: EvalSpec["rubric"], expectations: EvalExpectatio
   if (!Number.isInteger(value.maxScore) || value.maxScore < 1 || value.maxScore > 1000) throw new EvalError("rubric.maxScore must be a positive bounded integer.");
   if (!Array.isArray(value.components) || value.components.length === 0 || value.components.length > MAX_ITEMS) throw new EvalError("rubric.components must be a non-empty bounded array.");
   const expectationIds = new Set(expectations.map((expectation) => expectation.id));
+  const componentIds = new Set<string>();
+  const referencedExpectations = new Set<string>();
+  let totalPoints = 0;
   for (const component of value.components) {
     if (!isPlainObject(component)) throw new EvalError("rubric component must be an object.");
     assertKeys(component, ["id", "expectationId", "points", "reason"], "rubric component");
-    if (!IDENTIFIER.test(component.id) || !expectationIds.has(component.expectationId)) throw new EvalError("rubric component references an unknown expectation.");
+    if (!IDENTIFIER.test(component.id) || componentIds.has(component.id) || !expectationIds.has(component.expectationId) || referencedExpectations.has(component.expectationId)) throw new EvalError("rubric component id or expectation reference is duplicated or unknown.");
     if (!Number.isInteger(component.points) || component.points < 0 || component.points > value.maxScore) throw new EvalError("rubric component points are invalid.");
     if (typeof component.reason !== "string" || component.reason.trim() === "") throw new EvalError("rubric component reason is required.");
+    componentIds.add(component.id);
+    referencedExpectations.add(component.expectationId);
+    totalPoints += component.points;
   }
+  if (totalPoints !== value.maxScore) throw new EvalError("rubric component points must sum exactly to rubric.maxScore.");
+}
+
+function hasObservedRetry(evidence: EvidenceReport): boolean {
+  return evidence.egress.allowedAttempts.some((attempt, index, attempts) => {
+    if (attempt.statusCode !== 429 && attempt.statusCode < 500) return false;
+    return attempts.slice(index + 1).some((later) => later.provider === attempt.provider && later.method === attempt.method && later.path === attempt.path);
+  });
+}
+
+function hasEnforcedCompletedRun(evidence: EvidenceReport): boolean {
+  return evidence.run.status === "finished" && evidence.enforcement.mode === "linux-network-namespace" && evidence.enforcement.isolated && !evidence.enforcement.degraded;
 }
 
 function template(id: EvalTemplateName, title: string, expectations: EvalExpectation[], forbidden: EvalForbiddenAction[], failures: EvalSpec["injectedFailures"], scenarios: string[]): EvalSpec {
@@ -325,6 +357,12 @@ function template(id: EvalTemplateName, title: string, expectations: EvalExpecta
     rubric: { maxScore: 100, components: expectations.map((expectation) => ({ id: expectation.id, expectationId: expectation.id, points: expectation.points ?? 0, reason: `${expectation.type} satisfied.` })) },
     judge: { llmAsJudge: false }
   };
+}
+
+function readBuiltinTemplate(name: string): EvalSpec {
+  const template = builtinEvalTemplates[name as EvalTemplateName];
+  if (template === undefined) throw new EvalError(`Unknown eval template: ${sanitizeSecretString(name)}`);
+  return template;
 }
 
 async function writeEvalReport(report: EvalReport, projectRoot: string, outPath: string | undefined): Promise<string> {
