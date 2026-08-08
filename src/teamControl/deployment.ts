@@ -1,4 +1,5 @@
 import { TeamControlPlaneError } from "./controlPlane.js";
+import { sanitizeSecretString } from "../security/secrets.js";
 
 export const TEAM_CONTROL_PLANE_SECURITY_HEADERS: Readonly<Record<string, string>> = Object.freeze({
   "cache-control": "no-store",
@@ -52,7 +53,7 @@ export class TeamControlPlaneRateLimiter {
   }
 
   consume(key: string): { remaining: number; resetAt: string } {
-    if (typeof key !== "string" || key.length < 1 || key.length > 128 || /[\u0000-\u001f]/.test(key)) throw new TeamControlPlaneError("Rate-limit key is invalid.");
+    if (typeof key !== "string" || key.length < 1 || key.length > 128 || /[\u0000-\u001f]/.test(key) || sanitizeSecretString(key) !== key) throw new TeamControlPlaneError("Rate-limit key is invalid.");
     const timestamp = this.now().getTime();
     if (!Number.isFinite(timestamp) || timestamp < 0) throw new TeamControlPlaneError("Rate-limit clock is invalid.");
     const current = this.entries.get(key);

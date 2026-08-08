@@ -20,7 +20,7 @@ flowchart LR
   Disabled[Disabled identity provider] -. always denies; no I/O .-> Future
 ```
 
-No transport is supplied. A future HTTP layer must authenticate before dispatch, apply `createTeamControlPlaneSecurityHeaders()` (or the immutable `TEAM_CONTROL_PLANE_SECURITY_HEADERS`), use `TeamControlPlaneRateLimiter` before processing, avoid logging raw tokens, and fail closed on invalid keys, invalid limits, invalid clocks, or limiter capacity exhaustion.
+No transport is supplied. A future HTTP layer must authenticate before dispatch, apply `createTeamControlPlaneSecurityHeaders()` (or the immutable `TEAM_CONTROL_PLANE_SECURITY_HEADERS`), use `TeamControlPlaneRateLimiter` before processing with a non-secret opaque principal key, avoid logging raw tokens, and fail closed on invalid keys, invalid limits, invalid clocks, or limiter capacity exhaustion.
 
 ## Tenant And Authorization Model
 
