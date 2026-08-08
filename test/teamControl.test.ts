@@ -54,6 +54,7 @@ describe("local team control-plane security prototype", () => {
     await expect(plane.uploadSanitizedEvidence(service, { evidenceId: "service-evidence", projectId: "project-a", environmentId: "ci-a", report: evidenceReport() })).resolves.toMatchObject({ uploadedBy: "service:ci-bot" });
     await expect(plane.publishScenario(service, scenario("project-b", "ci-b", "outside-scope"))).rejects.toThrow("Access denied");
     await expect(plane.registerProject(service, { projectId: "blocked", name: "Blocked" })).rejects.toThrow("Access denied");
+    await expect(plane.getLatestPolicy(service)).rejects.toThrow("Access denied");
     await expect(plane.publishScenario({ organizationId: "service-team", serviceAccountId: "ci-bot", actorType: "service_account", tokenId: issued.tokenId }, scenario("project-a", "ci-a", "forged-service-actor"))).rejects.toThrow("Access denied");
   });
 
@@ -137,6 +138,7 @@ describe("local team control-plane security prototype", () => {
     expect(limiter.consume("client").remaining).toBe(0);
     expect(() => limiter.consume("client")).toThrow("Rate limit exceeded");
     expect(() => limiter.consume("second-client")).toThrow("capacity exceeded");
+    expect(() => limiter.consume("sk_live_rate_limit_key")).toThrow("key is invalid");
     tick = 1_001;
     expect(limiter.consume("client").remaining).toBe(0);
     expect(() => new TeamControlPlaneRateLimiter({ limit: 0 })).toThrow(TeamControlPlaneError);
