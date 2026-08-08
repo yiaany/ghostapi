@@ -63,6 +63,10 @@ describe("agent evals", () => {
     const duplicateRubricPath = join(getDataPaths().root, "duplicate-rubric.eval.json");
     await writeFile(duplicateRubricPath, JSON.stringify({ ...customSpec(), rubric: { maxScore: 100, components: [{ id: "retry", expectationId: "retry", points: 50, reason: "Retry observed." }, { id: "retry-again", expectationId: "retry", points: 50, reason: "Retry observed again." }] } }), "utf8");
     await expect(loadEvalSpec(duplicateRubricPath)).rejects.toThrow("duplicated or unknown");
+
+    const unsafeWorldPath = join(getDataPaths().root, "unsafe-world.eval.json");
+    await writeFile(unsafeWorldPath, JSON.stringify({ ...customSpec(), syntheticWorld: { ...customSpec().syntheticWorld, world: { id: "billing-world", version: "1.0.0", seed: "sk_live_not_allowed" } } }), "utf8");
+    await expect(loadEvalSpec(unsafeWorldPath)).rejects.toThrow("world must reference a safe world id");
   });
 
   it("runs offline scoring from a prebuilt evidence artifact", async () => {
@@ -113,7 +117,7 @@ function customSpec(): EvalSpec {
     kind: "ghostapi.eval",
     id: "custom.retry",
     title: "Custom retry eval",
-    syntheticWorld: { providers: ["stripe"], scenarios: ["stripe.rate_limited"] },
+    syntheticWorld: { world: { id: "billing-world", version: "1.0.0", seed: "fixed-seed" }, providers: ["stripe"], scenarios: ["stripe.rate_limited"] },
     task: { description: "Run custom agent", command: ["node", "agent.mjs"] },
     injectedFailures: [{ id: "stripe.rate_limited", type: "rate-limit", provider: "stripe", statusCode: 429, retryAfterMs: 1000 }],
     expectations: [{ id: "retry", type: "retry-observed", points: 100 }],

@@ -122,6 +122,16 @@ describe("CLI parser", () => {
     expect(parseCliArgs(["eval", "--spec", "agent.eval.json"])).toEqual({ name: "eval", options: { specPath: "agent.eval.json" } });
   });
 
+  it("parses synthetic world lifecycle commands", () => {
+    expect(parseCliArgs(["world", "create", "--id", "billing-world", "--seed", "fixed-seed", "--title", "Billing recovery", "--json"])).toEqual({
+      name: "world-create",
+      options: { id: "billing-world", seed: "fixed-seed", title: "Billing recovery", json: true }
+    });
+    expect(parseCliArgs(["world", "inspect", "billing-world", "--json"])).toEqual({ name: "world-inspect", id: "billing-world", json: true });
+    expect(parseCliArgs(["world", "reset", "billing-world"])).toEqual({ name: "world-reset", id: "billing-world" });
+    expect(parseCliArgs(["world", "fork", "billing-world", "--id", "billing-fork", "--title", "Fork"])).toEqual({ name: "world-fork", sourceId: "billing-world", options: { id: "billing-fork", title: "Fork" } });
+  });
+
   it("throws actionable errors for invalid user input", () => {
     expect(() => parseCliArgs(["start", "--port", "nope"])).toThrow(CliError);
     expect(() => parseCliArgs(["clear", "logs"])).toThrow("Unknown clear target");
@@ -143,5 +153,7 @@ describe("CLI parser", () => {
     expect(() => parseCliArgs(["contract", "diff", "--baseline", "base.contract.json"])).toThrow("requires baseline and candidate");
     expect(() => parseCliArgs(["eval", "--template", "unknown"])).toThrow("Unknown eval template");
     expect(() => parseCliArgs(["eval", "--template", "retry-after", "--spec", "agent.eval.json"])).toThrow("exactly one");
+    expect(() => parseCliArgs(["world", "create", "--id", "missing-seed"])).toThrow("requires --id and --seed");
+    expect(() => parseCliArgs(["world", "fork", "source"])).toThrow("requires --id");
   });
 });
