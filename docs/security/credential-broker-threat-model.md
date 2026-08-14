@@ -12,11 +12,11 @@ The included `test-memory-vault`, test executor, workload verifier, action-recei
 
 1. Provisioning: an operator registers non-secret metadata: tenant, project, environment, provider, owner workload binding, scope allowlist, expiry, and opaque vault reference. The vault owns secret creation and storage.
 2. Storage: GhostAPI stores only metadata, grant metadata, and use receipts in `.ghostapi/credential-broker.json`. It rejects unknown fields, symlinks, oversized state, secret-shaped identifiers, and plaintext secret fields. A vault reference is not secret material and must not encode a secret.
-3. Use: an authenticated workload requests a server-only grant for one exact action ID, action hash, and verified action receipt hash. The broker rechecks workload, tenant/project/environment, provider, scopes, credential status, grant status, expiry, and action reference immediately before vault access and execution.
+3. Use: an authenticated workload requests a server-only grant for one exact action ID, action hash, and verified action receipt hash. The broker persists `executing` before vault/provider I/O, then rechecks workload, tenant/project/environment, provider, scopes, credential status, grant status, expiry, and action reference immediately before vault access and through an executor-provided guard immediately before its side effect.
 4. Rotation: rotation replaces the opaque vault reference, increments the credential version, and revokes every outstanding grant. It does not touch local synthetic worlds, so local simulation stays available.
-5. Revocation: credential revocation marks the credential and all active grants revoked. New execution attempts are denied before vault access.
+5. Revocation: credential revocation marks the credential and all active grants revoked without waiting for vault/provider I/O. New execution attempts and an executor's final active check are denied before a later side effect.
 6. Audit: broker state records action-linked grant metadata and bounded execution receipts. It never stores the secret, a raw provider request, or an executor response body.
-7. Recovery: execution failures receive a failed receipt and are never automatically retried. Provider-specific reconciliation and duplicate-side-effect handling remain required before a real executor is enabled.
+7. Recovery: failures before the provider executor begins receive `failed`; any executor error receives `unknown` because a side effect may already have happened. Neither is retried automatically. Provider-specific reconciliation and duplicate-side-effect handling remain required before a real executor is enabled.
 
 ## Workload Identity
 
@@ -31,6 +31,7 @@ The identity verifier can additionally report whether an owner workload remains 
 - Standard grants last at most 15 minutes. Break-glass grants require an independent trusted authorizer and last at most 5 minutes.
 - Credential metadata and secret material are separate interfaces. Metadata cannot reconstruct the upstream value.
 - Broker and executor both enforce scope. The executor rejects unsupported scope even if a caller somehow reaches it after broker validation.
+- The executor must call its supplied `assertActive()` immediately before its provider side effect; a future adapter that cannot honor this contract is unsupported.
 - A rotated credential invalidates old grants through both revocation and version mismatch. A revoked or expired grant is rejected even when an old request is replayed.
 - Cross-tenant, project, environment, workload, scope, audience, action, and receipt mismatch all fail closed before secret access.
 - A provider executor must create an action-linked receipt. The current test executor has no real provider capability.
@@ -47,4 +48,5 @@ Node.js does not offer a universal guarantee that secret bytes are absent from e
 
 - This is not a production vault, KMS, HSM, hosted identity provider, approval inbox, provider client, or production action gateway.
 - Local JSON storage is coordination and tamper detection only under the existing single-user filesystem trust model; it is not immutable audit storage.
+- Revocation can stop execution before the executor's final active check, but it cannot undo a provider side effect that already crossed that check; a real provider integration still needs provider idempotency and reconciliation.
 - A real provider executor needs its own test-account gate, provider idempotency/reconciliation proof, action-level policy decision, kill switch, budgets/velocity controls, durable audit sink, timeout ambiguity handling, and compensation semantics before any real side effect is enabled.

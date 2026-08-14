@@ -14,6 +14,7 @@ const MAX_ACTION_BYTES = 128 * 1024;
 const MAX_RECEIPTS = 20;
 const IDENTIFIER = /^[a-z0-9][a-z0-9._-]{0,127}$/;
 const HASH = /^[a-f0-9]{64}$/;
+const approvalInboxCapabilities = new WeakSet<object>();
 
 export type ActionRiskClass = "read" | "write" | "money_movement" | "external_communication" | "delete" | "deploy";
 export type ActionReversibility = "none" | "compensatable";
@@ -90,6 +91,8 @@ export type ActionGatewayOptions = {
   pathForAction?: (actionId: string) => string;
   adapter?: ActionExecutionAdapter;
 };
+
+type ApprovalInboxCapability = object;
 
 export class ActionGatewayError extends Error {
   constructor(message: string) {
@@ -194,6 +197,13 @@ export function createSyntheticActionAdapter(): ActionExecutionAdapter {
   };
 }
 
+/** Internal capability used only by the local approval inbox execution path. */
+export function createApprovalInboxCapability(): ApprovalInboxCapability {
+  const capability = Object.freeze({});
+  approvalInboxCapabilities.add(capability);
+  return capability;
+}
+
 export class LocalActionGateway {
   private readonly now: () => Date;
   private readonly pathForAction: (actionId: string) => string;
@@ -206,8 +216,17 @@ export class LocalActionGateway {
   }
 
   async submit(actionValue: unknown, approvalValue: unknown, policy: ActionPolicyCheck): Promise<StoredAction> {
+    return this.submitInternal(actionValue, approvalValue, policy, undefined);
+  }
+
+  async submitFromApprovalInbox(actionValue: unknown, approvalValue: unknown, policy: ActionPolicyCheck, capability: unknown): Promise<StoredAction> {
+    return this.submitInternal(actionValue, approvalValue, policy, requireApprovalInboxCapability(capability));
+  }
+
+  private async submitInternal(actionValue: unknown, approvalValue: unknown, policy: ActionPolicyCheck, capability: ApprovalInboxCapability | undefined): Promise<StoredAction> {
     const action = validateActionEnvelope(actionValue);
     const approval = validateActionApproval(approvalValue);
+    assertApprovalSubmissionPath(approval, capability);
     const current = this.now().toISOString();
     if (Date.parse(action.expiresAt) <= Date.parse(current)) throw new ActionGatewayError("Action has expired.");
     verifyApproval(action, approval, current);
@@ -232,11 +251,20 @@ export class LocalActionGateway {
   }
 
   async execute(actionValue: unknown, identity: ActionExecutionIdentity, policy: ActionPolicyCheck): Promise<ActionExecutionReceipt> {
+    return this.executeInternal(actionValue, identity, policy, undefined);
+  }
+
+  async executeFromApprovalInbox(actionValue: unknown, identity: ActionExecutionIdentity, policy: ActionPolicyCheck, capability: unknown): Promise<ActionExecutionReceipt> {
+    return this.executeInternal(actionValue, identity, policy, requireApprovalInboxCapability(capability));
+  }
+
+  private async executeInternal(actionValue: unknown, identity: ActionExecutionIdentity, policy: ActionPolicyCheck, capability: ApprovalInboxCapability | undefined): Promise<ActionExecutionReceipt> {
     const requested = validateActionEnvelope(actionValue);
     const path = this.pathForAction(requested.actionId);
     return withFileLock(path, async () => {
       const record = await readStoredAction(path, true);
       if (record === null) throw new ActionGatewayError("Action was not submitted.");
+      assertApprovalExecutionPath(record.approval, capability);
       const current = this.now().toISOString();
       if (actionHash(requested) !== record.actionHash || canonicalizeActionEnvelope(requested) !== canonicalizeActionEnvelope(record.envelope)) throw new ActionGatewayError("Action envelope changed after approval; execution is blocked.");
       verifyApproval(record.envelope, record.approval, current);
@@ -398,6 +426,19 @@ function verifyApproval(action: ActionEnvelope, approval: ActionApproval, now: s
   if (approval.approvedBy === action.actor.id || approval.approvedBy === action.actor.workloadId) throw new ActionGatewayError("An action actor cannot approve its own high-risk action.");
   if (enforceExpiry && Date.parse(approval.approvedAt) > Date.parse(now)) throw new ActionGatewayError("Action approval timestamp is in the future.");
   if (enforceExpiry && Date.parse(approval.expiresAt) <= Date.parse(now)) throw new ActionGatewayError("Action approval has expired.");
+}
+
+function requireApprovalInboxCapability(value: unknown): ApprovalInboxCapability {
+  if (value === null || typeof value !== "object" || !approvalInboxCapabilities.has(value)) throw new ActionGatewayError("Approval inbox capability is invalid.");
+  return value;
+}
+
+function assertApprovalSubmissionPath(approval: ActionApproval, capability: ApprovalInboxCapability | undefined): void {
+  if (approval.approvedBy === "approval-inbox" && capability === undefined) throw new ActionGatewayError("Approval inbox artifacts can be submitted only through the approval inbox.");
+}
+
+function assertApprovalExecutionPath(approval: ActionApproval, capability: ApprovalInboxCapability | undefined): void {
+  if (approval.approvedBy === "approval-inbox" && capability === undefined) throw new ActionGatewayError("Approval inbox artifacts can be executed only through the approval inbox.");
 }
 
 function verifyPolicy(action: ActionEnvelope, policy: ActionPolicyCheck): void {

@@ -92,7 +92,7 @@ describe("credential broker and workload identity", () => {
     await expect(fixture.broker.listOrphanedCredentials()).resolves.toMatchObject([{ id: "stripe-write" }]);
   });
 
-  it("records an executor failure and never automatically retries the same grant", async () => {
+  it("records an executor error as an unknown outcome and never automatically retries the same grant", async () => {
     const fixture = brokerFixture("failed-execution");
     fixture.vault.put("test-vault/checkout", testSecretBytes());
     const failingBroker = createCredentialBroker({
@@ -109,9 +109,42 @@ describe("credential broker and workload identity", () => {
     const workload = fixture.identities.issue(identity());
     const grant = await failingBroker.issueGrant({ identity: workload, request: request(), expiresAt: "2026-08-14T12:10:00.000Z" });
 
-    await expect(failingBroker.executeServerSide({ identity: workload, grantId: grant.id, request: request() })).rejects.toThrow("failed without a usable receipt");
+    await expect(failingBroker.executeServerSide({ identity: workload, grantId: grant.id, request: request() })).rejects.toThrow("outcome is unknown");
     await expect(failingBroker.executeServerSide({ identity: workload, grantId: grant.id, request: request() })).rejects.toThrow("will not retry automatically");
-    expect((await failingBroker.readStateForTesting()).receipts).toMatchObject([{ grantId: grant.id, status: "failed", failureCode: "execution_failed" }]);
+    expect((await failingBroker.readStateForTesting()).receipts).toMatchObject([{ grantId: grant.id, status: "unknown", failureCode: "unknown_outcome" }]);
+  });
+
+  it("persists revoke while an executor is waiting and blocks its final pre-side-effect check", async () => {
+    const fixture = brokerFixture("revoke-race");
+    fixture.vault.put("test-vault/checkout", testSecretBytes());
+    let entered: (() => void) | undefined;
+    let release: (() => void) | undefined;
+    const enteredExecutor = new Promise<void>((resolve) => { entered = resolve; });
+    const releaseExecutor = new Promise<void>((resolve) => { release = resolve; });
+    const broker = createCredentialBroker({
+      ...fixture.options,
+      executor: {
+        provider: "test-provider",
+        supportsScope: (scope) => scope === "test.execute",
+        async execute(input) {
+          entered?.();
+          await releaseExecutor;
+          await input.assertActive();
+          return { providerRequestId: "should-not-execute" };
+        }
+      }
+    });
+    await broker.registerCredential(credential());
+    const workload = fixture.identities.issue(identity());
+    const grant = await broker.issueGrant({ identity: workload, request: request(), expiresAt: "2026-08-14T12:10:00.000Z" });
+    const execution = broker.executeServerSide({ identity: workload, grantId: grant.id, request: request() });
+
+    await enteredExecutor;
+    await broker.revokeCredential("tenant-a", "stripe-write");
+    release?.();
+
+    await expect(execution).rejects.toThrow("outcome is unknown");
+    expect((await broker.readStateForTesting()).receipts).toMatchObject([{ grantId: grant.id, status: "unknown", failureCode: "unknown_outcome" }]);
   });
 });
 
