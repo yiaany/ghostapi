@@ -28,7 +28,8 @@ export async function startMcpServer(): Promise<void> {
         method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]),
         status: z.number().int().min(100).max(599).default(200),
         body: z.unknown().default({ ok: true }),
-        headers: z.record(z.string(), z.string()).optional()
+        headers: z.record(z.string(), z.string()).optional(),
+        delayMs: z.number().int().min(0).max(10_000).optional()
       }
     },
     async (args) => jsonResult({ behavior: await setApiBehavior(args) })

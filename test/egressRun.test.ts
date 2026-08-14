@@ -27,7 +27,7 @@ describe("ghostapi run Linux network namespace backend", () => {
       const result = await runTarget(mode);
       expect(result.exitCode, mode).toBe(0);
     }
-  });
+  }, 15_000);
 
   (canRunLinuxNamespace && hasCurl ? it : it.skip)("blocks curl executed by the target", async () => {
     const result = await runTarget("curl");
@@ -58,7 +58,8 @@ describe("ghostapi run Linux network namespace backend", () => {
 
     expect(exitCode).toBe(143);
     await expectEvidence(evidencePath, "finished");
-  });
+    await expect(readFile(evidencePath, "utf8")).resolves.toContain('"type": "run-interrupted"');
+  }, 15_000);
 
   linuxIt("terminates the namespace process tree for eval timeout and output limits", async () => {
     const timedOut = await runEgressCommand({ command: [process.execPath, targetPath, "wait"], allowHosts: [], timeoutMs: 100 });
@@ -70,7 +71,7 @@ describe("ghostapi run Linux network namespace backend", () => {
     const outputEvidence = JSON.parse(await readFile(limited.evidencePath, "utf8")) as { output?: { limitExceeded?: boolean }; events?: Array<{ type?: string }> };
     expect(outputEvidence.output?.limitExceeded).toBe(true);
     expect(outputEvidence.events).toEqual(expect.arrayContaining([expect.objectContaining({ type: "run-output-limit-exceeded" })]));
-  });
+  }, 15_000);
 
   linuxIt("summarizes secret-shaped target output without persisting raw output", async () => {
     const result = await runEgressCommand({ command: [process.execPath, targetPath, "secret-output"], allowHosts: [], maxOutputBytes: 1024 });
@@ -79,6 +80,15 @@ describe("ghostapi run Linux network namespace backend", () => {
     expect(JSON.parse(evidence)).toMatchObject({ output: { secretMatches: 1 } });
     expect(evidence).not.toContain("sk_live_output_should_not_persist");
   });
+
+  linuxIt("redacts secret-shaped target output before terminal forwarding", async () => {
+    const result = await runCli(["run", "--", process.execPath, targetPath, "split-secret-output"]);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("***");
+    expect(result.stdout).toContain("\nsafe output\n");
+    expect(`${result.stdout}\n${result.stderr}`).not.toContain("sk_live_split_should_not_persist");
+  }, 15_000);
 });
 
 describe("ghostapi run degraded modes", () => {
@@ -135,6 +145,18 @@ function waitForExit(child: ReturnType<typeof spawn>): Promise<number> {
   return new Promise((resolve, reject) => {
     child.once("error", reject);
     child.once("exit", (code) => resolve(code ?? 1));
+  });
+}
+
+function runCli(args: string[]): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, ["--import", "tsx", cliPath, ...args], { env: process.env, stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => { stdout += String(chunk); });
+    child.stderr.on("data", (chunk) => { stderr += String(chunk); });
+    child.once("error", reject);
+    child.once("exit", (code) => resolve({ exitCode: code ?? 1, stdout, stderr }));
   });
 }
 

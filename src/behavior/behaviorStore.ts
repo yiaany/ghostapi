@@ -9,6 +9,7 @@ export type ApiBehavior = {
   status: number;
   body: unknown;
   headers?: Record<string, string>;
+  delayMs?: number;
 };
 
 export async function setApiBehavior(behavior: ApiBehavior): Promise<ApiBehavior> {
@@ -42,6 +43,9 @@ function normalizeBehavior(behavior: ApiBehavior): ApiBehavior {
   if (!Number.isInteger(behavior.status) || behavior.status < 100 || behavior.status > 599) {
     throw new Error("Behavior status must be an integer between 100 and 599.");
   }
+  if (behavior.delayMs !== undefined && (!Number.isInteger(behavior.delayMs) || behavior.delayMs < 0 || behavior.delayMs > 10_000)) {
+    throw new Error("Behavior delayMs must be an integer between 0 and 10000.");
+  }
   return sanitizeSecrets({ ...behavior, path, method }) as ApiBehavior;
 }
 
@@ -50,12 +54,14 @@ function behaviorKey(method: string, path: string): string {
 }
 
 function isApiBehavior(value: unknown): value is ApiBehavior {
-  return value !== null
-    && typeof value === "object"
-    && !Array.isArray(value)
-    && typeof (value as ApiBehavior).path === "string"
-    && typeof (value as ApiBehavior).method === "string"
-    && typeof (value as ApiBehavior).status === "number";
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const behavior = value as ApiBehavior;
+  return typeof behavior.path === "string"
+    && typeof behavior.method === "string"
+    && Number.isInteger(behavior.status)
+    && behavior.status >= 100
+    && behavior.status <= 599
+    && (behavior.delayMs === undefined || (Number.isInteger(behavior.delayMs) && behavior.delayMs >= 0 && behavior.delayMs <= 10_000));
 }
 
 function sanitizeBehaviors(value: unknown): Record<string, ApiBehavior> {

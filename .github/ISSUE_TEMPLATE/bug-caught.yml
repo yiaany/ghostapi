@@ -1,0 +1,42 @@
+name: Bug caught before merge
+description: Record a sanitized, real validation outcome.
+title: "[Bug caught]: "
+labels: ["validation", "bug-caught"]
+body:
+  - type: markdown
+    attributes:
+      value: "Only report observed outcomes. Do not include customer data, production identifiers, credentials, source code, or raw traffic. A demo does not count as a real bug."
+  - type: input
+    id: date
+    attributes:
+      label: Date observed
+      placeholder: YYYY-MM-DD
+    validations:
+      required: true
+  - type: dropdown
+    id: category
+    attributes:
+      label: Defect category
+      options:
+        - Duplicate side effect
+        - Webhook signature validation
+        - Retry or timeout recovery
+        - Production egress
+        - Contract drift
+        - Other integration defect
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: What GhostAPI evidence showed
+      description: Use a sanitized scenario/evidence reference and state whether merge was blocked.
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Expected impact without detection
+      description: Mark unknown rather than estimating.
+    validations:
+      required: true

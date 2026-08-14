@@ -122,11 +122,89 @@ The included [`examples/worlds/subscription-recovery.mjs`](../examples/worlds/su
 
 World transitions use one local file lock and same-directory atomic replacement. They are strongly consistent only for processes using the same world file on one local filesystem; GhostAPI does not claim distributed coordination, cloud tenancy, provider parity, or external delivery. Worlds are data only, capped at 512 KiB and 100 receipts, reject symlink files, secret-shaped values/fields, and non-`ghostapi.invalid` email addresses. `reset` restores the original baseline; `fork` snapshots the source's current state with lineage and then evolves independently.
 
+## Synthetic Action Gateway
+
+`ghostapi action` is the local foundation for one typed action contract across simulation, evidence, approvals, and a future execution gateway. In this release, its only adapter is `ghostapi-synthetic`; it executes `synthetic.subscription_failure` against an existing local synthetic world. It has no production provider account, credential, HTTP client, shell/tool execution path, message delivery, payment, deployment, or other external side effect.
+
+An action envelope is schema-v1 JSON containing a stable `actionId`, `idempotencyKey`, agent/workload identity, project/environment, provider/operation/resource, normalized arguments, expected effects, risk/reversibility classification, policy/evidence references, expiry, and nonce. The complete normalized envelope is canonicalized with sorted object keys and SHA-256 hashed. Approval is its own schema-v1 object containing the exact `actionHash`, named independent approver, issue/expiry timestamps, and nonce; a boolean approval is not accepted.
+
+Use the public API to construct the exact action and approval hash, then keep the JSON as reviewed artifacts:
+
+```ts
+import { actionHash, createLocalActionGateway } from "@yiaany/ghostapi";
+
+const action = {
+  schemaVersion: 1,
+  kind: "ghostapi.action",
+  actionId: "recover-subscription-001",
+  idempotencyKey: "recover-subscription-001",
+  actor: { id: "billing-agent", workloadId: "recovery-worker", type: "agent" },
+  project: { id: "checkout", environment: "synthetic" },
+  provider: "ghostapi-synthetic",
+  operation: "synthetic.subscription_failure",
+  resource: { type: "synthetic-world", id: "subscription-recovery" },
+  arguments: { worldId: "subscription-recovery" },
+  expectedSideEffects: [
+    "stripe.subscription.past_due",
+    "email.subscription_payment_failed",
+    "github.recovery_issue",
+    "generic_rest.payment_failed"
+  ],
+  riskClass: "write",
+  reversibility: "none",
+  policy: { version: 1, hash: "<SHA-256 of reviewed policy source>" },
+  evidence: { hash: "<SHA-256 evidence reference>" },
+  expiresAt: "2030-01-01T00:00:00.000Z",
+  nonce: "review-001"
+} as const;
+
+const approval = {
+  schemaVersion: 1,
+  kind: "ghostapi.action-approval",
+  approvalId: "approval-recover-subscription-001",
+  actionHash: actionHash(action),
+  approvedBy: "human-reviewer",
+  approvedAt: "2026-08-13T00:00:00.000Z",
+  expiresAt: "2030-01-01T00:00:00.000Z",
+  nonce: "approval-review-001"
+} as const;
+
+const gateway = createLocalActionGateway();
+await gateway.submit(action, approval, { version: 1, hash: action.policy.hash, allowed: true });
+const receipt = await gateway.execute(action, { actorId: "billing-agent", workloadId: "recovery-worker" }, { version: 1, hash: action.policy.hash, allowed: true });
+```
+
+CLI commands accept only regular non-symlink local JSON under the project root or `GHOSTAPI_DATA_DIR` and re-load the supplied policy at submit and execution:
+
+```bash
+ghostapi action submit --action action.json --approval approval.json --policy ghostapi.policy.yaml
+ghostapi action inspect recover-subscription-001 --json
+ghostapi action execute --action action.json --policy ghostapi.policy.yaml --actor billing-agent --workload recovery-worker --json
+```
+
+Before the synthetic side effect, the gateway checks exact action hash, independent approval, action/approval expiry, current policy version/hash, execution actor/workload identity, adapter operation support, and idempotency state. Receipts progress through `requested`, `attempted`, `committed`, `verified`, or `failed`; an attempted action is reconciled before any re-execution. Unknown provider outcomes and verification failures are explicitly not safe to retry. Unsupported operations or compensation fail visibly. The local store is bounded to 128 KiB per record and 20 receipts, uses per-action locks and atomic writes, and rejects symlink records.
+
+Policy schema v1 does not yet contain action-level authorization rules. This release verifies the reviewed policy reference at execution to prevent stale-policy use; it does not claim that a generic policy authorizes a production action. Read [`docs/security/action-gateway-threat-model.md`](security/action-gateway-threat-model.md) before extending the adapter boundary.
+
+## Credential Broker And Workload Identity
+
+The public `CredentialBroker` API is a local foundation for keeping upstream provider secrets outside an AI agent's context. It has no CLI, MCP tool, HTTP endpoint, provider SDK, environment-secret loader, or API that returns a provider secret. A grant is always audience-bound to `ghostapi-server`, so the agent process cannot receive it as an environment variable, argument, stdin value, log, report, or response.
+
+The broker stores only credential metadata, scoped grant metadata, and action-linked execution receipts in `.ghostapi/credential-broker.json`. Secret material remains behind an injected vault interface. This repository intentionally ships only a test in-memory vault and test executor for automated integration tests; neither has network or provider capability. Production use requires an existing reviewed vault/KMS abstraction and a separately reviewed server-side provider executor. Do not implement homemade reversible encryption or place secret material in `.env`, fixtures, scenario bundles, approval records, or MCP responses.
+
+Workload identities distinguish `agent_run`, `ci_job`, and `production_service` and bind a tenant, project, environment, workload, subject, run, issue time, and expiry. Before each server-side execution the broker rechecks workload identity, credential/grant revocation and expiry, tenant/project/environment, provider, scope, server-only audience, credential version after rotation, and exact action ID/hash/verified receipt reference. Standard grants last at most 15 minutes. Break-glass is disabled unless an injected independent human-controlled authorizer validates an exact-action approval, and its grants last at most 5 minutes.
+
+Rotation changes the opaque vault reference, increments the credential version, and revokes active grants without touching local simulation state. Revocation blocks all new execution before vault access. `listOrphanedCredentials()` reports active credentials whose configured owner workload is no longer active; it does not delete or transfer them automatically. Read [`docs/security/credential-broker-threat-model.md`](security/credential-broker-threat-model.md) before implementing any vault, identity, approval, or provider adapter.
+
 ## Team Control-Plane Prototype
 
-One design partner has confirmed a need for shared scenarios and CI/PR reports. The included prototype remains a local typed library, not a hosted account system or web UI. It models organizations, members/roles, projects, environments, versioned scenario metadata, sanitized CI evidence summaries, distributed policy versions, short-lived revocable tokens, audit metadata, migrations, and bounded retention. The separate hosted pilot skeleton and its explicit deployment limits are documented in [`docs/hosted-pilot.md`](hosted-pilot.md).
+The [design-partner validation kit](design-partners/README.md) records no independently verifiable interview, CI, bug-caught, LOI, or paid-pilot evidence in this repository, so the cloud/enterprise gate remains unmet. The included prototype remains a local typed library, not a hosted account system or web UI. It models organizations, members/roles, projects, environments, versioned scenario metadata, sanitized CI evidence summaries, distributed policy versions, short-lived revocable tokens, audit metadata, migrations, and bounded retention. The separate hosted pilot skeleton and its explicit deployment limits are documented in [`docs/hosted-pilot.md`](hosted-pilot.md).
 
 Local runtime behavior is unchanged and does not require login. Cloud sync is not implemented. The prototype never uploads raw traffic, code, secrets, request bodies, or provider credentials; evidence is accepted only after GhostAPI schema/hash validation and stored as a restricted summary. Read [`docs/team-control-plane.md`](team-control-plane.md) for the tenant model, API, storage limitations, incident response, and design-partner onboarding workflow.
+
+## Optional Local Product Telemetry
+
+GhostAPI has no telemetry by default. `ghostapi telemetry enable` stores only four local aggregate counters and up to eight ISO week labels in `.ghostapi/product-telemetry.json`; it has no network transport and never records source code, traffic, commands, provider names, repository identity, credentials, or secrets. Inspect the aggregate with `ghostapi telemetry status` or `ghostapi telemetry export --json`. `ghostapi telemetry disable` deletes it. See [`docs/design-partners/telemetry-plan.md`](design-partners/telemetry-plan.md) for the event schema and retention limits.
 
 ## Policy As Code
 
@@ -293,6 +371,6 @@ Resend is the first provider migrated to the `ProviderPack` contract. Its determ
 
 ## Failure Scenarios
 
-Use MCP or the dashboard to force deterministic responses such as Stripe card declines, rate limits, upstream errors, and latency.
+Use MCP or the dashboard to force deterministic responses such as Stripe card declines, rate limits, upstream errors, and latency. `set_api_behavior` supports a bounded optional `delayMs` value (0-10,000) for a specific method/path, allowing a repeatable client-timeout test without any provider call.
 
 The goal is to make failure handling repeatable instead of relying on live provider behavior.

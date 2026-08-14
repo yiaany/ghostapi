@@ -5,8 +5,7 @@ if (!baseUrl) throw new Error("GHOSTAPI_BASE_URL is required; run this fixture t
 const response = await fetch(`${baseUrl}/v1/customers`, {
   method: "POST",
   headers: {
-    "content-type": "application/json",
-    authorization: "Bearer stripe_test_ghostapi"
+    "content-type": "application/json"
   },
   body: JSON.stringify({
     email: "ci-safe@example.invalid",

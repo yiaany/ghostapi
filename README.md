@@ -69,7 +69,11 @@ Score agent behavior with deterministic evals using `ghostapi eval --template re
 
 Create a deterministic, local shared state with `ghostapi world create --id subscription-recovery --seed demo-seed`. A world uses one canonical synthetic identity across Stripe, GitHub, email, and generic REST projections; it supports atomic local transitions, reset, and snapshot forks without cloud tenancy or real PII. See the [synthetic world guide](docs/usage.md#stateful-synthetic-worlds) and [end-to-end example](examples/worlds/README.md).
 
-A design partner has confirmed the shared-scenarios and CI/PR-report workflow. The local typed [team-control-plane prototype](docs/team-control-plane.md) remains local-first, while the separate [hosted pilot architecture](docs/hosted-pilot.md) defines a Bun/Elysia, PostgreSQL outbox, scoped CI-ingest, and queue-worker design. No hosted service is deployed yet, and the stated RPO/RTO targets remain unproven until production-equivalent load and disaster-recovery drills pass.
+The local `ghostapi action` gateway uses a versioned action envelope, canonical hash, structured approval, policy/evidence references, identity recheck, idempotency, and receipt chain to execute one synthetic-world operation. It has no real-provider executor, credentials, or outbound side effect. See the [synthetic action gateway guide](docs/usage.md#synthetic-action-gateway) and [threat model](docs/security/action-gateway-threat-model.md).
+
+The public credential-broker library keeps provider secret material behind an injected vault boundary and executes through a server-side executor rather than returning a secret or grant to an agent. The shipped implementation has no CLI, MCP, provider, HTTP, environment-secret, or production side-effect path; its in-memory vault/provider adapters are tests only. See the [credential broker guide](docs/usage.md#credential-broker-and-workload-identity) and [threat model](docs/security/credential-broker-threat-model.md).
+
+The [design-partner validation kit](docs/design-partners/README.md) currently records no independently verifiable interview, CI, bug-caught, LOI, or paid-pilot evidence in this repository, so the cloud/enterprise gate remains unmet. The local typed [team-control-plane prototype](docs/team-control-plane.md) remains local-first, while the separate [hosted pilot architecture](docs/hosted-pilot.md) is an un-deployed technical design whose RPO/RTO targets remain unproven until production-equivalent load and disaster-recovery drills pass.
 
 ## What GhostAPI Does
 
@@ -306,9 +310,12 @@ Run `npx @yiaany/ghostapi doctor --json` for machine-readable environment checks
 | `.ghostapi/reports/` | Versioned evidence reports; 512 KiB per artifact with latest-20 local retention. |
 | `.ghostapi/scenarios/*.bundle.json` | Sanitized, versioned record/replay bundles; no raw temporary capture is retained. |
 | `.ghostapi/contracts/*.contract.json` | Bounded deterministic OpenAPI/HAR contract snapshots for offline drift checks. |
+| `.ghostapi/actions/*.action.json` | Synthetic action envelopes, structured approvals, and tamper-evident local receipt chains. |
+| `.ghostapi/credential-broker.json` | Credential metadata, scoped server-only grants, and action-linked execution receipts; never upstream secret material. |
 | `.ghostapi/behaviors.json` | Deterministic behavior overrides. |
 | `.ghostapi/cache/` | Local response cache. |
 | `.ghostapi/fault-lab.json` | Persisted Fault Lab configuration shared with MCP. |
+| `.ghostapi/product-telemetry.json` | Optional local aggregate counters; disabled by default, never uploaded, and deleted by `ghostapi telemetry disable`. |
 
 On POSIX systems GhostAPI requests owner-only permissions. On Windows, effective permissions inherit from the data directory ACL. Local lock files coordinate cooperating processes on one filesystem, not distributed or synchronized copies.
 
@@ -340,6 +347,7 @@ npx @yiaany/ghostapi record --input capture.har --allow-sandbox-host api.sandbox
 npx @yiaany/ghostapi replay .ghostapi/scenarios/sandbox-recording.bundle.json --requests requests.json
 npx @yiaany/ghostapi contract import-openapi --input openapi.json
 npx @yiaany/ghostapi contract diff --baseline base.contract.json --candidate head.contract.json --policy ghostapi.policy.yaml --ci
+npx @yiaany/ghostapi action inspect <action-id>
 npx @yiaany/ghostapi doctor --port 8080
 npx @yiaany/ghostapi clear cache|state|events|all
 npx @yiaany/ghostapi providers list
@@ -367,8 +375,14 @@ mcp, ai-agents, stripe, openai, mock-server, api-testing, sandbox, proxy, local-
 - [GitHub Actions PR safety check](docs/github-actions.md)
 - [Generic CI guide](docs/ci.md)
 - [Starter examples](examples/README.md)
+- [Design-partner validation kit](docs/design-partners/README.md)
+- [Commercial readiness and pricing experiment](docs/commercial/README.md)
+- [Launch and fundraising package](docs/fundraising/README.md)
 - [Provider pack authoring](docs/providers/authoring-packs.md)
 - [Release checklist](docs/release-checklist.md)
+- [Synthetic action gateway threat model](docs/security/action-gateway-threat-model.md)
+- [Release readiness](docs/release-readiness.md)
+- [Migration and rollback](docs/release-migration-and-rollback.md)
 - [Contributing](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)
 

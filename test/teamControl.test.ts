@@ -74,7 +74,7 @@ describe("local team control-plane security prototype", () => {
 
   it("freezes published role permissions and bounds duplicate token allocation", async () => {
     expect(Object.isFrozen(TEAM_PERMISSION_MATRIX.owner)).toBe(true);
-    const plane = createLocalTeamControlPlane({ path: join(getDataPaths().root, "team-control-collision.json"), randomTokenBytes: (size) => Buffer.alloc(size, 5) });
+    const plane = createLocalTeamControlPlane({ path: join(getDataPaths().root, "team-control-collision.json"), now: () => new Date("2026-08-08T00:00:00.000Z"), randomTokenBytes: (size) => Buffer.alloc(size, 5) });
     const owner = { organizationId: "collision-team", memberId: "owner" };
     await plane.bootstrapOrganization({ organizationId: "collision-team", name: "Collision Team", ownerId: "owner" });
     await plane.issueToken(owner, { expiresAt: "2026-08-09T00:00:00.000Z" });

@@ -17,6 +17,14 @@ export { EvalError, builtinEvalTemplates, formatEvalReport, loadEvalSpec, runEva
 export type { EvalExpectation, EvalForbiddenAction, EvalReport, EvalRunOptions, EvalScoreComponent, EvalSpec, EvalTemplateName } from "./evals/index.js";
 export { SyntheticWorldError, createSyntheticWorld, createWorld, forkWorld, formatWorld, getWorldPath, inspectWorld, resetWorld, runSubscriptionFailureWorkflow, validateSyntheticWorld } from "./worlds/index.js";
 export type { CreateWorldOptions, SyntheticWorld, SyntheticWorldManifest, SyntheticWorldState, WorldScenarioReference, WorldWorkflowReceipt } from "./worlds/index.js";
+export { ProductTelemetryError, formatProductTelemetry, readProductTelemetry, recordProductTelemetry, setProductTelemetryEnabled } from "./productTelemetry/index.js";
+export type { ProductTelemetryEvent, ProductTelemetrySnapshot } from "./productTelemetry/index.js";
+export { getApiBehaviors, setApiBehavior } from "./behavior/behaviorStore.js";
+export type { ApiBehavior } from "./behavior/behaviorStore.js";
+export { ActionGatewayError, LocalActionGateway, actionApprovalHash, actionHash, canonicalizeActionEnvelope, createLocalActionGateway, createSyntheticActionAdapter, getActionPath, validateActionApproval, validateActionEnvelope } from "./actions/index.js";
+export type { ActionApproval, ActionEnvelope, ActionExecutionAdapter, ActionExecutionIdentity, ActionExecutionReceipt, ActionGatewayOptions, ActionPolicyCheck, ActionReceiptStatus, ActionReversibility, ActionRiskClass, StoredAction } from "./actions/index.js";
+export { CredentialBroker, CredentialBrokerError, createCredentialBroker, createDisabledBreakGlassAuthorizer, createTestActionReceiptVerifier, createTestBreakGlassAuthorizer, createTestCredentialExecutor, createTestCredentialVault, createTestWorkloadIdentityProvider } from "./credentials/index.js";
+export type { ActionReceiptVerifier, BreakGlassApproval, BreakGlassAuthorizer, CredentialAccessRequest, CredentialActionReference, CredentialBrokerOptions, CredentialBrokerState, CredentialExecutor, CredentialGrant, CredentialMetadata, CredentialUseReceipt, CredentialVault, WorkloadBinding, WorkloadIdentity, WorkloadIdentityVerifier, WorkloadKind } from "./credentials/index.js";
 export type { ServerConfig } from "./config/serverConfig.js";
 export { createProviderRuntime, runProviderPackConformance } from "./providers/index.js";
 export type {

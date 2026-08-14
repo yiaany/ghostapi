@@ -1,0 +1,29 @@
+export {
+  CredentialBroker,
+  CredentialBrokerError,
+  createCredentialBroker,
+  createDisabledBreakGlassAuthorizer,
+  createTestActionReceiptVerifier,
+  createTestBreakGlassAuthorizer,
+  createTestCredentialExecutor,
+  createTestCredentialVault,
+  createTestWorkloadIdentityProvider
+} from "./credentialBroker.js";
+export type {
+  BreakGlassApproval,
+  BreakGlassAuthorizer,
+  ActionReceiptVerifier,
+  CredentialAccessRequest,
+  CredentialActionReference,
+  CredentialBrokerOptions,
+  CredentialBrokerState,
+  CredentialExecutor,
+  CredentialGrant,
+  CredentialMetadata,
+  CredentialUseReceipt,
+  CredentialVault,
+  WorkloadBinding,
+  WorkloadIdentity,
+  WorkloadIdentityVerifier,
+  WorkloadKind
+} from "./credentialBroker.js";

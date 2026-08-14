@@ -104,6 +104,17 @@ describe("evidence reports", () => {
     expect(formatEvidenceReport(report)).not.toContain("\u001b");
   });
 
+  it("bounds and validates explicit run evidence before parsing it", async () => {
+    const invalidPath = join(getDataPaths().root, "invalid-run.json");
+    const oversizedPath = join(getDataPaths().root, "oversized-run.json");
+    await mkdir(getDataPaths().root, { recursive: true });
+    await writeFile(invalidPath, "{not-json", "utf8");
+    await writeFile(oversizedPath, "x".repeat(128 * 1024 + 1), "utf8");
+
+    await expect(generateEvidenceReport({ runPath: invalidPath })).rejects.toThrow("Run evidence is not valid JSON.");
+    await expect(generateEvidenceReport({ runPath: oversizedPath })).rejects.toThrow("Run evidence exceeds 131072 bytes.");
+  });
+
   it("sets a non-zero CI exit code when policy findings fail", async () => {
     await addEvent(eventFixture());
     const outputPath = join(getDataPaths().reports, "ci.json");

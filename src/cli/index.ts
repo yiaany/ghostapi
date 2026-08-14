@@ -29,6 +29,8 @@ import { createScenarioReplayer, formatScenarioSanitizationSummary, loadScenario
 import { ContractError, diffContracts, formatContractDiff, importHarContractFromFile, importOpenApiContractFromFile, loadContract, writeContract } from "../contracts/index.js";
 import { EvalError, formatEvalReport, runEval } from "../evals/index.js";
 import { SyntheticWorldError, createWorld, forkWorld, formatWorld, inspectWorld, resetWorld } from "../worlds/index.js";
+import { formatProductTelemetry, readProductTelemetry, recordProductTelemetry, setProductTelemetryEnabled } from "../productTelemetry/index.js";
+import { ActionGatewayError, createLocalActionGateway } from "../actions/index.js";
 
 type DoctorStatus = "ok" | "warn" | "fail";
 type DoctorCheck = { label: string; status: DoctorStatus; detail: string; remediation?: string; docs?: string };
@@ -62,6 +64,7 @@ async function main(): Promise<void> {
       return;
     case "run": {
       const result = await runEgressCommand(command.options);
+      await recordLocalProductTelemetry("enforced_run_completed");
       process.exitCode = result.exitCode;
       return;
     }
@@ -109,6 +112,18 @@ async function main(): Promise<void> {
       return;
     case "world-fork":
       await forkWorldCommand(command.sourceId, command.options);
+      return;
+    case "action-submit":
+      await submitActionCommand(command.options);
+      return;
+    case "action-inspect":
+      await inspectActionCommand(command.actionId, command.json === true);
+      return;
+    case "action-execute":
+      await executeActionCommand(command.options);
+      return;
+    case "telemetry":
+      await runTelemetryCommand(command.action, command.json === true);
       return;
     case "init":
       await initProject();
@@ -196,6 +211,7 @@ async function initProject(): Promise<void> {
   console.log("Next: ghostapi doctor");
   console.log("Then on supported Linux hosts: ghostapi run -- npm test");
   console.log("Otherwise: ghostapi start --open and point SDKs at http://127.0.0.1:8080.");
+  await recordLocalProductTelemetry("init_completed");
 }
 
 async function printRepoSetup(write: boolean): Promise<void> {
@@ -385,6 +401,7 @@ async function generateEvidence(options: { policyPath?: string; runPath?: string
     console.log(`Artifact: ${path}`);
   }
   if (options.ci && !report.summary.passed) process.exitCode = 2;
+  await recordLocalProductTelemetry("evidence_generated");
 }
 
 async function viewEvidence(options: { path: string; json?: boolean }): Promise<void> {
@@ -474,6 +491,7 @@ async function runEvalCommand(options: { specPath?: string; template?: "retry-af
     console.log(`Artifact: ${path}`);
   }
   if (options.ci && !report.score.passed) process.exitCode = 2;
+  await recordLocalProductTelemetry("eval_completed");
 }
 
 async function createWorldCommand(options: { id: string; seed: string; title?: string; json?: boolean }): Promise<void> {
@@ -494,6 +512,48 @@ async function resetWorldCommand(id: string, json: boolean): Promise<void> {
 async function forkWorldCommand(sourceId: string, options: { id: string; title?: string; json?: boolean }): Promise<void> {
   const world = await forkWorld(sourceId, options);
   console.log(options.json ? JSON.stringify(world, null, 2) : `${formatWorld(world)}\nForked from: ${sourceId}`);
+}
+
+async function submitActionCommand(options: { actionPath: string; approvalPath: string; policyPath: string; json?: boolean }): Promise<void> {
+  const [action, approval, policy] = await Promise.all([loadActionInput(options.actionPath), loadActionInput(options.approvalPath), loadPolicyFile(options.policyPath, process.cwd(), true)]);
+  if (policy === null) throw new CliError("Policy file was not found.");
+  const record = await createLocalActionGateway().submit(action, approval, { version: policy.policy.version, hash: policy.hash, allowed: true });
+  console.log(options.json ? JSON.stringify(record, null, 2) : `Action submitted: ${record.envelope.actionId}\nHash: ${record.actionHash}\nEnvironment: synthetic only`);
+}
+
+async function inspectActionCommand(actionId: string, json: boolean): Promise<void> {
+  const record = await createLocalActionGateway().inspect(actionId);
+  console.log(json ? JSON.stringify(record, null, 2) : `Action: ${record.envelope.actionId}\nHash: ${record.actionHash}\nReceipts: ${record.receipts.map((receipt) => receipt.status).join(", ")}`);
+}
+
+async function executeActionCommand(options: { actionPath: string; policyPath: string; actorId: string; workloadId: string; json?: boolean }): Promise<void> {
+  const [action, policy] = await Promise.all([loadActionInput(options.actionPath), loadPolicyFile(options.policyPath, process.cwd(), true)]);
+  if (policy === null) throw new CliError("Policy file was not found.");
+  const receipt = await createLocalActionGateway().execute(action, { actorId: options.actorId, workloadId: options.workloadId }, { version: policy.policy.version, hash: policy.hash, allowed: true });
+  console.log(options.json ? JSON.stringify(receipt, null, 2) : `Action ${receipt.status}: ${receipt.actionId}\nProvider request: ${receipt.providerRequestId ?? "n/a"}`);
+}
+
+async function runTelemetryCommand(action: "status" | "enable" | "disable" | "export", json: boolean): Promise<void> {
+  const snapshot = action === "enable"
+    ? await setProductTelemetryEnabled(true)
+    : action === "disable"
+      ? await setProductTelemetryEnabled(false)
+      : await readProductTelemetry();
+  if (json) {
+    console.log(JSON.stringify(snapshot, null, 2));
+    return;
+  }
+  console.log(formatProductTelemetry(snapshot));
+  if (action === "disable") console.log("Existing local counters were deleted.");
+  if (action === "enable") console.log("Only aggregate event counts and up to eight ISO weeks are recorded locally after this command; no network export exists.");
+}
+
+async function recordLocalProductTelemetry(event: "init_completed" | "enforced_run_completed" | "evidence_generated" | "eval_completed"): Promise<void> {
+  try {
+    await recordProductTelemetry(event);
+  } catch {
+    console.error("Warning: local opt-in product telemetry was not recorded; no telemetry was sent.");
+  }
 }
 
 function parsePiiRules(value: string | undefined): Partial<ScenarioPiiRules> | undefined {
@@ -524,6 +584,21 @@ async function loadReplayRequests(path: string): Promise<ScenarioReplayRequest[]
     if (typeof candidate.method !== "string" || typeof candidate.path !== "string") throw new CliError("Replay request requires string method and path.");
     return { method: candidate.method, path: candidate.path, headers: candidate.headers as ScenarioReplayRequest["headers"], body: candidate.body };
   });
+}
+
+async function loadActionInput(path: string): Promise<unknown> {
+  const target = isAbsolute(path) ? resolve(path) : resolve(process.cwd(), path);
+  if (!isInsideAllowedRoots(target)) throw new CliError("Action input path traversal outside the project root or GHOSTAPI_DATA_DIR is not allowed.");
+  const info = await lstat(target);
+  if (!info.isFile() || info.isSymbolicLink()) throw new CliError("Action input must be a regular non-symlink file.");
+  if (!await isRealPathInsideAllowedRoots(target)) throw new CliError("Action input resolves outside the project root or GHOSTAPI_DATA_DIR through a symlink.");
+  const source = await readFile(target, "utf8");
+  if (Buffer.byteLength(source, "utf8") > 128 * 1024) throw new CliError("Action input exceeds 131072 bytes.");
+  try {
+    return JSON.parse(source);
+  } catch {
+    throw new CliError("Action input is not valid JSON.");
+  }
 }
 
 function isInsideAllowedRoots(target: string): boolean {
@@ -594,6 +669,10 @@ Usage:
   ghostapi world inspect <world-id> [--json]
   ghostapi world reset <world-id> [--json]
   ghostapi world fork <source-world-id> --id <fork-world-id> [--title title] [--json]
+  ghostapi action submit --action <action.json> --approval <approval.json> --policy ghostapi.policy.yaml [--json]
+  ghostapi action inspect <action-id> [--json]
+  ghostapi action execute --action <action.json> --policy ghostapi.policy.yaml --actor <actor-id> --workload <workload-id> [--json]
+  ghostapi telemetry status|enable|disable|export [--json]
   ghostapi init`);
 }
 
@@ -630,6 +709,11 @@ main().catch((error: unknown) => {
   }
 
   if (error instanceof SyntheticWorldError) {
+    console.error(`Error: ${error.message}`);
+    process.exit(1);
+  }
+
+  if (error instanceof ActionGatewayError) {
     console.error(`Error: ${error.message}`);
     process.exit(1);
   }

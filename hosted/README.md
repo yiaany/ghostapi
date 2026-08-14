@@ -19,6 +19,7 @@ This is a separate Bun/Elysia deployment boundary for the hosted pilot. It does 
 - Retrying the same `Idempotency-Key` and body returns the original report id. Reusing a key with a different body returns `409`.
 - Outbox dispatch may publish more than once. QStash deduplication is advisory; `app.job_receipts` remains the durable consumer idempotency ledger.
 - Queue messages contain only `{ eventId, reportId, schemaVersion }`, never report payloads or credentials.
+- The queue receiver rejects declared or chunked bodies over 16 KiB before JSON parsing or signature verification.
 - Writes and read-your-writes use the Postgres primary. A future replica read endpoint must label responses as eventual and never serve a write-after-read contract.
 
 See `../docs/hosted-pilot.md` for load, data, queue, disaster-recovery, and deployment constraints.
