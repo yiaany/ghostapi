@@ -196,6 +196,14 @@ Workload identities distinguish `agent_run`, `ci_job`, and `production_service` 
 
 Rotation changes the opaque vault reference, increments the credential version, and revokes active grants without touching local simulation state. Revocation blocks all new execution before vault access. `listOrphanedCredentials()` reports active credentials whose configured owner workload is no longer active; it does not delete or transfer them automatically. Read [`docs/security/credential-broker-threat-model.md`](security/credential-broker-threat-model.md) before implementing any vault, identity, approval, or provider adapter.
 
+## Local Approval Inbox
+
+`createLocalApprovalInbox()` is a typed local API for a human approval workflow over the existing synthetic action gateway. It has no CLI, hosted UI, Slack/email integration, bearer approval link, external notification, real credential, or production provider path. An injected approver verifier authenticates local approver objects; messages and LLM text are never approval authority.
+
+Requests are generated from an exact action envelope and display the intent, target, normalized argument diff, expected side effects, reversibility, amount impact, policy reason, evidence hash, and successful synthetic preflight result. The risk taxonomy includes `read`, `create`, `update`, `communicate`, `money_movement`, `delete`, `permission_change`, and `deployment`; risk is derived by GhostAPI, not supplied by an agent. The current synthetic subscription workflow is an `update` action only.
+
+Policies can restrict environment, actor, resource, amount, confidence, and action velocity. Actions requiring two-person review require distinct approver independence keys. Approval artifacts are exact-action-hash-bound, expiring, single-use, and rechecked along with the current policy before the action gateway is called. Reject, revoke, timeout, expiry, changed arguments, changed identity, and policy drift all fail closed. Read [`docs/security/approval-inbox-threat-model.md`](security/approval-inbox-threat-model.md) before connecting any future identity, notification, or provider execution system.
+
 ## Team Control-Plane Prototype
 
 The [design-partner validation kit](design-partners/README.md) records no independently verifiable interview, CI, bug-caught, LOI, or paid-pilot evidence in this repository, so the cloud/enterprise gate remains unmet. The included prototype remains a local typed library, not a hosted account system or web UI. It models organizations, members/roles, projects, environments, versioned scenario metadata, sanitized CI evidence summaries, distributed policy versions, short-lived revocable tokens, audit metadata, migrations, and bounded retention. The separate hosted pilot skeleton and its explicit deployment limits are documented in [`docs/hosted-pilot.md`](hosted-pilot.md).

@@ -12,6 +12,7 @@ export type DataPaths = {
   contracts: string;
   worlds: string;
   actions: string;
+  approvals: string;
   credentialBroker: string;
   teamControlPlane: string;
   faultLab: string;
@@ -48,6 +49,7 @@ export function getDataPaths(): DataPaths {
     contracts: resolveDataPath("contracts"),
     worlds: resolveDataPath("worlds"),
     actions: resolveDataPath("actions"),
+    approvals: resolveDataPath("approvals.json"),
     credentialBroker: resolveDataPath("credential-broker.json"),
     teamControlPlane: resolveDataPath("team-control-plane.json"),
     faultLab: resolveDataPath("fault-lab.json"),
