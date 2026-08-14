@@ -8,6 +8,7 @@ Use this checklist before publishing GhostAPI to GitHub or npm.
 - `README.md` explains value, install, CLI, provider coverage, examples, safety, and contributing.
 - `CHANGELOG.md` has an entry for the release.
 - `LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, and `CODE_OF_CONDUCT.md` are present.
+- [Release readiness matrix](release-readiness.md) and [migration/rollback guide](release-migration-and-rollback.md) are current for the proposed release.
 
 ## Local Verification
 
@@ -15,6 +16,7 @@ Use this checklist before publishing GhostAPI to GitHub or npm.
 npm run typecheck
 npm test
 npm run build
+npm run smoke:package
 ```
 
 Smoke check the built CLI:
@@ -70,6 +72,9 @@ Confirm the package includes only intended release files and does not include:
 - Non-loopback startup fails without a strong `GHOSTAPI_AUTH_TOKEN`; dashboard APIs and SSE reject missing tokens.
 - Generated tests honor `GHOSTAPI_BASE_URL` instead of requiring port 8080.
 - CLI user errors are actionable and do not print confusing stack traces.
+- GitHub workflows use least-privilege permissions and SHA-pinned actions.
+- Security claims match tests actually run on the target platform; Windows/macOS local simulation is not Linux enforcement evidence.
+- Any full-audit findings have a documented owner and remediation plan.
 
 ## Publish
 

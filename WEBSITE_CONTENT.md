@@ -231,6 +231,30 @@ GhostAPI works with MCP-compatible clients and provides setup snippets/instructi
 
 Yes. GhostAPI is designed as an open-source local developer tool under the MIT license.
 
+### Pricing Page (Draft)
+
+This page is for discovery until GhostAPI has validated paid demand. Do not publish a checkout, price table, customer logo, testimonial, ROI claim, SLA, or hosted-service availability claim before the commercial gate is met.
+
+#### Headline
+
+Keep local integration testing free. Pay only for proven team controls when the workflow is ready.
+
+#### OSS Local
+
+Available now, free, MIT licensed, and account-free. Local runtime, provider simulation, MCP, scenarios, and safety evidence stay usable without a paywall.
+
+#### Team
+
+Design-partner proposal only. A fixed-scope paid pilot may cover protected CI workflows, shared scenario/policy review, retained sanitized evidence, and agreed support after a team proves the workflow is valuable. It is not a self-serve subscription today.
+
+#### Enterprise
+
+Discovery only. Future enterprise controls require a validated workflow, a deployed control plane, security review, and written terms before they can be offered.
+
+#### Pricing FAQ
+
+There is no self-serve checkout or card collection today. GhostAPI does not process card data. Any paid pilot uses a transparent written scope and manual invoice; ending or missing a payment never removes access to the OSS local runtime or deletes customer data.
+
 ## Secondary Pages / Docs Content
 
 The following content should not be front-and-center on the homepage. Put it in docs, GitHub README, or subpages.

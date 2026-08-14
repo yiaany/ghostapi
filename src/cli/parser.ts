@@ -24,6 +24,10 @@ export type CliCommand =
   | { name: "world-inspect"; id: string; json?: boolean }
   | { name: "world-reset"; id: string; json?: boolean }
   | { name: "world-fork"; sourceId: string; options: WorldForkOptions }
+  | { name: "action-submit"; options: ActionSubmitOptions }
+  | { name: "action-inspect"; actionId: string; json?: boolean }
+  | { name: "action-execute"; options: ActionExecuteOptions }
+  | { name: "telemetry"; action: TelemetryAction; json?: boolean }
   | { name: "init" }
   | { name: "setup"; options: SetupOptions }
   | { name: "open"; options: OpenOptions }
@@ -135,6 +139,21 @@ export type WorldForkOptions = {
   json?: boolean;
 };
 
+export type ActionSubmitOptions = {
+  actionPath: string;
+  approvalPath: string;
+  policyPath: string;
+  json?: boolean;
+};
+
+export type ActionExecuteOptions = {
+  actionPath: string;
+  policyPath: string;
+  actorId: string;
+  workloadId: string;
+  json?: boolean;
+};
+
 export type SetupOptions = {
   write?: boolean;
 };
@@ -146,6 +165,7 @@ export type OpenOptions = {
 };
 
 export type ClearTarget = "cache" | "state" | "events" | "all";
+export type TelemetryAction = "status" | "enable" | "disable" | "export";
 
 export function parseCliArgs(args: string[]): CliCommand {
   const [command = "start", subcommand, ...rest] = args;
@@ -224,6 +244,14 @@ export function parseCliArgs(args: string[]): CliCommand {
 
   if (command === "world") {
     return parseWorldCommand(args.slice(1));
+  }
+
+  if (command === "action") {
+    return parseActionCommand(args.slice(1));
+  }
+
+  if (command === "telemetry") {
+    return parseTelemetryCommand(args.slice(1));
   }
 
   if (command === "init") {
@@ -624,6 +652,59 @@ function parseWorldCommand(args: string[]): CliCommand {
     return { name: "world-fork", sourceId, options: parseWorldForkOptions(rest.slice(1)) };
   }
   throw new CliError(`Unknown world command: ${subcommand ?? "<missing>"}`, "Use: ghostapi world create|inspect|reset|fork");
+}
+
+function parseActionCommand(args: string[]): CliCommand {
+  const [subcommand, ...rest] = args;
+  if (subcommand === "submit") return { name: "action-submit", options: parseActionSubmitOptions(rest) };
+  if (subcommand === "inspect") {
+    const actionId = rest[0];
+    if (!actionId) throw new CliError("Missing action id.", "Use: ghostapi action inspect <action-id> [--json]");
+    if (rest.length === 1) return { name: "action-inspect", actionId };
+    if (rest.length === 2 && rest[1] === "--json") return { name: "action-inspect", actionId, json: true };
+    throw new CliError(`Unexpected action inspect argument: ${rest[1]}`, "Use: ghostapi action inspect <action-id> [--json]");
+  }
+  if (subcommand === "execute") return { name: "action-execute", options: parseActionExecuteOptions(rest) };
+  throw new CliError(`Unknown action command: ${subcommand ?? "<missing>"}`, "Use: ghostapi action submit|inspect|execute");
+}
+
+function parseActionSubmitOptions(args: string[]): ActionSubmitOptions {
+  const options: Partial<ActionSubmitOptions> = {};
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index]!;
+    if (arg === "--action") { options.actionPath = readValue(args, index, arg); index += 1; continue; }
+    if (arg === "--approval") { options.approvalPath = readValue(args, index, arg); index += 1; continue; }
+    if (arg === "--policy") { options.policyPath = readValue(args, index, arg); index += 1; continue; }
+    if (arg === "--json") { options.json = true; continue; }
+    throw new CliError(`Unknown action submit option: ${arg}`, "Supported options: --action action.json, --approval approval.json, --policy ghostapi.policy.yaml, --json");
+  }
+  if (!options.actionPath || !options.approvalPath || !options.policyPath) throw new CliError("Action submit requires --action, --approval, and --policy.", "Use: ghostapi action submit --action action.json --approval approval.json --policy ghostapi.policy.yaml");
+  return options as ActionSubmitOptions;
+}
+
+function parseActionExecuteOptions(args: string[]): ActionExecuteOptions {
+  const options: Partial<ActionExecuteOptions> = {};
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index]!;
+    if (arg === "--action") { options.actionPath = readValue(args, index, arg); index += 1; continue; }
+    if (arg === "--policy") { options.policyPath = readValue(args, index, arg); index += 1; continue; }
+    if (arg === "--actor") { options.actorId = readValue(args, index, arg); index += 1; continue; }
+    if (arg === "--workload") { options.workloadId = readValue(args, index, arg); index += 1; continue; }
+    if (arg === "--json") { options.json = true; continue; }
+    throw new CliError(`Unknown action execute option: ${arg}`, "Supported options: --action action.json, --policy ghostapi.policy.yaml, --actor actor-id, --workload workload-id, --json");
+  }
+  if (!options.actionPath || !options.policyPath || !options.actorId || !options.workloadId) throw new CliError("Action execute requires --action, --policy, --actor, and --workload.", "Use: ghostapi action execute --action action.json --policy ghostapi.policy.yaml --actor agent-id --workload workload-id");
+  return options as ActionExecuteOptions;
+}
+
+function parseTelemetryCommand(args: string[]): CliCommand {
+  const [action, ...rest] = args;
+  if (action !== "status" && action !== "enable" && action !== "disable" && action !== "export") {
+    throw new CliError(`Unknown telemetry command: ${action ?? "<missing>"}`, "Use: ghostapi telemetry status|enable|disable|export [--json]");
+  }
+  if (rest.length === 0) return { name: "telemetry", action };
+  if (rest.length === 1 && rest[0] === "--json") return { name: "telemetry", action, json: true };
+  throw new CliError(`Unexpected telemetry argument: ${rest[0]}`, "Use: ghostapi telemetry status|enable|disable|export [--json]");
 }
 
 function parseWorldCreateOptions(args: string[]): WorldCreateOptions {

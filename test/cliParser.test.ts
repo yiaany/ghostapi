@@ -133,6 +133,25 @@ describe("CLI parser", () => {
     expect(parseCliArgs(["world", "fork", "billing-world", "--id", "billing-fork", "--title", "Fork"])).toEqual({ name: "world-fork", sourceId: "billing-world", options: { id: "billing-fork", title: "Fork" } });
   });
 
+  it("parses synthetic action gateway commands", () => {
+    expect(parseCliArgs(["action", "submit", "--action", "action.json", "--approval", "approval.json", "--policy", "ghostapi.policy.yaml", "--json"])).toEqual({
+      name: "action-submit",
+      options: { actionPath: "action.json", approvalPath: "approval.json", policyPath: "ghostapi.policy.yaml", json: true }
+    });
+    expect(parseCliArgs(["action", "inspect", "action-one", "--json"])).toEqual({ name: "action-inspect", actionId: "action-one", json: true });
+    expect(parseCliArgs(["action", "execute", "--action", "action.json", "--policy", "ghostapi.policy.yaml", "--actor", "agent-one", "--workload", "checkout-worker"])).toEqual({
+      name: "action-execute",
+      options: { actionPath: "action.json", policyPath: "ghostapi.policy.yaml", actorId: "agent-one", workloadId: "checkout-worker" }
+    });
+  });
+
+  it("parses local opt-in telemetry commands", () => {
+    expect(parseCliArgs(["telemetry", "status"])).toEqual({ name: "telemetry", action: "status" });
+    expect(parseCliArgs(["telemetry", "enable", "--json"])).toEqual({ name: "telemetry", action: "enable", json: true });
+    expect(parseCliArgs(["telemetry", "disable"])).toEqual({ name: "telemetry", action: "disable" });
+    expect(parseCliArgs(["telemetry", "export", "--json"])).toEqual({ name: "telemetry", action: "export", json: true });
+  });
+
   it("throws actionable errors for invalid user input", () => {
     expect(() => parseCliArgs(["start", "--port", "nope"])).toThrow(CliError);
     expect(() => parseCliArgs(["clear", "logs"])).toThrow("Unknown clear target");
@@ -156,5 +175,8 @@ describe("CLI parser", () => {
     expect(() => parseCliArgs(["eval", "--template", "retry-after", "--spec", "agent.eval.json"])).toThrow("exactly one");
     expect(() => parseCliArgs(["world", "create", "--id", "missing-seed"])).toThrow("requires --id and --seed");
     expect(() => parseCliArgs(["world", "fork", "source"])).toThrow("requires --id");
+    expect(() => parseCliArgs(["action", "submit", "--action", "action.json"])).toThrow("requires --action, --approval, and --policy");
+    expect(() => parseCliArgs(["action", "execute", "--action", "action.json", "--policy", "ghostapi.policy.yaml"])).toThrow("requires --action, --policy, --actor, and --workload");
+    expect(() => parseCliArgs(["telemetry", "upload"])).toThrow("Unknown telemetry command");
   });
 });

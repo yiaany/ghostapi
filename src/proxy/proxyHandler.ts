@@ -67,6 +67,10 @@ export async function proxyHandler(request: Request, response: Response, config:
       response.setHeader(key, value);
     }
     response.setHeader("x-ghostapi-behavior", "HIT");
+    if (behavior.delayMs !== undefined && behavior.delayMs > 0) {
+      response.setHeader("x-ghostapi-behavior-delay-ms", String(behavior.delayMs));
+      await waitForFault(behavior.delayMs);
+    }
     response.status(behavior.status).json(behavior.body);
     await completeRequest("behavior", behavior.status, behavior.body);
     return;

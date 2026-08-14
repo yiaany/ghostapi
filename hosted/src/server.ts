@@ -7,6 +7,9 @@ import { createIngestKey, revokeIngestKey } from "./ingestKeys.js";
 import { authenticateIngestKey, acceptReport, IdempotencyConflictError, ReportAuthenticationError, ReportInputError, type ReportPayload } from "./reports.js";
 import { createQueue, JobLeaseActiveError, processReportEvent, type ReportEvent } from "./worker.js";
 import { createRateLimiter, RateLimitError, RateLimitUnavailableError } from "./rateLimit.js";
+import { BoundedRequestBodyError, readBoundedRequestBody } from "./boundedBody.js";
+
+const MAX_QUEUE_BODY_BYTES = 16 * 1024;
 
 const reportBody = t.Object({
   schemaVersion: t.Literal(1),
@@ -137,8 +140,14 @@ export function createHostedApp(config: ReturnType<typeof loadConfig>, dependenc
     })
     .post("/internal/jobs/process-report", async ({ request, status }) => {
       const signature = request.headers.get("upstash-signature");
-      const rawBody = await request.text();
       if (signature === null) return status(401, { error: "missing_queue_signature" });
+      let rawBody: string;
+      try {
+        rawBody = await readBoundedRequestBody(request, MAX_QUEUE_BODY_BYTES);
+      } catch (error) {
+        if (error instanceof BoundedRequestBodyError) return status(413, { error: "payload_too_large" });
+        throw error;
+      }
       const verified = await dependencies.queue.receiver.verify({ signature, body: rawBody, url: request.url });
       if (!verified) return status(401, { error: "invalid_queue_signature" });
       try {

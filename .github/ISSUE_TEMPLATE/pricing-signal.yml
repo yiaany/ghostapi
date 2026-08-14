@@ -1,0 +1,48 @@
+name: Pricing and pilot signal
+description: Capture a buyer's willingness-to-pay evidence without fabricating demand.
+title: "[Pricing signal]: "
+labels: ["pricing", "design-partner"]
+body:
+  - type: markdown
+    attributes:
+      value: "Use this only for a real buyer conversation. Do not include names, contract terms, procurement documents, or confidential financial information."
+  - type: input
+    id: date
+    attributes:
+      label: Date
+      placeholder: YYYY-MM-DD
+    validations:
+      required: true
+  - type: input
+    id: buyer
+    attributes:
+      label: Buyer role and team segment
+      placeholder: VP Engineering, B2B SaaS 50 engineers
+    validations:
+      required: true
+  - type: dropdown
+    id: signal
+    attributes:
+      label: Commercial signal
+      options:
+        - Paid pilot interest
+        - LOI discussion
+        - Budget range shared
+        - Needs more evidence
+        - OSS only
+        - No budget
+    validations:
+      required: true
+  - type: textarea
+    id: basis
+    attributes:
+      label: Evidence basis
+      description: State the workflow outcome that led to the signal. Mark hypothetical answers as inconclusive.
+    validations:
+      required: true
+  - type: textarea
+    id: next
+    attributes:
+      label: Decision path and next step
+    validations:
+      required: true

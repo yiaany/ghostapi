@@ -70,7 +70,7 @@ async function main(): Promise<void> {
     process.exitCode = result.exitCode;
   } catch (error) {
     evidence.status = "failed-to-start";
-    evidence.events.push({ type: "target-failed-to-start", timestamp: new Date().toISOString(), detail: error instanceof Error ? error.message : "Unknown target error" });
+    evidence.events.push({ type: "target-failed-to-start", timestamp: new Date().toISOString(), detail: safeErrorMessage(error) });
     process.exitCode = 1;
   } finally {
     if (result !== undefined) {
@@ -92,6 +92,11 @@ function createTargetEnvironment(environment: NodeJS.ProcessEnv): NodeJS.Process
 
 function isSensitiveEnvironmentKey(key: string): boolean {
   return /(?:api[_-]?key|token|secret|password|credential|authorization|cookie)/i.test(key);
+}
+
+function safeErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : "Unknown target error";
+  return sanitizeSecretString(message).replace(/(?:Bearer\s+)?\S*(?:token|secret|key)\S*/gi, "***");
 }
 
 function parseConfig(): BootstrapConfig {

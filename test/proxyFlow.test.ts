@@ -160,4 +160,17 @@ describe("proxy flow integration", () => {
       expect(getEventsHistory().at(-1)).toMatchObject({ source: "behavior", statusCode: 429, path: "/tasks" });
     });
   });
+
+  it("applies a bounded deterministic behavior delay", async () => {
+    await setApiBehavior({ method: "POST", path: "/delayed", status: 200, body: { ok: true }, delayMs: 25 });
+
+    await withServer(baseConfig, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/delayed`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("x-ghostapi-behavior-delay-ms")).toBe("25");
+      expect(getEventsHistory().at(-1)).toMatchObject({ source: "behavior", path: "/delayed" });
+      expect(getEventsHistory().at(-1)?.durationMs).toBeGreaterThanOrEqual(20);
+    });
+  });
 });

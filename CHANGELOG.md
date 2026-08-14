@@ -4,6 +4,22 @@ All notable changes to GhostAPI will be documented in this file.
 
 The format follows the spirit of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project uses semantic versioning once public releases begin.
 
+## Unreleased
+
+### Security
+
+- Added a credential-broker and workload-identity boundary that stores only metadata, issues scoped server-only short-lived grants bound to action receipts, rechecks revocation/expiry/scope/tenant/workload at execution, invalidates grants on rotation, and ships test-only vault/provider adapters without real credential or network capability.
+- Bound explicit evidence run-input files before parsing and reject malformed JSON, preventing unbounded local memory consumption through `evidence generate --run`.
+- Redact secret-shaped target-start errors before writing Linux run evidence.
+- Redact secret-shaped target stdout/stderr before forwarding it to the operator or CI log, including tokens split across stream chunks; interrupted namespace runs now preserve the caller signal exit code and finalize evidence after escalation.
+- Added bounded queue-body handling to the separate undeployed hosted pilot before signature verification or JSON parsing.
+- Restricted the standard GitHub Actions CI token to `contents: read`.
+
+### Changed
+
+- Added deterministic malformed-input regression coverage for policy, OpenAPI, and scenario-bundle parsers.
+- Added release-readiness and migration/rollback documentation with platform-specific guarantees and known gaps.
+
 ## 0.1.7 - 2026-07-18
 
 ### Changed

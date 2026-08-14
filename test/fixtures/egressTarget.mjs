@@ -28,6 +28,10 @@ if (mode === "ghostapi") {
   process.stdout.write("x".repeat(16 * 1024));
 } else if (mode === "secret-output") {
   process.stdout.write("sk_live_output_should_not_persist");
+} else if (mode === "split-secret-output") {
+  process.stdout.write("sk_live_split_");
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  process.stdout.write("should_not_persist\nsafe output\n");
 } else {
   throw new Error(`Unknown egress target mode: ${mode}`);
 }

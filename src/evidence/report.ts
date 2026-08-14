@@ -104,6 +104,7 @@ const packageJson = require("../../package.json") as { version?: unknown };
 const MAX_EVENTS_FOR_REPORT = 1_000;
 const MAX_JSONL_BYTES = 8 * 1024 * 1024;
 const MAX_REPORT_BYTES = 512 * 1024;
+const MAX_RUN_EVIDENCE_BYTES = 128 * 1024;
 const MAX_REPORTS_RETAINED = 20;
 const MAX_ATTEMPTS = 500;
 const SENSITIVE_QUERY_KEYS = new Set(["api_key", "apikey", "access_token", "refresh_token", "token", "secret", "key", "client_secret", "password", "authorization", "cookie"]);
@@ -356,7 +357,13 @@ async function readRunEvidence(runPath: string | undefined, projectRoot: string)
   const path = runPath ?? await findLatestRunEvidence();
   if (path === undefined) return null;
   const resolved = runPath === undefined ? path : await resolveExistingReportPath(runPath, projectRoot);
-  return { path: resolved, evidence: JSON.parse(await readFile(resolved, "utf8")) as RunEvidence };
+  const source = await readFile(resolved, "utf8");
+  if (Buffer.byteLength(source, "utf8") > MAX_RUN_EVIDENCE_BYTES) throw new EvidenceReportError(`Run evidence exceeds ${MAX_RUN_EVIDENCE_BYTES} bytes.`);
+  try {
+    return { path: resolved, evidence: JSON.parse(source) as RunEvidence };
+  } catch {
+    throw new EvidenceReportError("Run evidence is not valid JSON.");
+  }
 }
 
 async function loadContractDiff(baselinePath: string | undefined, candidatePath: string | undefined, projectRoot: string): Promise<ContractDiff | undefined> {
