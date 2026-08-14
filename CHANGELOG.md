@@ -8,6 +8,7 @@ The format follows the spirit of [Keep a Changelog](https://keepachangelog.com/e
 
 ### Security
 
+- Added a local approval inbox with action-hash-bound, one-time expiring artifacts, derived risk taxonomy, independent two-person approval, amount/resource/environment/actor/confidence/velocity policy checks, timeout/revoke fail-closed handling, and action-receipt-linked audit records for the synthetic adapter only.
 - Added a credential-broker and workload-identity boundary that stores only metadata, issues scoped server-only short-lived grants bound to action receipts, rechecks revocation/expiry/scope/tenant/workload at execution, invalidates grants on rotation, and ships test-only vault/provider adapters without real credential or network capability.
 - Bound explicit evidence run-input files before parsing and reject malformed JSON, preventing unbounded local memory consumption through `evidence generate --run`.
 - Redact secret-shaped target-start errors before writing Linux run evidence.

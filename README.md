@@ -73,6 +73,8 @@ The local `ghostapi action` gateway uses a versioned action envelope, canonical 
 
 The public credential-broker library keeps provider secret material behind an injected vault boundary and executes through a server-side executor rather than returning a secret or grant to an agent. The shipped implementation has no CLI, MCP, provider, HTTP, environment-secret, or production side-effect path; its in-memory vault/provider adapters are tests only. See the [credential broker guide](docs/usage.md#credential-broker-and-workload-identity) and [threat model](docs/security/credential-broker-threat-model.md).
 
+The local approval inbox derives risk from exact synthetic action envelopes, applies bounded human approval policies, and emits single-use action-hash-bound artifacts with an audit chain. It has no hosted UI, notification integration, bearer approval link, or production execution path. See the [approval inbox guide](docs/usage.md#local-approval-inbox) and [threat model](docs/security/approval-inbox-threat-model.md).
+
 The [design-partner validation kit](docs/design-partners/README.md) currently records no independently verifiable interview, CI, bug-caught, LOI, or paid-pilot evidence in this repository, so the cloud/enterprise gate remains unmet. The local typed [team-control-plane prototype](docs/team-control-plane.md) remains local-first, while the separate [hosted pilot architecture](docs/hosted-pilot.md) is an un-deployed technical design whose RPO/RTO targets remain unproven until production-equivalent load and disaster-recovery drills pass.
 
 ## What GhostAPI Does
