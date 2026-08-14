@@ -19,6 +19,7 @@ describe("local human approval inbox", () => {
     expect(request.risk).toBe("update");
     expect(request.display).toMatchObject({ target: "synthetic-world/approval-world", reversibility: "none", impact: { amountMinor: 2500, amountKnown: true, irreversible: true }, simulation: { status: "passed" } });
     await expect(fixture.inbox.approve(request.id, fixture.identities.issue({ id: "agent-one", independenceKey: "agent-one" }))).rejects.toThrow("cannot approve");
+    await expect(fixture.inbox.approve(request.id, fixture.identities.issue({ id: "agent-alias", principalId: "agent-one", independenceKey: "independent-key" }))).rejects.toThrow("cannot approve");
     await fixture.inbox.approve(request.id, alice);
     await expect(fixture.inbox.approve(request.id, fixture.identities.issue({ id: "alice-alt", independenceKey: "alice" }))).rejects.toThrow("only once");
     const approved = await fixture.inbox.approve(request.id, bob);
@@ -79,6 +80,18 @@ describe("local human approval inbox", () => {
     await fixture.inbox.revoke(request.id, reviewer, "emergency-stop");
     await expect(fixture.inbox.execute(request.id, { actorId: "agent-one", workloadId: "checkout-worker" }, actionPolicy(), standardPolicy())).rejects.toThrow("not active");
     expect((await inspectWorld("revoke-world")).state.receipts).toHaveLength(0);
+  });
+
+  it("does not let callers bypass inbox artifact consumption through the public action gateway", async () => {
+    const fixture = inboxFixture("gateway-bypass");
+    await createWorld({ id: "gateway-bypass-world", seed: "gateway-bypass-seed" });
+    const request = await fixture.inbox.request(action("gateway-bypass", "gateway-bypass-world"), standardPolicy(), { confidence: 99 });
+    const approved = await fixture.inbox.approve(request.id, fixture.identities.issue({ id: "reviewer", independenceKey: "reviewer" }));
+    const directGateway = createLocalActionGateway({ now: () => new Date("2026-08-14T12:00:00.000Z"), pathForAction: (actionId) => join(getDataPaths().root, "direct-actions", `${actionId}.json`) });
+
+    await expect(directGateway.submit(approved.action, approved.artifact, actionPolicy())).rejects.toThrow("only through the approval inbox");
+    expect((await fixture.inbox.get(request.id)).status).toBe("approved");
+    expect((await inspectWorld("gateway-bypass-world")).state.receipts).toHaveLength(0);
   });
 });
 

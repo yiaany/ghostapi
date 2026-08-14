@@ -8,6 +8,8 @@ The format follows the spirit of [Keep a Changelog](https://keepachangelog.com/e
 
 ### Security
 
+- Hardened the local approval inbox so inbox-issued artifacts cannot be submitted or executed through the public action-gateway path, and verified approver principals prevent actor aliases from self-approving or satisfying two-person review.
+- Hardened credential execution receipts and revocation handling: vault/provider I/O no longer holds the broker mutation lock, executors must recheck active grants before side effects, and executor errors are recorded as non-retryable unknown outcomes rather than confirmed failures.
 - Added a local approval inbox with action-hash-bound, one-time expiring artifacts, derived risk taxonomy, independent two-person approval, amount/resource/environment/actor/confidence/velocity policy checks, timeout/revoke fail-closed handling, and action-receipt-linked audit records for the synthetic adapter only.
 - Added a credential-broker and workload-identity boundary that stores only metadata, issues scoped server-only short-lived grants bound to action receipts, rechecks revocation/expiry/scope/tenant/workload at execution, invalidates grants on rotation, and ships test-only vault/provider adapters without real credential or network capability.
 - Bound explicit evidence run-input files before parsing and reject malformed JSON, preventing unbounded local memory consumption through `evidence generate --run`.

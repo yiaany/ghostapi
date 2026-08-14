@@ -87,9 +87,9 @@ export type CredentialUseReceipt = {
   tenantId: string;
   workloadId: string;
   action: CredentialActionReference;
-  status: "executed" | "failed";
+  status: "executing" | "executed" | "failed" | "unknown";
   providerRequestId?: string;
-  failureCode?: "execution_failed";
+  failureCode?: "execution_not_started" | "unknown_outcome";
   executedAt: string;
 };
 
@@ -100,6 +100,8 @@ export type CredentialBrokerState = {
   receipts: CredentialUseReceipt[];
 };
 
+type CredentialExecutionStart = { grant: CredentialGrant; credential: CredentialMetadata; receipt: CredentialUseReceipt };
+
 export interface CredentialVault {
   readonly kind: "external-vault" | "test-memory-vault";
   readSecret(vaultRef: string): Promise<Uint8Array>;
@@ -108,7 +110,7 @@ export interface CredentialVault {
 export interface CredentialExecutor {
   readonly provider: string;
   supportsScope(scope: string): boolean;
-  execute(input: { secret: Uint8Array; grant: CredentialGrant; workload: WorkloadIdentity }): Promise<{ providerRequestId: string }>;
+  execute(input: { secret: Uint8Array; grant: CredentialGrant; workload: WorkloadIdentity; assertActive(): Promise<void> }): Promise<{ providerRequestId: string }>;
 }
 
 export interface ActionReceiptVerifier {
@@ -250,7 +252,7 @@ export class CredentialBroker {
     const workload = await this.authenticateWorkload(input.identity);
     const grantId = identifier(input.grantId, "Credential grant id");
     const request = validateAccessRequest(input.request);
-    const outcome: { receipt: CredentialUseReceipt; failed?: never } | { failed: true; receipt?: never } = await this.mutate(async (state, now) => {
+    const started: CredentialExecutionStart | CredentialUseReceipt = await this.mutate(async (state, now) => {
       const grant = state.grants.find((candidate) => candidate.id === grantId);
       if (grant === undefined) throw new CredentialBrokerError("Credential grant was not found.");
       assertGrantUsable(grant, workload, request, now);
@@ -260,29 +262,64 @@ export class CredentialBroker {
       if (credential.provider !== this.executor.provider || !grant.scopes.every((scope) => this.executor.supportsScope(scope))) throw new CredentialBrokerError("Credential executor denies the requested scope.");
       const prior = state.receipts.find((receipt) => receipt.grantId === grant.id);
       if (prior !== undefined) {
-        if (prior.status === "executed") return { receipt: clone(prior) };
-        throw new CredentialBrokerError("Prior credential execution failed and will not retry automatically.");
+        if (prior.status === "executed") return clone(prior);
+        throw new CredentialBrokerError("Prior credential execution has no retry-safe outcome and will not retry automatically.");
       }
       await this.actionReceiptVerifier.verify(request.action, workload);
-      let secret: Uint8Array | undefined;
-      try {
-        secret = await this.vault.readSecret(credential.vaultRef);
-        if (!(secret instanceof Uint8Array) || secret.byteLength === 0 || secret.byteLength > 64 * 1024) throw new CredentialBrokerError("Credential vault returned invalid secret material.");
-        const result = await this.executor.execute({ secret, grant: clone(grant), workload: clone(workload) });
-        const receipt: CredentialUseReceipt = { id: identifier(`credential-use-${randomUUID().replace(/-/g, "")}`, "Credential use receipt id"), grantId: grant.id, credentialId: credential.id, credentialVersion: credential.version, tenantId: credential.tenantId, workloadId: workload.workloadId, action: clone(grant.action), status: "executed", providerRequestId: identifier(result.providerRequestId, "Provider request id"), executedAt: now };
-        state.receipts.push(receipt);
-        credential.lastUsedAt = now;
-        return { receipt: clone(receipt) };
-      } catch {
-        const receipt: CredentialUseReceipt = { id: identifier(`credential-use-${randomUUID().replace(/-/g, "")}`, "Credential use receipt id"), grantId: grant.id, credentialId: credential.id, credentialVersion: credential.version, tenantId: credential.tenantId, workloadId: workload.workloadId, action: clone(grant.action), status: "failed", failureCode: "execution_failed", executedAt: now };
-        state.receipts.push(receipt);
-        return { failed: true };
-      } finally {
-        secret?.fill(0);
-      }
+      const receipt: CredentialUseReceipt = { id: identifier(`credential-use-${randomUUID().replace(/-/g, "")}`, "Credential use receipt id"), grantId: grant.id, credentialId: credential.id, credentialVersion: credential.version, tenantId: credential.tenantId, workloadId: workload.workloadId, action: clone(grant.action), status: "executing", executedAt: now };
+      state.receipts.push(receipt);
+      return { grant: clone(grant), credential: clone(credential), receipt: clone(receipt) };
     });
-    if (outcome.failed) throw new CredentialBrokerError("Credential execution failed without a usable receipt.");
-    return outcome.receipt;
+    if ("status" in started) return started;
+    let secret: Uint8Array | undefined;
+    try {
+      secret = await this.vault.readSecret(started.credential.vaultRef);
+      if (!(secret instanceof Uint8Array) || secret.byteLength === 0 || secret.byteLength > 64 * 1024) throw new CredentialBrokerError("Credential vault returned invalid secret material.");
+      await this.assertExecutionActive(started.grant, input.identity);
+    } catch {
+      await this.completeExecution(started.receipt.id, "failed");
+      throw new CredentialBrokerError("Credential execution did not start.");
+    }
+    try {
+      const result = await this.executor.execute({ secret, grant: clone(started.grant), workload: clone(workload), assertActive: async () => this.assertExecutionActive(started.grant, input.identity) });
+      return await this.completeExecution(started.receipt.id, "executed", result.providerRequestId);
+    } catch {
+      await this.completeExecution(started.receipt.id, "unknown");
+      throw new CredentialBrokerError("Credential execution outcome is unknown and will not retry automatically.");
+    } finally {
+      secret?.fill(0);
+    }
+  }
+
+  private async assertExecutionActive(grant: CredentialGrant, identity: unknown): Promise<void> {
+    const verifiedWorkload = validateWorkloadIdentity(await this.workloadVerifier.authenticate(identity), this.timestamp());
+    await this.actionReceiptVerifier.verify(grant.action, verifiedWorkload);
+    await withFileLock(this.path, async () => {
+      const state = await this.read();
+      const current = state.grants.find((candidate) => candidate.id === grant.id);
+      if (current === undefined) throw new CredentialBrokerError("Credential grant was not found.");
+      assertGrantUsable(current, verifiedWorkload, { credentialId: grant.credentialId, provider: grant.provider, scopes: grant.scopes, audience: grant.audience, action: grant.action }, this.timestamp());
+      const credential = findCredential(state, verifiedWorkload.tenantId, current.credentialId);
+      assertCredentialUsable(credential, this.timestamp());
+      if (credential.version !== current.credentialVersion || credential.provider !== this.executor.provider || !current.scopes.every((scope) => this.executor.supportsScope(scope))) throw new CredentialBrokerError("Credential grant is no longer executable.");
+      if (state.receipts.find((receipt) => receipt.grantId === current.id)?.status !== "executing") throw new CredentialBrokerError("Credential execution is no longer active.");
+    });
+  }
+
+  private async completeExecution(receiptId: string, status: "executed" | "failed" | "unknown", providerRequestId?: string): Promise<CredentialUseReceipt> {
+    return this.mutate((state, now) => {
+      const receipt = state.receipts.find((candidate) => candidate.id === receiptId);
+      if (receipt === undefined || receipt.status !== "executing") throw new CredentialBrokerError("Credential execution receipt is not active.");
+      receipt.status = status;
+      receipt.executedAt = now;
+      if (status === "executed") {
+        receipt.providerRequestId = identifier(providerRequestId, "Provider request id");
+        findCredential(state, receipt.tenantId, receipt.credentialId).lastUsedAt = now;
+      } else {
+        receipt.failureCode = status === "failed" ? "execution_not_started" : "unknown_outcome";
+      }
+      return clone(receipt);
+    });
   }
 
   async listOrphanedCredentials(): Promise<CredentialMetadata[]> {
@@ -383,6 +420,7 @@ export function createTestCredentialExecutor(): { executor: CredentialExecutor; 
       supportsScope: (scope) => scope === "test.execute",
       async execute(input): Promise<{ providerRequestId: string }> {
         if (input.grant.audience !== "ghostapi-server" || !input.grant.scopes.every((scope) => scope === "test.execute") || input.secret.byteLength === 0) throw new CredentialBrokerError("Test provider rejected credential execution.");
+        await input.assertActive();
         executions.push({ grantId: input.grant.id, secretLength: input.secret.byteLength });
         return { providerRequestId: `test-provider-${input.grant.id}` };
       }
@@ -492,10 +530,12 @@ function validateGrant(value: unknown): CredentialGrant {
 function validateReceipt(value: unknown): CredentialUseReceipt {
   const receipt = object(value, "Credential use receipt is invalid.");
   exactKeys(receipt, ["id", "grantId", "credentialId", "credentialVersion", "tenantId", "workloadId", "action", "status", "providerRequestId", "failureCode", "executedAt"], "Credential use receipt", ["providerRequestId", "failureCode"]);
-  if (receipt.status !== "executed" && receipt.status !== "failed") throw new CredentialBrokerError("Credential use receipt status is invalid.");
+  if (receipt.status !== "executing" && receipt.status !== "executed" && receipt.status !== "failed" && receipt.status !== "unknown") throw new CredentialBrokerError("Credential use receipt status is invalid.");
+  if (receipt.status === "executing" && (receipt.failureCode !== undefined || receipt.providerRequestId !== undefined)) throw new CredentialBrokerError("Executing credential receipt is invalid.");
   if (receipt.status === "executed" && (receipt.failureCode !== undefined || receipt.providerRequestId === undefined)) throw new CredentialBrokerError("Executed credential receipt is invalid.");
-  if (receipt.status === "failed" && (receipt.failureCode !== "execution_failed" || receipt.providerRequestId !== undefined)) throw new CredentialBrokerError("Failed credential receipt is invalid.");
-  return { id: identifier(receipt.id, "Credential use receipt id"), grantId: identifier(receipt.grantId, "Credential grant id"), credentialId: identifier(receipt.credentialId, "Credential id"), credentialVersion: positiveInteger(receipt.credentialVersion, "Credential version"), tenantId: identifier(receipt.tenantId, "Credential tenant id"), workloadId: identifier(receipt.workloadId, "Credential workload id"), action: actionReference(receipt.action), status: receipt.status, ...(receipt.providerRequestId === undefined ? {} : { providerRequestId: identifier(receipt.providerRequestId, "Provider request id") }), ...(receipt.failureCode === undefined ? {} : { failureCode: "execution_failed" as const }), executedAt: timestamp(receipt.executedAt, "Credential execution time") };
+  if (receipt.status === "failed" && (receipt.failureCode !== "execution_not_started" || receipt.providerRequestId !== undefined)) throw new CredentialBrokerError("Failed credential receipt is invalid.");
+  if (receipt.status === "unknown" && (receipt.failureCode !== "unknown_outcome" || receipt.providerRequestId !== undefined)) throw new CredentialBrokerError("Unknown credential receipt is invalid.");
+  return { id: identifier(receipt.id, "Credential use receipt id"), grantId: identifier(receipt.grantId, "Credential grant id"), credentialId: identifier(receipt.credentialId, "Credential id"), credentialVersion: positiveInteger(receipt.credentialVersion, "Credential version"), tenantId: identifier(receipt.tenantId, "Credential tenant id"), workloadId: identifier(receipt.workloadId, "Credential workload id"), action: actionReference(receipt.action), status: receipt.status as CredentialUseReceipt["status"], ...(receipt.providerRequestId === undefined ? {} : { providerRequestId: identifier(receipt.providerRequestId, "Provider request id") }), ...(receipt.failureCode === undefined ? {} : { failureCode: receipt.failureCode as "execution_not_started" | "unknown_outcome" }), executedAt: timestamp(receipt.executedAt, "Credential execution time") };
 }
 
 function validateAccessRequest(value: unknown): CredentialAccessRequest {

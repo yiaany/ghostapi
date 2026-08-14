@@ -13,10 +13,10 @@ An approval policy can restrict environment, actor, resource, amount, confidence
 ## Approval Invariants
 
 - Requests, decisions, artifacts, and audit records are strict schema-v1 local data under `.ghostapi/approvals.json`.
-- Approver identities come from an injected verifier. Unverified caller-shaped objects fail closed.
-- An action actor/workload cannot approve its own action.
-- Critical risks or low confidence require two distinct `independenceKey` values; aliases of the same identity cannot satisfy two-person approval.
-- Approval artifacts are action-hash-bound, one-time, expiring, and consumed under the inbox lock before execution starts.
+- Approver identities come from an injected verifier and include a verified stable `principalId`. Unverified caller-shaped objects fail closed.
+- An action actor/workload cannot approve its own action through its approver ID, verified principal ID, or independence key.
+- Critical risks or low confidence require distinct verified principals and `independenceKey` values; aliases cannot satisfy two-person approval.
+- Approval artifacts are action-hash-bound, one-time, expiring, and consumed under the inbox lock before execution starts. The public action-gateway methods reject inbox-issued artifacts; only the inbox holds the in-process capability needed to delegate them.
 - Rejection, revoke, timeout, expiry, policy drift, changed action, or changed execution identity deny execution.
 - Edit-and-resubmit supersedes the prior request and requires a changed canonical action hash.
 - The inbox rechecks the policy at execution and then delegates only to the existing action gateway, which repeats action/approval/policy/identity/idempotency checks before its synthetic side effect.
@@ -24,7 +24,7 @@ An approval policy can restrict environment, actor, resource, amount, confidence
 
 ## Race And Recovery
 
-The inbox serializes approval state and artifact consumption with one private file lock. A revoke that acquires the lock first prevents the side effect; an execution that has consumed the artifact first cannot be revoked as if it were still pending. Execution failures are recorded and remain fail-closed; no automatic retry or compensation is claimed.
+The inbox serializes approval state and artifact consumption with one private file lock. A revoke that acquires the lock first prevents the side effect; an execution that has consumed the artifact first cannot be revoked as if it were still pending. Execution failures are recorded and remain fail-closed; no automatic retry or compensation is claimed. Artifact data alone is not sufficient to bypass inbox consumption or its audit chain.
 
 ## Remaining Limits
 
