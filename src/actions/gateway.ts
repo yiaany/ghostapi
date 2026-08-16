@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { lstat, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { getDataPaths } from "../config/dataPaths.js";
+import { createLocalSafetyController, type LocalSafetyController, type SafetyAction } from "../safety/index.js";
 import { sanitizeSecretString } from "../security/secrets.js";
 import { atomicWriteJson, ensurePrivateDirectory, withFileLock } from "../storage/fileStore.js";
 import { inspectWorld, runSubscriptionFailureWorkflow } from "../worlds/index.js";
@@ -81,7 +82,7 @@ export type ActionExecutionAdapter = {
   supports(operation: string): boolean;
   plan(action: ActionEnvelope): Promise<void>;
   simulate(action: ActionEnvelope): Promise<void>;
-  execute(action: ActionEnvelope): Promise<{ outcome: "committed"; providerRequestId: string; result: { worldId: string; subscriptionId: string; syntheticReceiptId: string } } | { outcome: "unknown" }>;
+  execute(action: ActionEnvelope, controls?: { commit<T>(operation: () => Promise<T>): Promise<T> }): Promise<{ outcome: "committed"; providerRequestId: string; result: { worldId: string; subscriptionId: string; syntheticReceiptId: string } } | { outcome: "unknown" }>;
   verify(action: ActionEnvelope): Promise<{ committed: boolean; providerRequestId?: string; result?: { worldId: string; subscriptionId: string; syntheticReceiptId: string } }>;
   compensate?: (action: ActionEnvelope) => Promise<void>;
 };
@@ -90,6 +91,7 @@ export type ActionGatewayOptions = {
   now?: () => Date;
   pathForAction?: (actionId: string) => string;
   adapter?: ActionExecutionAdapter;
+  safetyController?: LocalSafetyController;
 };
 
 type ApprovalInboxCapability = object;
@@ -183,8 +185,8 @@ export function createSyntheticActionAdapter(): ActionExecutionAdapter {
     async simulate(action) {
       await inspectWorld(action.arguments.worldId);
     },
-    async execute(action) {
-      const receipt = await runSubscriptionFailureWorkflow(action.arguments.worldId, action.actionId);
+    async execute(action, controls) {
+      const receipt = await runSubscriptionFailureWorkflow(action.arguments.worldId, action.actionId, controls?.commit);
       return { outcome: "committed", providerRequestId: `synthetic_${receipt.actionId}`, result: { worldId: action.arguments.worldId, subscriptionId: receipt.subscriptionId, syntheticReceiptId: receipt.actionId } };
     },
     async verify(action) {
@@ -208,11 +210,13 @@ export class LocalActionGateway {
   private readonly now: () => Date;
   private readonly pathForAction: (actionId: string) => string;
   private readonly adapter: ActionExecutionAdapter;
+  private readonly safetyController: LocalSafetyController;
 
   constructor(options: ActionGatewayOptions = {}) {
     this.now = options.now ?? (() => new Date());
     this.pathForAction = options.pathForAction ?? getActionPath;
     this.adapter = options.adapter ?? createSyntheticActionAdapter();
+    this.safetyController = options.safetyController ?? createLocalSafetyController({ now: this.now });
   }
 
   async submit(actionValue: unknown, approvalValue: unknown, policy: ActionPolicyCheck): Promise<StoredAction> {
@@ -295,18 +299,22 @@ export class LocalActionGateway {
       }
       await this.adapter.plan(record.envelope);
       await this.adapter.simulate(record.envelope);
+      const safety = await this.safetyController.admit(safetyAction(record.envelope, record.actionHash));
+      if (safety.replay) throw new ActionGatewayError("Safety controller replay was reached before a verified action receipt.");
       appendReceipt(record, createReceipt(record, "attempted", current));
       await writeStoredAction(path, record);
       let execution: Awaited<ReturnType<ActionExecutionAdapter["execute"]>>;
       try {
-        execution = await this.adapter.execute(record.envelope);
+        execution = await this.adapter.execute(record.envelope, { commit: safety.commit });
       } catch {
+        await safety.complete({ success: false, latencyMs: 0, reason: "synthetic execution failed or was stopped" }).catch(() => undefined);
         const failed = createReceipt(record, "failed", this.now().toISOString(), undefined, undefined, { code: "execution_error", retrySafe: false });
         appendReceipt(record, failed);
         await writeStoredAction(path, record);
         throw new ActionGatewayError("Action execution failed; it was not automatically retried.");
       }
       if (execution.outcome === "unknown") {
+        await safety.complete({ success: false, latencyMs: 0, reason: "synthetic execution outcome is unknown" });
         const failed = createReceipt(record, "failed", this.now().toISOString(), undefined, undefined, { code: "unknown_outcome", retrySafe: false });
         appendReceipt(record, failed);
         await writeStoredAction(path, record);
@@ -315,6 +323,7 @@ export class LocalActionGateway {
       appendReceipt(record, createReceipt(record, "committed", this.now().toISOString(), execution.providerRequestId, execution.result));
       const verification = await this.adapter.verify(record.envelope);
       if (!verification.committed || verification.providerRequestId === undefined || verification.result === undefined) {
+        await safety.complete({ success: false, reconciliationMismatch: true, latencyMs: 0, reason: "synthetic verification did not prove the result" });
         const failed = createReceipt(record, "failed", this.now().toISOString(), execution.providerRequestId, execution.result, { code: "verification_failed", retrySafe: false });
         appendReceipt(record, failed);
         await writeStoredAction(path, record);
@@ -323,6 +332,7 @@ export class LocalActionGateway {
       const verifiedReceipt = createReceipt(record, "verified", this.now().toISOString(), verification.providerRequestId, verification.result);
       appendReceipt(record, verifiedReceipt);
       await writeStoredAction(path, record);
+      await safety.complete({ success: true, latencyMs: 0 });
       return verifiedReceipt;
     });
   }
@@ -333,6 +343,22 @@ export class LocalActionGateway {
     await this.adapter.compensate(action.envelope);
     throw new ActionGatewayError("Compensation adapters must return a durable compensation receipt before this operation can be exposed.");
   }
+}
+
+function safetyAction(action: ActionEnvelope, actionDigest: string): SafetyAction {
+  return {
+    organizationId: "ghostapi-local",
+    projectId: action.project.id,
+    environment: action.project.environment,
+    actorId: action.actor.id,
+    workloadId: action.actor.workloadId,
+    provider: action.provider,
+    operation: action.operation,
+    riskClass: action.riskClass,
+    idempotencyKey: action.idempotencyKey,
+    actionHash: actionDigest,
+    costs: { monetaryAmountMinor: 0, requests: 1, messages: 1, mutations: 1, deletes: 0, tokenCost: 0 }
+  };
 }
 
 export function createLocalActionGateway(options: ActionGatewayOptions = {}): LocalActionGateway {

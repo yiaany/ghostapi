@@ -8,6 +8,7 @@ The format follows the spirit of [Keep a Changelog](https://keepachangelog.com/e
 
 ### Security
 
+- Added a persisted local synthetic safety controller with scoped kill switches, locked budget reservations, circuit breakers, bounded queue/dead-letter handling, audited separately authorized re-enable, final synthetic commit checks, and a scheduled non-destructive game-day drill. No provider, credential, HTTP, or hosted emergency transport was added.
 - Added a local synthetic trust ladder with strict no-side-effect level capabilities, explicit unsupported dry-run/trusted states, verified-owner promotion evidence, deterministic scoped canaries, hash-only shadow/outcome comparison, automatic demotion/circuit-breaker policy, rollback audit reasons, and no provider execution path.
 - Hardened the local approval inbox so inbox-issued artifacts cannot be submitted or executed through the public action-gateway path, and verified approver principals prevent actor aliases from self-approving or satisfying two-person review.
 - Hardened credential execution receipts and revocation handling: vault/provider I/O no longer holds the broker mutation lock, executors must recheck active grants before side effects, and executor errors are recorded as non-retryable unknown outcomes rather than confirmed failures.

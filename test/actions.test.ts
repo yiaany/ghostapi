@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { ActionGatewayError, actionHash, createLocalActionGateway, createSyntheticActionAdapter } from "../src/actions/index.js";
+import { createLocalSafetyController, createTestSafetyEmergencyAuthorizer } from "../src/safety/index.js";
 import { createWorld, inspectWorld } from "../src/worlds/index.js";
 
 const POLICY_HASH = "a".repeat(64);
@@ -76,6 +77,28 @@ describe("synthetic production action gateway", () => {
     await expect(gateway.inspect("action-tampered")).rejects.toThrow(ActionGatewayError);
   });
 
+  it("checks the persisted kill switch in the synthetic world's final commit section", async () => {
+    await createWorld({ id: "stopped-world", seed: "stopped-seed" });
+    const emergency = createTestSafetyEmergencyAuthorizer();
+    const stopOperator = emergency.issue({ id: "stop-operator", principalId: "stop-principal", permissions: ["safety.stop"] });
+    const controller = createLocalSafetyController({ path: join(process.env.GHOSTAPI_DATA_DIR!, "safety-final-check.json"), now: () => new Date("2029-01-01T00:00:00.000Z"), emergencyAuthorizer: emergency.authorizer });
+    const baseAdapter = createSyntheticActionAdapter();
+    const adapter = {
+      ...baseAdapter,
+      async execute(action: Parameters<typeof baseAdapter.execute>[0], controls: Parameters<typeof baseAdapter.execute>[1]) {
+        await controller.stop({ identity: stopOperator, scope: { kind: "global" }, reason: "race before synthetic commit" });
+        return baseAdapter.execute(action, controls);
+      }
+    };
+    const action = actionEnvelope("action-stopped", "stopped-world");
+    const gateway = createGateway(adapter, controller);
+    await gateway.submit(action, approvalFor(action), policy());
+
+    await expect(gateway.execute(action, { actorId: "agent-one", workloadId: "checkout-worker" }, policy())).rejects.toThrow("not automatically retried");
+    expect((await inspectWorld("stopped-world")).state.receipts).toEqual([]);
+    expect((await gateway.inspect("action-stopped")).receipts.map((entry) => entry.status)).toEqual(["requested", "attempted", "failed"]);
+  });
+
   it("submits, inspects, and executes a synthetic action through the CLI", async () => {
     await createWorld({ id: "cli-action-world", seed: "cli-action-seed" });
     const root = process.env.GHOSTAPI_DATA_DIR!;
@@ -100,9 +123,9 @@ describe("synthetic production action gateway", () => {
   }, 20_000);
 });
 
-function createGateway(adapter = createSyntheticActionAdapter()) {
+function createGateway(adapter = createSyntheticActionAdapter(), safetyController?: ReturnType<typeof createLocalSafetyController>) {
   const root = process.env.GHOSTAPI_DATA_DIR!;
-  return createLocalActionGateway({ now: () => new Date("2029-01-01T00:00:00.000Z"), adapter, pathForAction: (actionId) => join(root, "actions", `${actionId}.action.json`) });
+  return createLocalActionGateway({ now: () => new Date("2029-01-01T00:00:00.000Z"), adapter, safetyController, pathForAction: (actionId) => join(root, "actions", `${actionId}.action.json`) });
 }
 
 function actionEnvelope(actionId: string, worldId: string) {

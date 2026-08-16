@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const workflowPath = fileURLToPath(new URL("../.github/workflows/ghostapi-pr-safety.yml", import.meta.url));
 const ciWorkflowPath = fileURLToPath(new URL("../.github/workflows/ci.yml", import.meta.url));
+const gameDayWorkflowPath = fileURLToPath(new URL("../.github/workflows/ghostapi-kill-switch-game-day.yml", import.meta.url));
 const safeFixturePath = fileURLToPath(new URL("../examples/ci-smoke/safe.mjs", import.meta.url));
 
 describe("GhostAPI PR safety workflow", () => {
@@ -40,5 +41,20 @@ describe("standard CI workflow", () => {
     expect(workflow).toContain("actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683");
     expect(workflow).toContain("actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020");
     expect(workflow).toContain("npm ci");
+  });
+});
+
+describe("kill-switch game-day workflow", () => {
+  it("schedules a local synthetic drill with immutable actions and no provider side effect", async () => {
+    const workflow = await readFile(gameDayWorkflowPath, "utf8");
+
+    expect(workflow).toContain("schedule:");
+    expect(workflow).toContain('cron: "17 3 * * 1"');
+    expect(workflow).toContain("workflow_dispatch:");
+    expect(workflow).toContain("permissions:\n  contents: read");
+    expect(workflow).toContain("actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683");
+    expect(workflow).toContain("actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020");
+    expect(workflow).toContain("npm test -- --run test/safetyController.test.ts");
+    expect(workflow).not.toMatch(/provider|vault|credential|webhook|curl|fetch/i);
   });
 });

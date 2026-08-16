@@ -177,7 +177,7 @@ export async function forkWorld(sourceId: string, options: { id: string; title?:
   return valid;
 }
 
-export async function runSubscriptionFailureWorkflow(id: string, actionId: string): Promise<WorldWorkflowReceipt> {
+export async function runSubscriptionFailureWorkflow(id: string, actionId: string, commit?: <T>(operation: () => Promise<T>) => Promise<T>): Promise<WorldWorkflowReceipt> {
   const normalizedActionId = normalizeIdentifier(actionId, "Workflow action id");
   let receipt: WorldWorkflowReceipt | undefined;
   await mutateWorld(normalizeIdentifier(id, "World id"), (world) => {
@@ -216,7 +216,7 @@ export async function runSubscriptionFailureWorkflow(id: string, actionId: strin
       receipts: [...world.state.receipts, receipt]
     };
     return { ...world, revision: world.revision + 1, state: nextState };
-  });
+  }, commit);
   if (receipt === undefined) throw new SyntheticWorldError("World workflow did not produce a receipt.");
   return receipt;
 }
@@ -267,12 +267,14 @@ async function readWorld(id: string): Promise<SyntheticWorld> {
   }
 }
 
-async function mutateWorld(id: string, mutation: (world: SyntheticWorld) => SyntheticWorld): Promise<SyntheticWorld> {
+async function mutateWorld(id: string, mutation: (world: SyntheticWorld) => SyntheticWorld | Promise<SyntheticWorld>, commit?: <T>(operation: () => Promise<T>) => Promise<T>): Promise<SyntheticWorld> {
   const path = getWorldPath(id);
   return withFileLock(path, async () => {
     const current = await readWorld(id);
-    const next = validateSyntheticWorld(mutation(structuredClone(current)));
-    await atomicWriteJson(path, next);
+    const next = validateSyntheticWorld(await mutation(structuredClone(current)));
+    const write = () => atomicWriteJson(path, next);
+    if (commit === undefined) await write();
+    else await commit(write);
     return next;
   });
 }
