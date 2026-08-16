@@ -8,6 +8,7 @@ The format follows the spirit of [Keep a Changelog](https://keepachangelog.com/e
 
 ### Security
 
+- Added a local synthetic trust ladder with strict no-side-effect level capabilities, explicit unsupported dry-run/trusted states, verified-owner promotion evidence, deterministic scoped canaries, hash-only shadow/outcome comparison, automatic demotion/circuit-breaker policy, rollback audit reasons, and no provider execution path.
 - Hardened the local approval inbox so inbox-issued artifacts cannot be submitted or executed through the public action-gateway path, and verified approver principals prevent actor aliases from self-approving or satisfying two-person review.
 - Hardened credential execution receipts and revocation handling: vault/provider I/O no longer holds the broker mutation lock, executors must recheck active grants before side effects, and executor errors are recorded as non-retryable unknown outcomes rather than confirmed failures.
 - Added a local approval inbox with action-hash-bound, one-time expiring artifacts, derived risk taxonomy, independent two-person approval, amount/resource/environment/actor/confidence/velocity policy checks, timeout/revoke fail-closed handling, and action-receipt-linked audit records for the synthetic adapter only.

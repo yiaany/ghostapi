@@ -204,6 +204,21 @@ Requests are generated from an exact action envelope and display the intent, tar
 
 Policies can restrict environment, actor, resource, amount, confidence, and action velocity. Actions requiring two-person review require distinct verified principals and approver independence keys. Approval artifacts are exact-action-hash-bound, expiring, single-use, and rechecked along with the current policy before the action gateway is called. Public action-gateway methods reject inbox-issued artifacts, so artifact data alone cannot bypass consumption, revoke, or inbox audit state. Reject, revoke, timeout, expiry, changed arguments, changed identity, and policy drift all fail closed. Read [`docs/security/approval-inbox-threat-model.md`](security/approval-inbox-threat-model.md) before connecting any future identity, notification, or provider execution system.
 
+## Local Synthetic Trust Ladder
+
+`createLocalTrustLadder()` is a data-only preparation layer for the typed synthetic action contract. It does not call the action gateway, approval inbox, credential broker, vault, provider SDK, HTTP client, or a real provider. Its only target identity is `{ provider: "ghostapi-synthetic", environment: "synthetic" }`; production/test-account identity mixing is rejected.
+
+| Trust level | Local synthetic capability | External side effects |
+| --- | --- | --- |
+| `simulate` | Supported local preparation state. | Never. |
+| `shadow` | Supported hash-only comparison of predicted action/context with supplied actual input context. | Never. |
+| `dry-run` | Unsupported because `ghostapi-synthetic` has no provider-official dry-run semantic. It is never substituted with execution. | Never. |
+| `approve` | Supported preparation state that denotes the existing approval boundary requirement. | Never. |
+| `bounded-auto` | Supported preparation state with deterministic canary eligibility and predicted/actual outcome comparison evidence. | Never. |
+| `trusted` | Unsupported. Local synthetic state is not production authorization. | Never. |
+
+Promotion is owner-gated and never automatic: a verified stable owner principal must explicitly advance exactly one supported step and provide fresh evidence meeting minimum-run, required-eval, violation-rate, and error-rate policy thresholds. Canary scope is tenant/resource/percentage based and assigned from a stable SHA-256 bucket. Violations can auto-demote to `approve` or open a circuit breaker according to policy. Once a breaker is open or a configured stop condition is breached, the controller rejects further canary activity. `rollbackToApproval()` records its reason in the bounded local audit chain. The store contains hashes and bounded metadata only under `.ghostapi/trust-ladder.json`; it is not a durable production audit ledger or authorization system. Read [`docs/security/trust-ladder-threat-model.md`](security/trust-ladder-threat-model.md) before extending any execution path.
+
 ## Team Control-Plane Prototype
 
 The [design-partner validation kit](design-partners/README.md) records no independently verifiable interview, CI, bug-caught, LOI, or paid-pilot evidence in this repository, so the cloud/enterprise gate remains unmet. The included prototype remains a local typed library, not a hosted account system or web UI. It models organizations, members/roles, projects, environments, versioned scenario metadata, sanitized CI evidence summaries, distributed policy versions, short-lived revocable tokens, audit metadata, migrations, and bounded retention. The separate hosted pilot skeleton and its explicit deployment limits are documented in [`docs/hosted-pilot.md`](hosted-pilot.md).

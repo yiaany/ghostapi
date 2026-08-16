@@ -27,6 +27,8 @@ export { ApprovalInboxError, LocalApprovalInbox, approvalPolicyHash, createLocal
 export type { ApprovalApprover, ApprovalApproverVerifier, ApprovalAuditRecord, ApprovalContext, ApprovalDecision, ApprovalDisplay, ApprovalInboxOptions, ApprovalInboxState, ApprovalPolicy, ApprovalRequest, ApprovalRequestStatus, ApprovalRisk } from "./approvals/index.js";
 export { CredentialBroker, CredentialBrokerError, createCredentialBroker, createDisabledBreakGlassAuthorizer, createTestActionReceiptVerifier, createTestBreakGlassAuthorizer, createTestCredentialExecutor, createTestCredentialVault, createTestWorkloadIdentityProvider } from "./credentials/index.js";
 export type { ActionReceiptVerifier, BreakGlassApproval, BreakGlassAuthorizer, CredentialAccessRequest, CredentialActionReference, CredentialBrokerOptions, CredentialBrokerState, CredentialExecutor, CredentialGrant, CredentialMetadata, CredentialUseReceipt, CredentialVault, WorkloadBinding, WorkloadIdentity, WorkloadIdentityVerifier, WorkloadKind } from "./credentials/index.js";
+export { TRUST_LEVELS, LocalTrustLadder, TrustLadderError, createLocalSyntheticTrustCapabilities, createLocalTrustLadder, createTestTrustOwnerVerifier } from "./trust/index.js";
+export type { TrustAuditRecord, TrustCapabilities, TrustCanaryDecision, TrustCanaryOutcome, TrustCanaryScope, TrustComparisonEvidence, TrustLadderOptions, TrustLadderState, TrustLevel, TrustLevelCapability, TrustObservation, TrustOutcomeObservation, TrustOwner, TrustOwnerVerifier, TrustPromotionEvidence, TrustPromotionPolicy, TrustTarget, TrustTargetState } from "./trust/index.js";
 export type { ServerConfig } from "./config/serverConfig.js";
 export { createProviderRuntime, runProviderPackConformance } from "./providers/index.js";
 export type {

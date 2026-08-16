@@ -75,6 +75,8 @@ The public credential-broker library keeps provider secret material behind an in
 
 The local approval inbox derives risk from exact synthetic action envelopes, applies bounded human approval policies, and emits single-use action-hash-bound artifacts with an audit chain. It has no hosted UI, notification integration, bearer approval link, or production execution path. See the [approval inbox guide](docs/usage.md#local-approval-inbox) and [threat model](docs/security/approval-inbox-threat-model.md).
 
+The local synthetic trust ladder prepares evidence-based `simulate` through `bounded-auto` promotion contracts, deterministic canary assignment, shadow/outcome hash comparisons, auto-demotion/circuit-breaker policy, and rollback audit reasons. It does not execute actions or authorize production; local `dry-run` and `trusted` remain explicitly unsupported. See the [trust ladder guide](docs/usage.md#local-synthetic-trust-ladder) and [threat model](docs/security/trust-ladder-threat-model.md).
+
 The [design-partner validation kit](docs/design-partners/README.md) currently records no independently verifiable interview, CI, bug-caught, LOI, or paid-pilot evidence in this repository, so the cloud/enterprise gate remains unmet. The local typed [team-control-plane prototype](docs/team-control-plane.md) remains local-first, while the separate [hosted pilot architecture](docs/hosted-pilot.md) is an un-deployed technical design whose RPO/RTO targets remain unproven until production-equivalent load and disaster-recovery drills pass.
 
 ## What GhostAPI Does
@@ -314,6 +316,7 @@ Run `npx @yiaany/ghostapi doctor --json` for machine-readable environment checks
 | `.ghostapi/contracts/*.contract.json` | Bounded deterministic OpenAPI/HAR contract snapshots for offline drift checks. |
 | `.ghostapi/actions/*.action.json` | Synthetic action envelopes, structured approvals, and tamper-evident local receipt chains. |
 | `.ghostapi/credential-broker.json` | Credential metadata, scoped server-only grants, and action-linked execution receipts; never upstream secret material. |
+| `.ghostapi/trust-ladder.json` | Local synthetic trust-level, canary, comparison, rollback, and audit metadata; never production authorization or provider activity. |
 | `.ghostapi/behaviors.json` | Deterministic behavior overrides. |
 | `.ghostapi/cache/` | Local response cache. |
 | `.ghostapi/fault-lab.json` | Persisted Fault Lab configuration shared with MCP. |
@@ -383,6 +386,7 @@ mcp, ai-agents, stripe, openai, mock-server, api-testing, sandbox, proxy, local-
 - [Provider pack authoring](docs/providers/authoring-packs.md)
 - [Release checklist](docs/release-checklist.md)
 - [Synthetic action gateway threat model](docs/security/action-gateway-threat-model.md)
+- [Local synthetic trust ladder threat model](docs/security/trust-ladder-threat-model.md)
 - [Release readiness](docs/release-readiness.md)
 - [Migration and rollback](docs/release-migration-and-rollback.md)
 - [Contributing](CONTRIBUTING.md)
