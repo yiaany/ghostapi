@@ -400,6 +400,74 @@ The equivalent environment flag is `GHOSTAPI_ALLOW_EXTERNAL_LLM=true`. `--offlin
 
 When external generation is enabled on a non-loopback bind, proxy requests also require `Authorization: Bearer <GHOSTAPI_AUTH_TOKEN>` or `X-GhostAPI-Token`. This prevents unauthenticated clients from consuming the configured external LLM account.
 
+## Reliability: SLOs, Reconciliation, Cost Governance, And Runtime Health
+
+The reliability layer is local-first and synthetic. It adds no provider, credential, or network surface.
+
+### Runtime health
+
+`GET /health` returns `{ ok, ready }` (liveness). `GET /health/readiness` returns the full structural report and HTTP 503 when a store is missing, oversized, corrupt, or a symlink. File stores are capped at 4 MiB each during the check.
+
+```ts
+import { checkRuntimeHealth, formatRuntimeHealth } from "@yiaany/ghostapi";
+const report = await checkRuntimeHealth();
+console.log(formatRuntimeHealth(report));
+```
+
+### SLOs
+
+```ts
+import { createLocalSloController, createSloRecordIdentity, createTestSloOperatorAuthorizer } from "@yiaany/ghostapi";
+
+const { authorizer, issue } = createTestSloOperatorAuthorizer();
+const operator = issue({ id: "sre", principalId: "sre-one", permissions: ["slo.configure", "slo.inspect"] });
+const controller = createLocalSloController({ operatorAuthorizer: authorizer });
+await controller.configureTarget({ identity: operator, target: { id: "availability.checkout", metric: "availability", windowMs: 60 * 60 * 1000, minimumSamples: 10, targetBps: 9_000 } });
+
+const recordIdentity = createSloRecordIdentity(); // only the reconciliation service and its peers hold this
+await controller.recordSample({ metric: "availability", ok: true, runId: "run-1", actionId: "action-1", labels: { tenantId: "tenant-a" } }, recordIdentity);
+
+const report = await controller.evaluate({ identity: operator });
+```
+
+Recording requires the record capability; configuring/evaluating requires an authenticated operator. Samples are trimmed to the evaluation window and capped per metric.
+
+### Reconciliation
+
+```ts
+import { createLocalReconciliationService, createWorldStateReconciliationProvider } from "@yiaany/ghostapi";
+
+const service = createLocalReconciliationService({
+  ledger, capability, provider: createWorldStateReconciliationProvider(async (actionId) => worldId),
+});
+const report = await service.runReconciliation();
+```
+
+Reconciliation exports the tenant ledger (blocked if integrity fails), classifies every action as `committed` / `not_committed` / `unknown` / `compensated` / `drifted`, derives SLI samples (duplicate-prevention, receipt verification, availability, execution latency), records them into the SLO controller, and opens findings for drifted/unknown actions. Resolutions require an operator with `reconciliation.manage`; unknown findings require provider evidence.
+
+### Cost governance
+
+```ts
+import { createLocalCostGovernance, createTestCostOperatorAuthorizer } from "@yiaany/ghostapi";
+
+const controller = createLocalCostGovernance({ operatorAuthorizer: authorizer });
+await controller.recordCost({ identity: operator, record: { tenantId: "tenant-a", runId: "run-1", actionId: "action-1", attribution, amounts } });
+const report = await controller.report({ identity: operator });
+```
+
+`report` returns totals, attribution dimensions, budget statuses, and a linear-extrapolation forecast that is explicitly not a provider invoice. Exceeded budgets with `alertOnExceed` raise acknowledgeable alerts.
+
+### Backup and restore
+
+```ts
+import { backupRuntime, restoreRuntimeBackup } from "@yiaany/ghostapi";
+
+const backup = await backupRuntime({ destinationDir: ".ghostapi/reliability/backups/drill-1" });
+await restoreRuntimeBackup({ sourceDir: backup.path, targetDir: ".ghostapi-restored" });
+```
+
+Backups verify every file against a sha256 manifest, refuse to overwrite, and exclude `cache`, `runs`, `backups`, lock and temp files, and symbolic links. Restore re-verifies everything and rejects tampered or path-escaping manifests. See the [disaster-recovery runbook](operations/disaster-recovery-runbook.md).
+
 ## Local Data And Retention
 
 Runtime files default to `.ghostapi/`. Set `GHOSTAPI_DATA_DIR` to isolate tests or multiple instances. Persisted events use a 5 MiB active log plus two rotated archives, and each persisted event is capped at 256 KiB. Local JSON mutations use inter-process lock files and atomic replacement on the local filesystem.

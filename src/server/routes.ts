@@ -15,6 +15,7 @@ import { generateAgentPrompt } from "../agents/agentPrompt.js";
 import { generateVitestFromEvent } from "../tests/testGenerator.js";
 import { generateSafetyReport } from "../report/safetyReport.js";
 import { getProviderManifests } from "../providers/registry.js";
+import { checkRuntimeHealth } from "../reliability/index.js";
 
 const PROXY_METHODS = ["get", "post", "put", "patch", "delete", "head", "options"] as const;
 const CLEAR_TARGETS = ["cache", "state", "events", "all"] as const;
@@ -24,8 +25,22 @@ export function registerRoutes(app: Express, config: ServerConfig): void {
   app.get("/", landingHandler);
   app.use("/landing/assets", landingAssetsHandler);
 
-  app.get("/health", (_request: Request, response: Response) => {
-    response.status(200).json({ ok: true });
+  app.get("/health", async (_request: Request, response: Response, next: NextFunction) => {
+    try {
+      const report = await checkRuntimeHealth();
+      response.status(200).json({ ok: report.ready, ready: report.ready });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/health/readiness", async (_request: Request, response: Response, next: NextFunction) => {
+    try {
+      const report = await checkRuntimeHealth();
+      response.status(report.ready ? 200 : 503).json(report);
+    } catch (error) {
+      next(error);
+    }
   });
 
   app.get("/dashboard", dashboardHandler);
