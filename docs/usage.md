@@ -128,6 +128,37 @@ World transitions use one local file lock and same-directory atomic replacement.
 
 An action envelope is schema-v1 JSON containing a stable `actionId`, `idempotencyKey`, agent/workload identity, project/environment, provider/operation/resource, normalized arguments, expected effects, risk/reversibility classification, policy/evidence references, expiry, and nonce. The complete normalized envelope is canonicalized with sorted object keys and SHA-256 hashed. Approval is its own schema-v1 object containing the exact `actionHash`, named independent approver, issue/expiry timestamps, and nonce; a boolean approval is not accepted.
 
+## Local Action Ledger And Incident Replay
+
+`createLocalActionLedger()` is a local typed API, not a CLI or hosted audit service. It records a tenant-scoped, append-only action timeline from an existing `StoredAction` returned by the synthetic action gateway. The timeline connects intent, identity, policy decision, approval, credential-grant reference, execution attempts, provider receipts, verification/reconciliation, and compensation status.
+
+```ts
+const access = createTestLedgerAccessAuthorizer(); // Test helper only.
+const tenantAudit = access.issue({
+  tenantId: "tenant-a",
+  principalId: "audit-service",
+  permissions: ["append", "read", "export"]
+});
+const ledger = createLocalActionLedger({ accessAuthorizer: access.authorizer });
+
+await ledger.recordAction(tenantAudit, await gateway.inspect("action-one"));
+const timeline = await ledger.timeline(tenantAudit, "action-one");
+const exported = await ledger.exportTenant(tenantAudit);
+```
+
+Every entry uses SHA-256 over canonical structured data plus the previous tenant entry hash. Verification fails if content, ordering, a chain link, head hash, or entry count changes. Export first verifies the requested tenant chain and returns only that tenant's entries. The ledger rejects raw payloads and credential/PII-shaped fields; it records hashes or safe scalar references instead.
+
+Turn an action with a confirmed or ambiguous outcome into a local regression fixture:
+
+```ts
+const incident = await ledger.createIncidentFixture(tenantAudit, "action-one");
+const result = await ledger.replayIncidentFixture(tenantAudit, incident.fixture);
+```
+
+The pipeline creates a deterministic synthetic world and one sanitized, sequence-strict local scenario bundle. It does not open a network connection, call a provider, reuse an original credential, or copy an action payload into the ledger. An ambiguous or unverified result reproduces as `409 requires_reconciliation`, never as success. Add the generated `*.fixture.json` and `*.bundle.json` to a normal Vitest/CI fixture test to make the incident a regression check.
+
+Retention is intentionally conservative: a recorded retention value does not automatically prune the chain; local legal hold blocks deletion requests; and a deletion request is only an auditable request, not an erasure or compliance claim. See the [action-ledger and incident-replay threat model](security/action-ledger-incident-replay-threat-model.md).
+
 Use the public API to construct the exact action and approval hash, then keep the JSON as reviewed artifacts:
 
 ```ts

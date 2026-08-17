@@ -79,6 +79,8 @@ The local synthetic trust ladder prepares evidence-based `simulate` through `bou
 
 The local safety controller persists scoped kill switches, budget reservations, circuit breakers, bounded queue/dead-letter state, emergency audit records, and a synthetic game-day drill. It controls only the existing local synthetic action mutation and has no provider stop, external execution, or hosted emergency endpoint. See the [kill-switch threat model](docs/security/kill-switch-budgets-threat-model.md) and [runbook](docs/operations/kill-switch-runbook.md).
 
+The local action ledger turns an existing synthetic action record into a tenant-scoped, SHA-256 chained timeline of intent, approval, execution, provider-receipt, verification, and compensation evidence. It exports only the authorized tenant's redacted structured entries and can create a deterministic, no-network incident regression fixture that preserves ambiguous outcomes as `requires_reconciliation`. It is local tamper evidence, not an immutable external audit/compliance system. See the [ledger and incident-replay threat model](docs/security/action-ledger-incident-replay-threat-model.md).
+
 The [design-partner validation kit](docs/design-partners/README.md) currently records no independently verifiable interview, CI, bug-caught, LOI, or paid-pilot evidence in this repository, so the cloud/enterprise gate remains unmet. The local typed [team-control-plane prototype](docs/team-control-plane.md) remains local-first, while the separate [hosted pilot architecture](docs/hosted-pilot.md) is an un-deployed technical design whose RPO/RTO targets remain unproven until production-equivalent load and disaster-recovery drills pass.
 
 ## What GhostAPI Does
