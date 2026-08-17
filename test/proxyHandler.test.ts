@@ -178,12 +178,13 @@ describe("proxy handler", () => {
     await withServer(async (baseUrl) => {
       const health = await fetch(`${baseUrl}/health`);
       const dashboard = await fetch(`${baseUrl}/dashboard`);
-      const events = await fetch(`${baseUrl}/events`, { headers: { accept: "text/event-stream" } });
+      const controller = new AbortController();
+      const events = await fetch(`${baseUrl}/events`, { headers: { accept: "text/event-stream" }, signal: controller.signal });
 
-      expect(await health.json()).toEqual({ ok: true });
+      expect(await health.json()).toEqual({ ok: true, ready: true });
       expect(dashboard.headers.get("content-type")).toContain("text/html");
       expect(events.headers.get("content-type")).toContain("text/event-stream");
-      events.body?.cancel();
+      controller.abort();
     });
   });
 

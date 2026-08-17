@@ -21,6 +21,11 @@ export type DataPaths = {
   teamControlPlane: string;
   faultLab: string;
   productTelemetry: string;
+  reliability: string;
+  sloStore: string;
+  reconciliationStore: string;
+  costStore: string;
+  backups: string;
 };
 
 export function getDataDir(env: NodeJS.ProcessEnv = process.env): string {
@@ -61,6 +66,11 @@ export function getDataPaths(): DataPaths {
     incidents: resolveDataPath("incidents"),
     teamControlPlane: resolveDataPath("team-control-plane.json"),
     faultLab: resolveDataPath("fault-lab.json"),
-    productTelemetry: resolveDataPath("product-telemetry.json")
+    productTelemetry: resolveDataPath("product-telemetry.json"),
+    reliability: resolveDataPath("reliability"),
+    sloStore: resolveDataPath("reliability", "slo.json"),
+    reconciliationStore: resolveDataPath("reliability", "reconciliation.json"),
+    costStore: resolveDataPath("reliability", "costs.json"),
+    backups: resolveDataPath("reliability", "backups")
   };
 }

@@ -45,3 +45,11 @@ export type {
   ProviderScenarioStep,
   ProviderWebhookHook
 } from "./providers/index.js";
+export { LocalSloController, SloError, SLO_LATENCY_METRICS, SLO_METRICS, createDisabledSloOperatorAuthorizer, createLocalSloController, createSloRecordIdentity, createTestSloOperatorAuthorizer, examplePilotSloTargets, formatSloReport } from "./reliability/index.js";
+export type { SloControllerOptions, SloEvaluation, SloMetric, SloOperator, SloOperatorAuthorizer, SloOperatorPermission, SloRecordSampleInput, SloReport, SloSample, SloStoreState, SloTarget } from "./reliability/index.js";
+export { LocalReconciliationService, ReconciliationError, RECONCILIATION_OUTCOMES, createDisabledReconciliationOperatorAuthorizer, createLocalReconciliationService, createTestReconciliationOperatorAuthorizer, createWorldStateReconciliationProvider, formatReconciliationReport } from "./reliability/index.js";
+export type { ReconciliationActionResult, ReconciliationFinding, ReconciliationLedgerIntent, ReconciliationOperator, ReconciliationOperatorAuthorizer, ReconciliationOperatorPermission, ReconciliationOutcome, ReconciliationProvider, ReconciliationProviderState, ReconciliationReport, ReconciliationServiceOptions, ReconciliationSli, ReconciliationState } from "./reliability/index.js";
+export { CostGovernanceError, COST_AMOUNT_KEYS, COST_DIMENSIONS, LocalCostGovernance, createDisabledCostOperatorAuthorizer, createLocalCostGovernance, createTestCostOperatorAuthorizer, formatCostReport } from "./reliability/index.js";
+export type { CostAlert, CostAmountKey, CostAmounts, CostAttribution, CostBudget, CostBudgetEvaluation, CostControllerOptions, CostDimension, CostForecast, CostOperator, CostOperatorAuthorizer, CostOperatorPermission, CostRecord, CostReport, CostStoreState, RecordCostInput } from "./reliability/index.js";
+export { RuntimeHealthError, backupRuntime, checkRuntimeHealth, formatRuntimeHealth, restoreRuntimeBackup } from "./reliability/index.js";
+export type { BackupManifest, BackupManifestEntry, BackupResult, RestoreResult, RuntimeDependencyStatus, RuntimeHealthReport, RuntimeStoreCheck } from "./reliability/index.js";

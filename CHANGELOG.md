@@ -89,6 +89,8 @@ The format follows the spirit of [Keep a Changelog](https://keepachangelog.com/e
 
 ### Security
 
+- Added a local reliability layer with bounded stores and reference-bound capabilities: a local SLO controller (`slo.json`) that records samples only with a verified record capability, restricts configure/evaluate to authenticated operators, trims evaluation windows, and caps samples per metric and store bytes; a local reconciliation service (`reconciliation.json`) that blocks on ledger integrity failure, classifies ledger timelines as committed/not-committed/unknown/compensated/drifted against synthetic provider state, opens resolveable findings, and records duplicate-prevention, receipt-verification, availability, and execution-latency SLI samples; a local cost-governance store (`costs.json`) with capped attribution records, budgets, acknowledgeable alerts, and a linear-extrapolation forecast explicitly labeled as not a provider invoice; and runtime health plus verified local backup/restore (`reliability/backups/`) with sha256 manifests, tamper and path-traversal rejection, and no egress. `GET /health` and `GET /health/readiness` now report structural readiness and return 503 when a store is degraded.
+
 - No real external provider API calls by default.
 - Secrets are masked before prompt construction, cache key generation, event logging, and dashboard rendering.
 - `ghostapi doctor` warns about unsafe TLS bypass settings.
