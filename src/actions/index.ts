@@ -8,7 +8,8 @@ export {
   createSyntheticActionAdapter,
   getActionPath,
   validateActionApproval,
-  validateActionEnvelope
+  validateActionEnvelope,
+  validateStoredAction
 } from "./gateway.js";
 export type {
   ActionApproval,

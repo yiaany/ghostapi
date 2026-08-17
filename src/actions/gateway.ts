@@ -392,7 +392,7 @@ async function writeStoredAction(path: string, record: StoredAction): Promise<vo
   await atomicWriteJson(path, validateStoredAction(record));
 }
 
-function validateStoredAction(value: unknown): StoredAction {
+export function validateStoredAction(value: unknown): StoredAction {
   const record = object(value, "Action record must be an object.");
   exactKeys(record, ["schemaVersion", "kind", "envelope", "actionHash", "approval", "receipts"], "Action record");
   if (record.schemaVersion !== ACTION_SCHEMA_VERSION || record.kind !== RECORD_KIND) throw new ActionGatewayError("Unsupported action record schema.");

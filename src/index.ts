@@ -21,7 +21,7 @@ export { ProductTelemetryError, formatProductTelemetry, readProductTelemetry, re
 export type { ProductTelemetryEvent, ProductTelemetrySnapshot } from "./productTelemetry/index.js";
 export { getApiBehaviors, setApiBehavior } from "./behavior/behaviorStore.js";
 export type { ApiBehavior } from "./behavior/behaviorStore.js";
-export { ActionGatewayError, LocalActionGateway, actionApprovalHash, actionHash, canonicalizeActionEnvelope, createLocalActionGateway, createSyntheticActionAdapter, getActionPath, validateActionApproval, validateActionEnvelope } from "./actions/index.js";
+export { ActionGatewayError, LocalActionGateway, actionApprovalHash, actionHash, canonicalizeActionEnvelope, createLocalActionGateway, createSyntheticActionAdapter, getActionPath, validateActionApproval, validateActionEnvelope, validateStoredAction } from "./actions/index.js";
 export type { ActionApproval, ActionEnvelope, ActionExecutionAdapter, ActionExecutionIdentity, ActionExecutionReceipt, ActionGatewayOptions, ActionPolicyCheck, ActionReceiptStatus, ActionReversibility, ActionRiskClass, StoredAction } from "./actions/index.js";
 export { ApprovalInboxError, LocalApprovalInbox, approvalPolicyHash, createLocalApprovalInbox, createTestApprovalApproverVerifier } from "./approvals/index.js";
 export type { ApprovalApprover, ApprovalApproverVerifier, ApprovalAuditRecord, ApprovalContext, ApprovalDecision, ApprovalDisplay, ApprovalInboxOptions, ApprovalInboxState, ApprovalPolicy, ApprovalRequest, ApprovalRequestStatus, ApprovalRisk } from "./approvals/index.js";
@@ -31,6 +31,8 @@ export { TRUST_LEVELS, LocalTrustLadder, TrustLadderError, createLocalSyntheticT
 export type { TrustAuditRecord, TrustCapabilities, TrustCanaryDecision, TrustCanaryOutcome, TrustCanaryScope, TrustComparisonEvidence, TrustLadderOptions, TrustLadderState, TrustLevel, TrustLevelCapability, TrustObservation, TrustOutcomeObservation, TrustOwner, TrustOwnerVerifier, TrustPromotionEvidence, TrustPromotionPolicy, TrustTarget, TrustTargetState } from "./trust/index.js";
 export { LocalSafetyController, SafetyControllerError, SAFETY_SCOPE_KINDS, createDisabledSafetyEmergencyAuthorizer, createLocalSafetyController, createTestSafetyEmergencyAuthorizer } from "./safety/index.js";
 export type { SafetyAction, SafetyAuditRecord, SafetyBudget, SafetyBudgetLimits, SafetyCircuit, SafetyControllerOptions, SafetyControllerState, SafetyDeadLetter, SafetyEmergencyAuthorizer, SafetyLease, SafetyOperator, SafetyOperatorPermission, SafetyQueueItem, SafetyScope, SafetyScopeKind } from "./safety/index.js";
+export { ActionLedgerError, LocalActionLedger, createLocalActionLedger, createTestLedgerAccessAuthorizer, validateIncidentFixture } from "./ledger/index.js";
+export type { ActionLedgerOptions, ActionLedgerRecord, ActionLedgerState, IncidentFixture, IncidentReplayResult, LedgerAccess, LedgerAccessAuthorizer, LedgerEntry, LedgerExport, LedgerPermission, LedgerStage, LedgerTenantState, LedgerVerification } from "./ledger/index.js";
 export type { ServerConfig } from "./config/serverConfig.js";
 export { createProviderRuntime, runProviderPackConformance } from "./providers/index.js";
 export type {

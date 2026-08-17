@@ -8,6 +8,7 @@ The format follows the spirit of [Keep a Changelog](https://keepachangelog.com/e
 
 ### Security
 
+- Added a local tenant-scoped action ledger with bounded structured redaction, SHA-256 append-only chains, verification/export integrity checks, legal-hold/deletion-request semantics, and no credential or raw payload persistence. Added incident-to-synthetic-world/scenario fixtures that replay only in memory and preserve ambiguous outcomes as reconciliation-required.
 - Added a persisted local synthetic safety controller with scoped kill switches, locked budget reservations, circuit breakers, bounded queue/dead-letter handling, audited separately authorized re-enable, final synthetic commit checks, and a scheduled non-destructive game-day drill. No provider, credential, HTTP, or hosted emergency transport was added.
 - Added a local synthetic trust ladder with strict no-side-effect level capabilities, explicit unsupported dry-run/trusted states, verified-owner promotion evidence, deterministic scoped canaries, hash-only shadow/outcome comparison, automatic demotion/circuit-breaker policy, rollback audit reasons, and no provider execution path.
 - Hardened the local approval inbox so inbox-issued artifacts cannot be submitted or executed through the public action-gateway path, and verified approver principals prevent actor aliases from self-approving or satisfying two-person review.

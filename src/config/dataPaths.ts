@@ -16,6 +16,8 @@ export type DataPaths = {
   credentialBroker: string;
   trustLadder: string;
   safetyController: string;
+  actionLedger: string;
+  incidents: string;
   teamControlPlane: string;
   faultLab: string;
   productTelemetry: string;
@@ -55,6 +57,8 @@ export function getDataPaths(): DataPaths {
     credentialBroker: resolveDataPath("credential-broker.json"),
     trustLadder: resolveDataPath("trust-ladder.json"),
     safetyController: resolveDataPath("safety-controller.json"),
+    actionLedger: resolveDataPath("action-ledger.json"),
+    incidents: resolveDataPath("incidents"),
     teamControlPlane: resolveDataPath("team-control-plane.json"),
     faultLab: resolveDataPath("fault-lab.json"),
     productTelemetry: resolveDataPath("product-telemetry.json")
