@@ -468,6 +468,51 @@ await restoreRuntimeBackup({ sourceDir: backup.path, targetDir: ".ghostapi-resto
 
 Backups verify every file against a sha256 manifest, refuse to overwrite, and exclude `cache`, `runs`, `backups`, lock and temp files, and symbolic links. Restore re-verifies everything and rejects tampered or path-escaping manifests. See the [disaster-recovery runbook](operations/disaster-recovery-runbook.md).
 
+## Agent Inventory And Attack-Path Graph
+
+The inventory layer is local-first and synthetic. It imports agent, identity, tool, provider, resource, side-effect, credential, and policy records with provenance and freshness into `.ghostapi/inventory.json`, and it never reaches out to a source. ROI and removal numbers come from imported counters and the local store only.
+
+```ts
+import { createLocalInventoryController, createTestInventoryOperatorAuthorizer } from "@yiaany/ghostapi";
+
+const { authorizer, issue } = createTestInventoryOperatorAuthorizer();
+const operator = issue({ id: "invop", principalId: "invop-one", tenantId: "tenant-a", permissions: ["inventory.import", "inventory.inspect", "inventory.analyze", "inventory.remediate", "inventory.export"] });
+const controller = createLocalInventoryController({ operatorAuthorizer: authorizer });
+
+await controller.import(operator, {
+  schemaVersion: 1,
+  kind: "ghostapi.inventory-import",
+  source: { sourceId: "repo-config", sourceType: "config", sourceName: "Repo config" },
+  agents: [{ agentId: "agent-order", name: "Order assistant", identityIds: ["identity-order"], environmentIds: ["production"], gatewayManaged: true, killSwitchEnabled: true }],
+  identities: [{ identityId: "identity-order", principalId: "svc-order", role: "service_account", toolIds: ["tool-stripe"], environmentIds: ["production"], scopes: ["read", "charge"] }]
+});
+```
+
+Imports carry a digest; re-importing the same payload refreshes freshness without duplicating records or edges. Every graph edge has provenance (`source`, `importedAt`, `importedBy`) and a freshness status.
+
+```ts
+const snapshot = await controller.inspect(operator);          // tenant-scoped records, edges, findings
+const paths = await controller.attackPaths(operator, "agent-order");
+const blast = await controller.blastRadius(operator, "agent-order"); // heuristic-labeled, advisory
+const { findings } = await controller.analyze(operator);       // detections on the current store
+const exported = await controller.export(operator);            // inventory, policies, evidence, ROI
+```
+
+Detections cover orphaned agents, stale/unused credentials, excessive permissions, unowned production integrations, agents outside the gateway, missing kill switches, missing evidence, and policy drift. Heuristic findings are explicitly labeled; coverage gaps are surfaced as risk, not ignored.
+
+Remediations are proposed against a finding and applied locally: assign an owner, reduce credential scopes (never expanded — proposals that add or keep scopes are rejected), revoke a credential, onboard an agent through the gateway, or create an eval scenario reference.
+
+```ts
+const excessive = snapshot.findings.find((finding) => finding.kind === "excessive_permissions");
+const proposal = await controller.proposeRemediation(operator, {
+  findingId: excessive!.findingId, kind: "reduce_scope", targetKind: "credential", targetId: "cred-stripe",
+  rationale: "Drop the unused admin scope.", reducedScopes: ["read", "charge"]
+});
+await controller.applyRemediation(operator, proposal.remediationId);
+```
+
+The ROI report uses only imported counters and applied remediations; unmeasured values are `null` and listed in `notMeasured`. See the [inventory threat model](security/inventory-threat-model.md). The entry gate for enterprise numbers (a real pilot) is not yet met; results are for local synthetic review.
+
 ## Local Data And Retention
 
 Runtime files default to `.ghostapi/`. Set `GHOSTAPI_DATA_DIR` to isolate tests or multiple instances. Persisted events use a 5 MiB active log plus two rotated archives, and each persisted event is capped at 256 KiB. Local JSON mutations use inter-process lock files and atomic replacement on the local filesystem.

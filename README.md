@@ -330,6 +330,7 @@ Run `npx @yiaany/ghostapi doctor --json` for machine-readable environment checks
 | `.ghostapi/reliability/reconciliation.json` | Local reconciliation findings, resolutions, and last-run outcome counts. |
 | `.ghostapi/reliability/costs.json` | Local cost-attribution records, budgets, and budget alerts. |
 | `.ghostapi/reliability/backups/` | Verified local runtime backups (sha256 manifests) for disaster recovery. |
+| `.ghostapi/inventory.json` | Local agent inventory, attack-path graph edges with provenance/freshness, detections, remediations, and open export data. |
 
 On POSIX systems GhostAPI requests owner-only permissions. On Windows, effective permissions inherit from the data directory ACL. Local lock files coordinate cooperating processes on one filesystem, not distributed or synchronized copies.
 
@@ -400,6 +401,7 @@ mcp, ai-agents, stripe, openai, mock-server, api-testing, sandbox, proxy, local-
 - [Kill-switch runbook](docs/operations/kill-switch-runbook.md)
 - [Disaster-recovery runbook](docs/operations/disaster-recovery-runbook.md)
 - [Reliability surface threat model](docs/security/reliability-threat-model.md)
+- [Agent inventory and attack-path graph threat model](docs/security/inventory-threat-model.md)
 - [Release readiness](docs/release-readiness.md)
 - [Migration and rollback](docs/release-migration-and-rollback.md)
 - [Contributing](CONTRIBUTING.md)
