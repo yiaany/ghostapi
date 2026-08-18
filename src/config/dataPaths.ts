@@ -26,6 +26,7 @@ export type DataPaths = {
   reconciliationStore: string;
   costStore: string;
   backups: string;
+  inventoryStore: string;
 };
 
 export function getDataDir(env: NodeJS.ProcessEnv = process.env): string {
@@ -71,6 +72,7 @@ export function getDataPaths(): DataPaths {
     sloStore: resolveDataPath("reliability", "slo.json"),
     reconciliationStore: resolveDataPath("reliability", "reconciliation.json"),
     costStore: resolveDataPath("reliability", "costs.json"),
-    backups: resolveDataPath("reliability", "backups")
+    backups: resolveDataPath("reliability", "backups"),
+    inventoryStore: resolveDataPath("inventory.json")
   };
 }
