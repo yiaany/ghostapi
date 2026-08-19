@@ -23,10 +23,16 @@ It does not add a provider client, provider account, credential vault, HTTP tran
 
 ## Retention, Hold, And Deletion
 
-- `configureRetention()` records a local retention policy value. It does not automatically prune entries because silent pruning would break the chain and create a false compliance claim.
+- `configureRetention()` records a per-tenant retention policy. `appendEntry` enforces the store bound (`MAX_ENTRIES` 2,000): when the cap is reached, entries older than the tenant's `retentionDays` are rotated out and the tenant's hash chain is relinked to genesis — `previousHash`/`entryHash` are recomputed and `entryCount`/`headHash` updated, so a subsequent `verifyTenant` still passes. Rotation is bounded and never silent at the cap: if the store cannot be brought under `MAX_ENTRIES`, the append is rejected with an explicit retention-review error.
+- Rotation is per-tenant and opt-in: a tenant without a `retentionDays` policy is never rotated (its chain remains strictly append-only), and a tenant under `setLegalHold(true)` is never rotated.
 - `setLegalHold(true)` records an active local hold and blocks `requestDeletion()`.
 - `requestDeletion()` records a request timestamp after the hold check. It does not erase entries, backups, or external copies and does not claim GDPR, SEC, HIPAA, or any other compliance behavior.
 - A real retention/deletion workflow needs an approved retention schedule, backup lifecycle, legal authority, trusted identity, durable external evidence, and a cryptographically preserved anchor before destructive deletion can be designed.
+
+## Claimed Basis And Verification
+
+- `policy_decision` and `approval` stages echo caller-supplied decisions as `basis: "caller_claimed"` — they record what the caller asserted at admission time, not an independently verified policy/approval decision, and consumers must treat them as claims.
+- `verifyTenant()` returns `tracked: false` with the tenant's genesis hash as head for a tenant that has no entries, and `tracked: true` for a tenant with entries, so "no ledger yet" is distinguishable from a broken or tampered chain.
 
 ## Trust Boundaries And Limits
 

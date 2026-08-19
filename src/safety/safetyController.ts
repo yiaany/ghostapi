@@ -12,6 +12,8 @@ const MAX_LEDGER = 10_000;
 const MAX_QUEUE = 100;
 const MAX_DEAD_LETTERS = 1_000;
 const MAX_AUDIT = 10_000;
+const DEFAULT_LEASE_TTL_MS = 60_000;
+const KILL_SWITCH_ERROR_CODE = "SAFETY_KILL_SWITCH";
 const IDENTIFIER = /^[a-z0-9][a-z0-9._-]{0,127}$/;
 const HASH = /^[a-f0-9]{64}$/;
 
@@ -52,10 +54,15 @@ export type SafetyControllerState = {
   auditAnchor: string;
   audit: SafetyAuditRecord[];
 };
-export type SafetyControllerOptions = { path?: string; now?: () => Date; emergencyAuthorizer?: SafetyEmergencyAuthorizer };
+export type SafetyControllerOptions = { path?: string; now?: () => Date; emergencyAuthorizer?: SafetyEmergencyAuthorizer; leaseTtlMs?: number };
 
 export class SafetyControllerError extends Error {
-  constructor(message: string) { super(message); this.name = "SafetyControllerError"; }
+  readonly code?: string;
+  constructor(message: string, code?: string) {
+    super(message);
+    this.name = "SafetyControllerError";
+    if (code !== undefined) this.code = code;
+  }
 }
 
 export function createLocalSafetyController(options: SafetyControllerOptions = {}): LocalSafetyController {
@@ -66,11 +73,13 @@ export class LocalSafetyController {
   private readonly path: string;
   private readonly now: () => Date;
   private readonly emergencyAuthorizer: SafetyEmergencyAuthorizer;
+  private readonly leaseTtlMs: number;
 
   constructor(options: SafetyControllerOptions = {}) {
     this.path = options.path ?? getDataPaths().safetyController;
     this.now = options.now ?? (() => new Date());
     this.emergencyAuthorizer = options.emergencyAuthorizer ?? createDisabledSafetyEmergencyAuthorizer();
+    this.leaseTtlMs = options.leaseTtlMs ?? DEFAULT_LEASE_TTL_MS;
   }
 
   async configureBudget(input: { identity: unknown; budget: unknown }): Promise<SafetyBudget> {
@@ -132,6 +141,7 @@ export class LocalSafetyController {
     const now = this.timestamp();
     const key = ledgerKey(action);
     const replay = await this.mutate((state, current) => {
+      pruneExpiredLeases(state, current, this.leaseTtlMs);
       const sameIdempotency = state.ledger.find((candidate) => candidate.action.idempotencyKey === action.idempotencyKey);
       if (sameIdempotency !== undefined && sameIdempotency.action.actionHash !== action.actionHash) throw new SafetyControllerError("Safety idempotency key collides with a different action hash.");
       const existing = state.ledger.find((candidate) => candidate.key === key);
@@ -149,6 +159,7 @@ export class LocalSafetyController {
         if (replay) return;
         await this.mutate((state, current) => {
           const entry = findLedger(state, key);
+          if (this.leaseExpired(entry, current)) throw new SafetyControllerError("Safety lease has expired.");
           if (entry.status !== "reserved") throw new SafetyControllerError("Safety lease is no longer active.");
           assertActionAllowed(state, action, current);
           appendAudit(state, "action.final_check", key, "kill switch, budgets, and circuits remain active", current);
@@ -156,28 +167,35 @@ export class LocalSafetyController {
       },
       commit: async <T>(operation: () => Promise<T>): Promise<T> => {
         if (replay) throw new SafetyControllerError("Safety replay lease cannot commit a side effect.");
-        return withFileLock(this.path, async () => {
-          const state = await this.read();
+        await this.mutate((state, current) => {
           const entry = findLedger(state, key);
+          if (this.leaseExpired(entry, current)) throw new SafetyControllerError("Safety lease has expired.");
           if (entry.status !== "reserved") throw new SafetyControllerError("Safety lease is no longer active.");
-          assertActionAllowed(state, action, this.timestamp());
-          appendAudit(state, "action.final_check", key, "kill switch, budgets, and circuits remained active through synthetic commit", this.timestamp());
-          await atomicWriteJson(this.path, validateState(state));
-          return operation();
+          assertActionAllowed(state, action, current);
         });
+        const result = await operation();
+        await this.mutate((state, current) => {
+          const entry = findLedger(state, key);
+          if (this.leaseExpired(entry, current)) throw new SafetyControllerError("Safety lease has expired.");
+          if (entry.status !== "reserved") throw new SafetyControllerError("Safety lease is no longer active.");
+          appendAudit(state, "action.final_check", key, "kill switch, budgets, and circuits remained active through commit", current);
+        });
+        return result;
       },
       complete: async (outcomeValue) => {
         if (replay) return;
         const outcome = validateOutcome(outcomeValue);
         await this.mutate((state, current) => {
-          const entry = findLedger(state, key);
-          if (entry.status === "completed") return;
-          if (entry.status !== "reserved") throw new SafetyControllerError("Safety lease is no longer active.");
-          entry.status = "completed";
-          entry.completedAt = current;
-          entry.outcome = outcome;
+          const entry = state.ledger.find((candidate) => candidate.key === key);
+          if (entry !== undefined) {
+            if (entry.status === "completed") return;
+            if (entry.status !== "reserved") throw new SafetyControllerError("Safety lease is no longer active.");
+            entry.status = "completed";
+            entry.completedAt = current;
+            entry.outcome = outcome;
+          }
           appendAudit(state, outcome.success ? "action.completed" : "action.unknown", key, outcome.reason ?? (outcome.success ? "action completed" : "action outcome is unknown"), current);
-          evaluateCircuits(state, action, current);
+          if (entry !== undefined) evaluateCircuits(state, entry.action, current);
         });
       }
     };
@@ -223,7 +241,7 @@ export class LocalSafetyController {
     await this.stop({ identity: input.stopIdentity, scope: globalScope, reason: `${reason} stop drill` });
     const stoppedAt = this.timestamp();
     await this.admit(action).then(() => { throw new SafetyControllerError("Game-day kill switch did not block the action."); }, (error: unknown) => {
-      if (!(error instanceof SafetyControllerError) || !error.message.includes("Kill switch")) throw error;
+      if (!(error instanceof SafetyControllerError) || error.code !== KILL_SWITCH_ERROR_CODE) throw error;
     });
     await this.reenable({ identity: input.reenableIdentity, scope: globalScope, reason: `${reason} recovery drill` });
     const reenabledAt = this.timestamp();
@@ -263,6 +281,10 @@ export class LocalSafetyController {
     const value = this.now();
     if (!(value instanceof Date) || !Number.isFinite(value.getTime())) throw new SafetyControllerError("Safety controller clock is invalid.");
     return value.toISOString();
+  }
+
+  private leaseExpired(entry: SafetyControllerState["ledger"][number], now: string): boolean {
+    return entry.status === "reserved" && Date.parse(now) - Date.parse(entry.admittedAt) > this.leaseTtlMs;
   }
 }
 
@@ -332,12 +354,13 @@ function validateDeadLetter(value: unknown): SafetyDeadLetter { const item = obj
 function validateAudit(value: unknown): SafetyAuditRecord { const record = object(value, "Safety audit record is invalid."); exactKeys(record, ["sequence", "event", "subject", "reason", "actorPrincipalId", "timestamp", "previousHash", "recordHash"], "Safety audit record", ["actorPrincipalId"]); const base = { sequence: positive(record.sequence, "Safety audit sequence", MAX_AUDIT), event: text(record.event, "Safety audit event", 80), subject: text(record.subject, "Safety audit subject", 300), reason: text(record.reason, "Safety audit reason", 200), ...(record.actorPrincipalId === undefined ? {} : { actorPrincipalId: identifier(record.actorPrincipalId, "Safety audit actor") }), timestamp: timestamp(record.timestamp, "Safety audit time"), previousHash: hash(record.previousHash, "Safety audit previous hash") }; if (hash(record.recordHash, "Safety audit record hash") !== sha256(canonical(base))) throw new SafetyControllerError("Safety audit record hash is invalid."); return { ...base, recordHash: record.recordHash as string }; }
 function validateAuditChain(anchor: string, audit: SafetyAuditRecord[]): void { let previous = anchor; let sequence = 1; for (const record of audit) { if (record.sequence !== sequence || record.previousHash !== previous) throw new SafetyControllerError("Safety audit chain is invalid."); previous = record.recordHash; sequence += 1; } }
 function setSwitch(state: SafetyControllerState, scope: SafetyScope, enabled: boolean, reason: string, principalId: string, now: string): void { const existing = state.switches.find((candidate) => sameScope(candidate.scope, scope)); if (existing === undefined) { if (state.switches.length >= MAX_CONTROLS) throw new SafetyControllerError("Safety switch limit was reached."); state.switches.push({ scope, enabled, reason, changedBy: principalId, changedAt: now }); } else { existing.enabled = enabled; existing.reason = reason; existing.changedBy = principalId; existing.changedAt = now; } }
-function assertActionAllowed(state: SafetyControllerState, action: SafetyAction, now: string): void { const stopped = state.switches.find((control) => control.enabled && scopeMatches(control.scope, action)); if (stopped !== undefined) throw new SafetyControllerError(`Kill switch is active for ${scopeKey(stopped.scope)}.`); const circuit = state.circuits.find((candidate) => candidate.state === "open" && scopeMatches(candidate.scope, action)); if (circuit !== undefined) throw new SafetyControllerError(`Safety circuit breaker is open: ${circuit.id}.`); for (const circuitCandidate of state.circuits) if (circuitCandidate.state === "closed" && scopeMatches(circuitCandidate.scope, action)) evaluateCircuit(state, circuitCandidate, now); const opened = state.circuits.find((candidate) => candidate.state === "open" && scopeMatches(candidate.scope, action)); if (opened !== undefined) throw new SafetyControllerError(`Safety circuit breaker is open: ${opened.id}.`); }
+function assertActionAllowed(state: SafetyControllerState, action: SafetyAction, now: string): void { const stopped = state.switches.find((control) => control.enabled && scopeMatches(control.scope, action)); if (stopped !== undefined) throw new SafetyControllerError(`Kill switch is active for ${scopeKey(stopped.scope)}.`, KILL_SWITCH_ERROR_CODE); const circuit = state.circuits.find((candidate) => candidate.state === "open" && scopeMatches(candidate.scope, action)); if (circuit !== undefined) throw new SafetyControllerError(`Safety circuit breaker is open: ${circuit.id}.`); for (const circuitCandidate of state.circuits) if (circuitCandidate.state === "closed" && scopeMatches(circuitCandidate.scope, action)) evaluateCircuit(state, circuitCandidate, now); const opened = state.circuits.find((candidate) => candidate.state === "open" && scopeMatches(candidate.scope, action)); if (opened !== undefined) throw new SafetyControllerError(`Safety circuit breaker is open: ${opened.id}.`); }
 function assertBudgets(state: SafetyControllerState, action: SafetyAction, now: string): void { for (const budget of state.budgets) { if (!scopeMatches(budget.scope, action)) continue; const windowEntries = state.ledger.filter((entry) => scopeMatches(budget.scope, entry.action) && Date.parse(entry.admittedAt) >= Date.parse(now) - budget.windowMs); const velocityEntries = state.ledger.filter((entry) => scopeMatches(budget.scope, entry.action) && Date.parse(entry.admittedAt) >= Date.parse(now) - budget.velocityWindowMs); const totals = sumCosts(windowEntries.map((entry) => entry.action.costs)); const velocity = sumCosts(velocityEntries.map((entry) => entry.action.costs)).requests; const concurrent = windowEntries.filter((entry) => entry.status === "reserved").length; for (const key of ["monetaryAmountMinor", "requests", "messages", "mutations", "deletes", "tokenCost"] as const) if (budget.limits[key] !== undefined && totals[key] + action.costs[key] > budget.limits[key]!) throw new SafetyControllerError(`Safety budget exceeded: ${budget.id} ${key}.`); if (budget.limits.concurrency !== undefined && concurrent + 1 > budget.limits.concurrency) throw new SafetyControllerError(`Safety budget exceeded: ${budget.id} concurrency.`); if (budget.limits.velocity !== undefined && velocity + action.costs.requests > budget.limits.velocity) throw new SafetyControllerError(`Safety velocity limit exceeded: ${budget.id}.`); } }
 function evaluateCircuits(state: SafetyControllerState, action: SafetyAction, now: string): void { for (const circuit of state.circuits) if (circuit.state === "closed" && scopeMatches(circuit.scope, action)) evaluateCircuit(state, circuit, now); }
 function evaluateCircuit(state: SafetyControllerState, circuit: SafetyCircuit, now: string): void { const entries = state.ledger.filter((entry) => entry.status === "completed" && entry.completedAt !== undefined && entry.outcome !== undefined && scopeMatches(circuit.scope, entry.action) && Date.parse(entry.completedAt) >= Date.parse(now) - circuit.windowMs); if (entries.length < circuit.minimumSamples) return; const failures = entries.filter((entry) => !entry.outcome!.success).length; const violations = entries.filter((entry) => entry.outcome!.policyViolation).length; const mismatches = entries.filter((entry) => entry.outcome!.reconciliationMismatch).length; const latencyExceeded = entries.some((entry) => entry.outcome!.latencyMs > circuit.maxLatencyMs); const reason = rateBps(failures, entries.length) > circuit.maxFailureRateBps ? "failure rate exceeded" : violations > circuit.maxPolicyViolations ? "policy violation threshold exceeded" : mismatches > circuit.maxReconciliationMismatches ? "reconciliation mismatch threshold exceeded" : latencyExceeded ? "latency threshold exceeded" : undefined; if (reason !== undefined) { circuit.state = "open"; circuit.openedAt = now; circuit.reason = reason; appendAudit(state, "circuit.opened", circuit.id, reason, now); } }
 function deadLetterMatchingQueued(state: SafetyControllerState, scope: SafetyScope, reason: string, now: string): void { const remaining: SafetyQueueItem[] = []; for (const item of state.queue) { if (scopeMatches(scope, item.action)) { addDeadLetter(state, item, `kill switch: ${reason}`, now); appendAudit(state, "queue.dead_lettered", item.id, "kill switch stopped queued action", now); } else remaining.push(item); } state.queue = remaining; }
-function addDeadLetter(state: SafetyControllerState, item: SafetyQueueItem, reason: string, now: string): void { if (state.deadLetters.length >= MAX_DEAD_LETTERS) throw new SafetyControllerError("Safety dead-letter queue limit was reached."); state.deadLetters.push({ ...item, reason: text(reason, "Safety dead-letter reason", 200), deadLetteredAt: now }); }
+function addDeadLetter(state: SafetyControllerState, item: SafetyQueueItem, reason: string, now: string): void { if (state.deadLetters.length >= MAX_DEAD_LETTERS) state.deadLetters.shift(); state.deadLetters.push({ ...item, reason: text(reason, "Safety dead-letter reason", 200), deadLetteredAt: now }); }
+function pruneExpiredLeases(state: SafetyControllerState, now: string, leaseTtlMs: number): void { const cutoff = Date.parse(now) - leaseTtlMs; state.ledger = state.ledger.filter((entry) => entry.status === "completed" || Date.parse(entry.admittedAt) >= cutoff); }
 function findLedger(state: SafetyControllerState, key: string): SafetyControllerState["ledger"][number] { const entry = state.ledger.find((candidate) => candidate.key === key); if (entry === undefined) throw new SafetyControllerError("Safety lease was not found."); return entry; }
 function scopeMatches(scope: SafetyScope, action: SafetyAction): boolean { return scope.kind === "global" || scope.id === scopeValue(scope.kind, action); }
 function scopeValue(kind: Exclude<SafetyScopeKind, "global">, action: SafetyAction): string { switch (kind) { case "organization": return action.organizationId; case "project": return action.projectId; case "environment": return action.environment; case "agent": return action.actorId; case "workload": return action.workloadId; case "provider": return action.provider; case "operation": return action.operation; case "risk_class": return action.riskClass; } }

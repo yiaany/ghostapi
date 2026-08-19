@@ -82,9 +82,11 @@ export type CreateWorldOptions = {
 };
 
 export class SyntheticWorldError extends Error {
-  constructor(message: string) {
+  readonly code?: string;
+  constructor(message: string, code?: string) {
     super(message);
     this.name = "SyntheticWorldError";
+    if (code !== undefined) this.code = code;
   }
 }
 
@@ -283,7 +285,7 @@ async function ensureWorldFileIsSafe(path: string, required: boolean): Promise<v
   await ensurePrivateDirectory(getDataPaths().worlds);
   const info = await lstat(path).catch((error: unknown) => isErrorCode(error, "ENOENT") ? null : Promise.reject(error));
   if (info === null) {
-    if (required) throw new SyntheticWorldError(`Synthetic world was not found: ${path}`);
+    if (required) throw new SyntheticWorldError(`Synthetic world was not found: ${path}`, "WORLD_NOT_FOUND");
     return;
   }
   if (!info.isFile() || info.isSymbolicLink()) throw new SyntheticWorldError("Synthetic world must be a regular non-symlink file.");

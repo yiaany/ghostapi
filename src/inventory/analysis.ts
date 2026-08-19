@@ -40,15 +40,17 @@ export function graphEdges(state: InventoryStoreState, tenantId: string, now: st
     .map((edge) => ({ ...edge, freshnessStatus: freshnessStatusFor(edge.lastSeenAt, now, normalized.edgeStaleDays) }));
 }
 
-export function findAttackPaths(state: InventoryStoreState, tenantId: string, agentId: string): AttackPathResult {
+export function findAttackPaths(state: InventoryStoreState, tenantId: string, agentId: string, now: string, freshnessDays: InventoryFreshnessDays | undefined): AttackPathResult {
   const agent = state.agents.find((candidate) => candidate.tenantId === tenantId && candidate.agentId === agentId);
   if (agent === undefined) return { agentId, paths: [], incompletePaths: 0 };
+  const normalized = normalizeFreshnessDays(freshnessDays);
+  const staleBeforeMs = Date.parse(now) - normalized.edgeStaleDays * 24 * 60 * 60 * 1000;
   const identities = state.identities.filter((identity) => identity.tenantId === tenantId);
   const tools = state.tools.filter((tool) => tool.tenantId === tenantId);
   const providers = state.providers.filter((provider) => provider.tenantId === tenantId);
   const resources = state.resources.filter((resource) => resource.tenantId === tenantId);
   const sideEffects = state.sideEffects.filter((sideEffect) => sideEffect.tenantId === tenantId);
-  const edges = state.edges.filter((edge) => edge.tenantId === tenantId);
+  const edges = state.edges.filter((edge) => edge.tenantId === tenantId && Date.parse(edge.lastSeenAt) >= staleBeforeMs);
   const paths: AttackPath[] = [];
   let incompletePaths = 0;
 
@@ -129,7 +131,7 @@ function edge(edges: InventoryStoreState["edges"], sourceKind: NodeKind, sourceI
 }
 
 export function computeBlastRadius(state: InventoryStoreState, tenantId: string, agentId: string, now: string, freshnessDays: InventoryFreshnessDays | undefined): BlastRadiusReport {
-  const result = findAttackPaths(state, tenantId, agentId);
+  const result = findAttackPaths(state, tenantId, agentId, now, freshnessDays);
   const resources = state.resources.filter((resource) => resource.tenantId === tenantId);
   const sideEffects = state.sideEffects.filter((sideEffect) => sideEffect.tenantId === tenantId);
   const identities = state.identities.filter((identity) => identity.tenantId === tenantId);

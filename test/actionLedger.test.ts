@@ -1,4 +1,5 @@
 import { readFile, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { actionHash, createLocalActionGateway, createSyntheticActionAdapter } from "../src/actions/index.js";
@@ -86,7 +87,67 @@ describe("local action ledger and incident replay", () => {
     expect(state.deletionRequestedAt).toBe("2029-01-01T00:00:00.000Z");
     expect((await ledger.exportTenant(capability)).entries.map((entry) => entry.stage)).toEqual(["retention", "legal_hold", "legal_hold", "deletion_request"]);
   });
+
+  it("marks policy and approval echoes as caller-claimed and reports untracked tenants as not tracked", async () => {
+    await createWorld({ id: "basis-world", seed: "basis-seed" });
+    const gateway = createGateway();
+    const action = actionEnvelope("basis-action", "basis-world");
+    await gateway.submit(action, approvalFor(action), policy());
+    const access = createTestLedgerAccessAuthorizer();
+    const capability = access.issue({ tenantId: "tenant-basis", principalId: "auditor", permissions: ["append", "read", "export"] });
+    const ledger = createLedger(access.authorizer, "basis-ledger.json");
+    await ledger.recordAction(capability, await gateway.inspect("basis-action"));
+    const timeline = await ledger.timeline(capability, "basis-action");
+    expect(timeline.find((entry) => entry.stage === "policy_decision")?.data.basis).toBe("caller_claimed");
+    expect(timeline.find((entry) => entry.stage === "approval")?.data.basis).toBe("caller_claimed");
+    expect(await ledger.verifyTenant(capability)).toMatchObject({ valid: true, tracked: true });
+    expect(await ledger.verifyTenant(access.issue({ tenantId: "tenant-unknown", principalId: "auditor", permissions: ["read"] }))).toEqual({ valid: true, entryCount: 0, headHash: sha256("ghostapi.action-ledger.v1:tenant-unknown"), tracked: false });
+  });
+
+  it("rotates expired tenant history at the entry limit and relinks the surviving chain without breaking integrity", async () => {
+    const access = createTestLedgerAccessAuthorizer();
+    const capability = access.issue({ tenantId: "tenant-rotation", principalId: "records-owner", permissions: ["append", "read", "export"] });
+    const ledger = createLedger(access.authorizer, "rotation-ledger.json");
+    const path = join(process.env.GHOSTAPI_DATA_DIR!, "rotation-ledger.json");
+    const seeded = seedLedgerState("tenant-rotation", 2_000, 1_500);
+    await writeFile(path, JSON.stringify(seeded), "utf8");
+    await createWorld({ id: "rotation-world", seed: "rotation-seed" });
+    const gateway = createGateway();
+    const action = actionEnvelope("rotation-action", "rotation-world");
+    await gateway.submit(action, approvalFor(action), policy());
+    await ledger.recordAction(capability, await gateway.inspect("rotation-action"));
+    const verification = await ledger.verifyTenant(capability);
+    expect(verification).toMatchObject({ valid: true, tracked: true });
+    expect(verification.entryCount).toBeGreaterThan(500);
+    expect(verification.entryCount).toBeLessThan(2_000);
+    const exported = await ledger.exportTenant(capability);
+    expect(exported.entries.some((entry) => entry.actionId === "seed-action-1")).toBe(false);
+    expect(exported.entries.some((entry) => entry.actionId === "seed-action-2000")).toBe(true);
+  });
 });
+
+function seedLedgerState(tenantId: string, count: number, oldCount: number) {
+  const entries = [];
+  let previousHash = sha256(`ghostapi.action-ledger.v1:${tenantId}`);
+  for (let index = 1; index <= count; index += 1) {
+    const base = { schemaVersion: 1, kind: "ghostapi.action-ledger-entry", tenantId, sequence: index, timestamp: index <= oldCount ? "2028-01-01T00:00:00.000Z" : "2029-01-01T00:00:00.000Z", actionId: `seed-action-${index}`, actionHash: "c".repeat(64), stage: "intent" as const, data: { operation: "synthetic.op" }, previousHash };
+    const entryHash = sha256(canonicalJson(base));
+    entries.push({ ...base, entryHash });
+    previousHash = entryHash;
+  }
+  return { schemaVersion: 1, kind: "ghostapi.action-ledger", entries, tenants: [{ tenantId, entryCount: count, headHash: previousHash, retentionDays: 1, legalHold: false }] };
+}
+
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value === "boolean" || typeof value === "string" || typeof value === "number") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (typeof value === "object") return `{${Object.keys(value as Record<string, unknown>).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson((value as Record<string, unknown>)[key])}`).join(",")}}`;
+  throw new Error("Ledger values must be JSON data.");
+}
+
+function sha256(value: string): string {
+  return createHash("sha256").update(value, "utf8").digest("hex");
+}
 
 function createLedger(authorizer: ReturnType<typeof createTestLedgerAccessAuthorizer>["authorizer"], fileName: string) {
   return createLocalActionLedger({ path: join(process.env.GHOSTAPI_DATA_DIR!, fileName), incidentsPath: join(process.env.GHOSTAPI_DATA_DIR!, `incidents-${fileName}`), now: () => new Date("2029-01-01T00:00:00.000Z"), accessAuthorizer: authorizer });

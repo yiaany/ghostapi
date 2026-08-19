@@ -68,6 +68,7 @@ export type InventoryControllerOptions = {
   now?: () => Date;
   operatorAuthorizer?: InventoryOperatorAuthorizer;
   freshnessDays?: InventoryFreshnessDays;
+  evalScenarioExists?: (scenarioId: string) => boolean;
 };
 
 export class LocalInventoryController {
@@ -75,12 +76,14 @@ export class LocalInventoryController {
   private readonly now: () => Date;
   private readonly operatorAuthorizer: InventoryOperatorAuthorizer;
   private readonly freshnessDays: InventoryFreshnessDays | undefined;
+  private readonly evalScenarioExists: ((scenarioId: string) => boolean) | undefined;
 
   constructor(options: InventoryControllerOptions = {}) {
     this.path = options.path ?? getDataPaths().inventoryStore;
     this.now = options.now ?? (() => new Date());
     this.operatorAuthorizer = options.operatorAuthorizer ?? createDisabledInventoryOperatorAuthorizer();
     this.freshnessDays = options.freshnessDays;
+    this.evalScenarioExists = options.evalScenarioExists;
   }
 
   async import(identityValue: unknown, payloadValue: unknown): Promise<ImportSummary> {
@@ -140,6 +143,7 @@ export class LocalInventoryController {
       validateCrossReferences(state, operator.tenantId, imported);
 
       const outcome = upsertEdges(state, operator.tenantId, upserted, payload, operator.principalId, now, before);
+      this.pruneStaleEdges(state, operator.tenantId, now);
       this.assertStoreBounds(state);
       state.importRuns.push({
         schemaVersion: 1,
@@ -157,6 +161,7 @@ export class LocalInventoryController {
         edgesRefreshed: outcome.edgesRefreshed,
         status: "completed"
       });
+      this.rotateImportRuns(state, operator.tenantId);
       return { runId, importedAt: now, digest, recordCounts: counts, edgesCreated: outcome.edgesCreated, edgesRefreshed: outcome.edgesRefreshed };
     });
   }
@@ -182,8 +187,11 @@ export class LocalInventoryController {
         const prior = previous.get(findingKey(finding));
         const matchingRemediation = appliedRemediations.find((remediation) => remediation.findingId === finding.findingId && remediation.targetKind === finding.targetKind && remediation.targetId === finding.targetId);
         if (matchingRemediation !== undefined) {
-          resolved += 1;
-          return { ...finding, status: "resolved" as const, resolvedAt: matchingRemediation.appliedAt, remediationId: matchingRemediation.remediationId };
+          if (this.isRemediationEffective(state, operator.tenantId, matchingRemediation)) {
+            resolved += 1;
+            return { ...finding, status: "resolved" as const, resolvedAt: matchingRemediation.appliedAt, remediationId: matchingRemediation.remediationId };
+          }
+          return finding;
         }
         if (prior !== undefined && prior.status === "resolved") {
           return { ...finding, status: "resolved" as const, resolvedAt: prior.resolvedAt, ...(prior.remediationId === undefined ? {} : { remediationId: prior.remediationId }) };
@@ -205,7 +213,7 @@ export class LocalInventoryController {
   async attackPaths(identityValue: unknown, agentId: string): Promise<AttackPathResult> {
     const operator = await this.authorize(identityValue, "inventory.inspect");
     const state = await this.read();
-    return findAttackPaths(state, operator.tenantId, safeIdentifier(agentId, "Agent id"));
+    return findAttackPaths(state, operator.tenantId, safeIdentifier(agentId, "Agent id"), this.timestamp(), this.freshnessDays);
   }
 
   async blastRadius(identityValue: unknown, agentId: string): Promise<BlastRadiusReport> {
@@ -245,6 +253,7 @@ export class LocalInventoryController {
         for (const scope of reduced) if (!credential.grantScopes.includes(scope)) throw new InventoryError("Reduced scopes must be a subset of the current grant scopes; permissions are never expanded.");
         if (reduced.length >= credential.grantScopes.length) throw new InventoryError("reduce_scope must remove at least one scope; permissions are never expanded.");
       }
+      if (proposal.kind === "create_eval" && this.evalScenarioExists !== undefined && !this.evalScenarioExists(proposal.evalScenarioId!)) throw new InventoryError("Eval scenario was not found for create_eval remediation.");
       if (state.remediations.length >= INVENTORY_LIMITS.maxRemediations) throw new InventoryError("Remediation limit was reached.");
       const remediationId = `remediation-${randomUUID().replace(/-/g, "").slice(0, 32)}`;
       const record = {
@@ -383,7 +392,14 @@ export class LocalInventoryController {
       : targetKind === "resource" ? state.resources.some((record) => record.tenantId === tenantId && record.resourceId === targetId)
       : targetKind === "side_effect" ? state.sideEffects.some((record) => record.tenantId === tenantId && record.sideEffectId === targetId)
       : targetKind === "credential" ? state.credentials.some((record) => record.tenantId === tenantId && record.credentialId === targetId)
-      : targetKind === "environment" ? true
+      : targetKind === "environment" ? (
+          state.agents.some((record) => record.tenantId === tenantId && record.environmentIds.includes(targetId)) ||
+          state.identities.some((record) => record.tenantId === tenantId && record.environmentIds.includes(targetId)) ||
+          state.providers.some((record) => record.tenantId === tenantId && record.environmentIds.includes(targetId)) ||
+          state.resources.some((record) => record.tenantId === tenantId && record.environmentIds.includes(targetId)) ||
+          state.credentials.some((record) => record.tenantId === tenantId && record.environmentIds.includes(targetId)) ||
+          state.policies.some((record) => record.tenantId === tenantId && record.environmentIds.includes(targetId))
+        )
       : targetKind === "policy" ? state.policies.some((record) => record.tenantId === tenantId && record.policyId === targetId)
       : false;
     if (!exists) throw new InventoryError(`Remediation target ${targetKind} ${targetId} does not exist for the tenant.`);
@@ -391,6 +407,70 @@ export class LocalInventoryController {
 
   private assertStoreBounds(state: InventoryStoreState): void {
     if (state.edges.length > INVENTORY_LIMITS.maxEdges) throw new InventoryError("Inventory graph edge limit was reached.");
+    if (state.findings.length > INVENTORY_LIMITS.maxFindings) throw new InventoryError("Inventory finding limit was reached.");
+  }
+
+  private pruneStaleEdges(state: InventoryStoreState, tenantId: string, now: string): void {
+    const normalized = normalizeFreshnessDays(this.freshnessDays);
+    const staleBeforeMs = Date.parse(now) - normalized.edgeStaleDays * 24 * 60 * 60 * 1000;
+    state.edges = state.edges.filter((edge) => edge.tenantId !== tenantId || Date.parse(edge.lastSeenAt) >= staleBeforeMs);
+  }
+
+  private rotateImportRuns(state: InventoryStoreState, tenantId: string): void {
+    const tenantRuns = state.importRuns.filter((run) => run.tenantId === tenantId);
+    if (tenantRuns.length <= INVENTORY_LIMITS.maxImports) return;
+    const excess = tenantRuns.length - INVENTORY_LIMITS.maxImports;
+    const oldestRunIds = new Set(
+      [...tenantRuns].sort((a, b) => Date.parse(a.importedAt) - Date.parse(b.importedAt)).slice(0, excess).map((run) => run.runId)
+    );
+    state.importRuns = state.importRuns.filter((run) => !oldestRunIds.has(run.runId));
+  }
+
+  private isRemediationEffective(state: InventoryStoreState, tenantId: string, remediation: InventoryStoreState["remediations"][number]): boolean {
+    if (remediation.kind === "reduce_scope") {
+      if (remediation.targetKind !== "credential") return false;
+      const credential = state.credentials.find((candidate) => candidate.tenantId === tenantId && candidate.credentialId === remediation.targetId);
+      const reduced = remediation.result?.reducedScopes;
+      if (credential === undefined || reduced === undefined) return false;
+      return credential.grantScopes.every((scope) => reduced.includes(scope));
+    }
+    if (remediation.kind === "revoke") {
+      if (remediation.targetKind !== "credential") return false;
+      const credential = state.credentials.find((candidate) => candidate.tenantId === tenantId && candidate.credentialId === remediation.targetId);
+      return credential !== undefined && credential.status === "revoked";
+    }
+    if (remediation.kind === "assign_owner") {
+      const ownerId = remediation.result?.ownerId;
+      if (ownerId === undefined) return false;
+      if (remediation.targetKind === "agent") {
+        const record = state.agents.find((candidate) => candidate.tenantId === tenantId && candidate.agentId === remediation.targetId);
+        return record !== undefined && record.ownerId === ownerId;
+      }
+      if (remediation.targetKind === "provider") {
+        const record = state.providers.find((candidate) => candidate.tenantId === tenantId && candidate.providerId === remediation.targetId);
+        return record !== undefined && record.ownerId === ownerId;
+      }
+      if (remediation.targetKind === "resource") {
+        const record = state.resources.find((candidate) => candidate.tenantId === tenantId && candidate.resourceId === remediation.targetId);
+        return record !== undefined && record.ownerId === ownerId;
+      }
+      if (remediation.targetKind === "credential") {
+        const record = state.credentials.find((candidate) => candidate.tenantId === tenantId && candidate.credentialId === remediation.targetId);
+        return record !== undefined && record.ownerId === ownerId;
+      }
+      return false;
+    }
+    if (remediation.kind === "onboard_through_gateway") {
+      if (remediation.targetKind !== "agent") return false;
+      const record = state.agents.find((candidate) => candidate.tenantId === tenantId && candidate.agentId === remediation.targetId);
+      return record !== undefined && record.gatewayManaged === true;
+    }
+    if (remediation.kind === "create_eval") {
+      const scenarioId = remediation.result?.evalScenarioId;
+      if (scenarioId === undefined) return false;
+      return this.evalScenarioExists === undefined ? true : this.evalScenarioExists(scenarioId);
+    }
+    return false;
   }
 
   private async read(): Promise<InventoryStoreState> {
