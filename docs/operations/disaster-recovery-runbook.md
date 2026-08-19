@@ -45,6 +45,7 @@ Restore refuses:
 - A backup whose manifest was not verified at creation time.
 - Any manifest entry path that escapes the backup root (path traversal).
 - A target that is the backup source itself or inside it.
+- A target directory that is not empty (restore copies into a fresh directory).
 - Any entry whose bytes no longer match the manifest (tamper detection).
 
 ## Verification Steps After Restore

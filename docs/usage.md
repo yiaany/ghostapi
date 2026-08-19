@@ -157,7 +157,7 @@ const result = await ledger.replayIncidentFixture(tenantAudit, incident.fixture)
 
 The pipeline creates a deterministic synthetic world and one sanitized, sequence-strict local scenario bundle. It does not open a network connection, call a provider, reuse an original credential, or copy an action payload into the ledger. An ambiguous or unverified result reproduces as `409 requires_reconciliation`, never as success. Add the generated `*.fixture.json` and `*.bundle.json` to a normal Vitest/CI fixture test to make the incident a regression check.
 
-Retention is intentionally conservative: a recorded retention value does not automatically prune the chain; local legal hold blocks deletion requests; and a deletion request is only an auditable request, not an erasure or compliance claim. See the [action-ledger and incident-replay threat model](security/action-ledger-incident-replay-threat-model.md).
+Retention is per-tenant and opt-in: a tenant with a configured `retentionDays` is bounded by the 2,000-entry store cap — when the cap is reached, entries older than the retention window are rotated out and the tenant's chain is relinked so verification still passes. A tenant without a retention policy, and any tenant on a local legal hold, is never rotated. Local legal hold blocks deletion requests, and a deletion request is only an auditable request, not an erasure or compliance claim. See the [action-ledger and incident-replay threat model](security/action-ledger-incident-replay-threat-model.md).
 
 Use the public API to construct the exact action and approval hash, then keep the JSON as reviewed artifacts:
 
@@ -430,7 +430,7 @@ await controller.recordSample({ metric: "availability", ok: true, runId: "run-1"
 const report = await controller.evaluate({ identity: operator });
 ```
 
-Recording requires the record capability; configuring/evaluating requires an authenticated operator. Samples are trimmed to the evaluation window and capped per metric.
+Recording requires the record capability; configuring/evaluating requires an authenticated operator. Samples are trimmed to the evaluation window, capped per metric, and recorded in bounded batches of at most 1,000 per call. Latency SLIs only count samples that report `ok`.
 
 ### Reconciliation
 
@@ -466,7 +466,7 @@ const backup = await backupRuntime({ destinationDir: ".ghostapi/reliability/back
 await restoreRuntimeBackup({ sourceDir: backup.path, targetDir: ".ghostapi-restored" });
 ```
 
-Backups verify every file against a sha256 manifest, refuse to overwrite, and exclude `cache`, `runs`, `backups`, lock and temp files, and symbolic links. Restore re-verifies everything and rejects tampered or path-escaping manifests. See the [disaster-recovery runbook](operations/disaster-recovery-runbook.md).
+Backups verify every file against a sha256 manifest, refuse to overwrite, and exclude only the canonical `cache`/`backups` data locations, top-level `runs`, lock and temp files, and symbolic links — nested folders named `cache` or `backups` are backed up normally. Restore re-verifies everything, rejects tampered or path-escaping manifests, and refuses a non-empty target directory. See the [disaster-recovery runbook](operations/disaster-recovery-runbook.md).
 
 ## Agent Inventory And Attack-Path Graph
 
