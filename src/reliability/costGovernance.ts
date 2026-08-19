@@ -106,7 +106,7 @@ export type CostStoreState = {
 };
 
 export type CostOperatorPermission = "cost.record" | "cost.configure" | "cost.inspect" | "cost.acknowledge";
-export type CostOperator = { id: string; principalId: string; permissions: readonly CostOperatorPermission[] };
+export type CostOperator = { id: string; principalId: string; permissions: readonly CostOperatorPermission[]; tenantId?: string };
 export interface CostOperatorAuthorizer { authenticate(identity: unknown): Promise<CostOperator>; }
 
 export type CostControllerOptions = {
@@ -149,6 +149,7 @@ export class LocalCostGovernance {
     await this.authorize(input.identity, "cost.record");
     const record = validateRecordInput(input.record, this.timestamp());
     return this.mutate((state) => {
+      if (state.records.some((candidate) => candidate.tenantId === record.tenantId && candidate.actionId === record.actionId)) throw new CostGovernanceError("Cost record already exists for this tenant and action.");
       if (state.records.length >= MAX_RECORDS) throw new CostGovernanceError("Cost record limit was reached; export and retention review are required.");
       state.records.push(record);
       return clone(record);
@@ -181,41 +182,45 @@ export class LocalCostGovernance {
   }
 
   async report(input: { identity: unknown; windowMs?: number; projectionDays?: number; runId?: string }): Promise<CostReport> {
-    await this.authorize(input.identity, "cost.inspect");
+    const operator = await this.authorize(input.identity, "cost.inspect");
     const windowMs = input.windowMs === undefined ? 30 * 24 * 60 * 60 * 1000 : boundedMs(input.windowMs, "Cost report window");
     const projectionDays = input.projectionDays === undefined ? 7 : boundedDays(input.projectionDays, "Cost projection days");
     const now = this.timestamp();
     const runId = input.runId === undefined ? `cost-${randomUUID().replace(/-/g, "").slice(0, 32)}` : identifier(input.runId, "Cost report run id");
     const state = await this.read();
-    const windowStart = new Date(Date.parse(now) - windowMs).toISOString();
-    const inWindow = state.records.filter((record) => Date.parse(record.recordedAt) >= Date.parse(windowStart) && Date.parse(record.recordedAt) <= Date.parse(now) + 1_000);
+    const inWindow = tenantScoped(state.records, operator.tenantId).filter((record) => Date.parse(record.recordedAt) >= Date.parse(now) - windowMs && Date.parse(record.recordedAt) <= Date.parse(now) + 1_000);
     const totals = sumAmounts(inWindow.map((record) => record.amounts));
     const attribution = aggregateAttribution(inWindow);
     const evaluations = state.budgets.map((budget) => evaluateBudget(budget, inWindow, now));
-    const alerts = await this.applyAlerts(evaluations, now);
+    const alerts = deriveAlerts(state.alerts, evaluations, state.budgets, now);
     const forecast = buildForecast(inWindow, projectionDays, now, windowMs);
     return {
       schemaVersion: 1,
       kind: "ghostapi.cost-report",
-      tenantId: "ghostapi-local",
+      tenantId: operator.tenantId ?? "ghostapi-local",
       generatedAt: now,
       runId,
       windowMs,
-      windowStart,
+      windowStart: new Date(Date.parse(now) - windowMs).toISOString(),
       windowEnd: now,
       source: "Local cost records are synthetic action metadata (counts and token estimates). They are not provider invoices and must be calibrated against real billing during the pilot.",
       totals,
       attribution,
       budgets: evaluations,
-      alerts,
+      alerts: clone(alerts),
       forecast
     };
   }
 
   async listAlerts(input: { identity: unknown }): Promise<CostAlert[]> {
     await this.authorize(input.identity, "cost.inspect");
-    const state = await this.read();
-    return clone(state.alerts);
+    const now = this.timestamp();
+    return this.mutate((state) => {
+      const inWindow = state.records.filter((record) => Date.parse(record.recordedAt) >= Date.parse(now) - MAX_WINDOW_MS);
+      const evaluations = state.budgets.map((budget) => evaluateBudget(budget, inWindow, now));
+      state.alerts = deriveAlerts(state.alerts, evaluations, state.budgets, now);
+      return clone(state.alerts);
+    });
   }
 
   async acknowledgeAlert(input: { identity: unknown; alertId: string }): Promise<CostAlert> {
@@ -230,33 +235,6 @@ export class LocalCostGovernance {
       alert.acknowledgedAt = this.timestamp();
       return clone(alert);
     });
-  }
-
-  private async applyAlerts(evaluations: CostBudgetEvaluation[], now: string): Promise<CostAlert[]> {
-    if (evaluations.every((evaluation) => evaluation.status === "within")) return [];
-    const changed: CostAlert[] = [];
-    await this.mutate((state) => {
-      for (const evaluation of evaluations) {
-        if (evaluation.status !== "exceeded") continue;
-        const existing = state.alerts.find((candidate) => candidate.budgetId === evaluation.id && candidate.status === "open");
-        const windowStart = new Date(Date.parse(now) - evaluation.windowMs).toISOString();
-        const payload = { budgetId: evaluation.id, scope: evaluation.scope, windowMs: evaluation.windowMs, windowStart, windowEnd: now, exceeded: evaluation.exceeded };
-        if (existing !== undefined) {
-          Object.assign(existing, payload);
-          changed.push(existing);
-        } else {
-          if (state.alerts.length >= MAX_ALERTS) {
-            const removable = state.alerts.findIndex((candidate) => candidate.status === "acknowledged");
-            if (removable === -1) throw new CostGovernanceError("Cost alert limit was reached.");
-            state.alerts.splice(removable, 1);
-          }
-          const alert: CostAlert = { id: `alert-${randomUUID().replace(/-/g, "").slice(0, 32)}`, ...payload, created: now, status: "open" };
-          state.alerts.push(alert);
-          changed.push(alert);
-        }
-      }
-    });
-    return changed.map((alert) => clone(alert));
   }
 
   private async authorize(identity: unknown, permission: CostOperatorPermission): Promise<CostOperator> {
@@ -461,6 +439,33 @@ function evaluateBudget(budget: CostBudget, records: CostRecord[], now: string):
   return { id: budget.id, scope: budget.scope, windowMs: budget.windowMs, limits: budget.limits, totals, status: exceeded.length === 0 ? "within" : "exceeded", exceeded };
 }
 
+function tenantScoped(records: CostRecord[], tenantId: string | undefined): CostRecord[] {
+  return tenantId === undefined ? records : records.filter((record) => record.tenantId === tenantId);
+}
+
+function deriveAlerts(existing: CostAlert[], evaluations: CostBudgetEvaluation[], budgets: CostBudget[], now: string): CostAlert[] {
+  if (evaluations.every((evaluation) => evaluation.status === "within")) return existing;
+  const alerts = [...existing];
+  for (const evaluation of evaluations) {
+    if (evaluation.status !== "exceeded") continue;
+    const budget = budgets.find((candidate) => candidate.id === evaluation.id);
+    if (budget !== undefined && !budget.alertOnExceed) continue;
+    const current = alerts.find((candidate) => candidate.budgetId === evaluation.id && candidate.status === "open");
+    const payload = { budgetId: evaluation.id, scope: evaluation.scope, windowMs: evaluation.windowMs, windowStart: new Date(Date.parse(now) - evaluation.windowMs).toISOString(), windowEnd: now, exceeded: evaluation.exceeded };
+    if (current !== undefined) {
+      Object.assign(current, payload);
+    } else {
+      if (alerts.length >= MAX_ALERTS) {
+        const removable = alerts.findIndex((candidate) => candidate.status === "acknowledged");
+        if (removable === -1) throw new CostGovernanceError("Cost alert limit was reached.");
+        alerts.splice(removable, 1);
+      }
+      alerts.push({ id: `alert-${randomUUID().replace(/-/g, "").slice(0, 32)}`, ...payload, created: now, status: "open" });
+    }
+  }
+  return alerts;
+}
+
 function aggregateAttribution(records: CostRecord[]): Array<{ dimension: CostDimension; value: string; totals: CostAmounts }> {
   const result: Array<{ dimension: CostDimension; value: string; totals: CostAmounts }> = [];
   for (const dimension of COST_DIMENSIONS) {
@@ -546,13 +551,13 @@ function sumAmounts(values: CostAmounts[]): CostAmounts {
 
 function validateOperator(value: unknown): CostOperator {
   const operator = object(value, "Cost operator is invalid.");
-  exactKeys(operator, ["id", "principalId", "permissions"], "Cost operator");
+  exactKeys(operator, ["id", "principalId", "permissions", "tenantId"], "Cost operator", ["tenantId"]);
   const permissions = array(operator.permissions, "Cost operator permissions", 8).map((permission) => {
     if (permission !== "cost.record" && permission !== "cost.configure" && permission !== "cost.inspect" && permission !== "cost.acknowledge") throw new CostGovernanceError("Cost operator permission is invalid.");
     return permission as CostOperatorPermission;
   });
   unique(permissions, "Cost operator permissions");
-  return { id: identifier(operator.id, "Cost operator id"), principalId: identifier(operator.principalId, "Cost operator principal id"), permissions };
+  return { id: identifier(operator.id, "Cost operator id"), principalId: identifier(operator.principalId, "Cost operator principal id"), permissions, ...(operator.tenantId === undefined ? {} : { tenantId: identifier(operator.tenantId, "Cost operator tenant id") }) };
 }
 
 function boundedMs(value: unknown, label: string): number {

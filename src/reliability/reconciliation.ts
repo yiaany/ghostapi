@@ -5,7 +5,7 @@ import { getDataPaths } from "../config/dataPaths.js";
 import type { LedgerEntry, LocalActionLedger } from "../ledger/index.js";
 import { sanitizeSecretString } from "../security/secrets.js";
 import { atomicWriteJson, ensurePrivateDirectory, withFileLock } from "../storage/fileStore.js";
-import { inspectWorld } from "../worlds/index.js";
+import { inspectWorld, SyntheticWorldError } from "../worlds/index.js";
 import { createSloRecordIdentity, type LocalSloController, type SloMetric } from "./slo.js";
 
 const SCHEMA_VERSION = 1;
@@ -43,7 +43,7 @@ export type ReconciliationSli = {
   duplicatePrevention: { measured: number; ok: number; okRateBps: number };
   receiptVerification: { measured: number; ok: number; okRateBps: number };
   availability: { measured: number; ok: number; okRateBps: number };
-  executionLatency: { measured: number; avgMs: number; p95Ms: number; p99Ms: number };
+  executionLatency: { measured: number; avgMs: number; p95Ms: number; p99Ms: number; basis: "ledger_record_interval" };
 };
 
 export type ReconciliationReport = {
@@ -126,7 +126,8 @@ export class LocalReconciliationService {
     this.operatorAuthorizer = options.operatorAuthorizer ?? createDisabledReconciliationOperatorAuthorizer();
   }
 
-  async runReconciliation(): Promise<ReconciliationReport> {
+  async runReconciliation(input: { identity: unknown }): Promise<ReconciliationReport> {
+    await this.authorize(input.identity, "reconciliation.manage");
     const runId = `recon-${randomUUID().replace(/-/g, "").slice(0, 32)}`;
     const now = this.timestamp();
     let exportResult;
@@ -304,7 +305,7 @@ export function createWorldStateReconciliationProvider(resolveWorld: (actionId: 
         const world = await inspectWorld(input.worldId);
         return { receipts: world.state.receipts.map((receipt) => ({ actionId: receipt.actionId })) };
       } catch (error) {
-        if (error instanceof Error && error.message.includes("was not found")) return null;
+        if (error instanceof SyntheticWorldError && error.code === "WORLD_NOT_FOUND") return null;
         throw error;
       }
     }
@@ -420,7 +421,7 @@ function aggregateSli(results: ReconciliationActionResult[], measurements: Array
     duplicatePrevention: { ...duplicatePrevention, okRateBps: rateBps(duplicatePrevention.ok, duplicatePrevention.measured) },
     receiptVerification: { ...receiptVerification, okRateBps: rateBps(receiptVerification.ok, receiptVerification.measured) },
     availability: { ...availability, okRateBps: rateBps(availability.ok, availability.measured) },
-    executionLatency: { measured: latencies.length, avgMs: latencies.length === 0 ? 0 : latencies.reduce((sum, value) => sum + value, 0) / latencies.length, p95Ms: percentile(95), p99Ms: percentile(99) }
+    executionLatency: { measured: latencies.length, avgMs: latencies.length === 0 ? 0 : latencies.reduce((sum, value) => sum + value, 0) / latencies.length, p95Ms: percentile(95), p99Ms: percentile(99), basis: "ledger_record_interval" }
   };
 }
 

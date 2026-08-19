@@ -4,6 +4,7 @@ import {
   createDisabledInventoryOperatorAuthorizer,
   createLocalInventoryController,
   createTestInventoryOperatorAuthorizer,
+  INVENTORY_LIMITS,
   validateImportPayload
 } from "../src/inventory/index.js";
 import type {
@@ -232,6 +233,104 @@ describe("local inventory controller", () => {
     await expect(controller.import(operator, { schemaVersion: 1, kind: "ghostapi.inventory-import", source: { sourceId: "bad-source", sourceType: "config", sourceName: "Config" }, counters: { preventedEgressAttempts: 1 } })).rejects.toThrow(/Counters are only allowed/);
     expect(() => validateImportPayload(tenantAPayload())).not.toThrow();
     await expect(controller.import(operator, { schemaVersion: 1, kind: "ghostapi.inventory-import", source: { sourceId: "bad-source", sourceType: "cloud", sourceName: "Cloud" }, agents: [{ agentId: "agent-bad", name: "Bad", gatewayManaged: true, killSwitchEnabled: true, identityIds: ["identity-missing"], environmentIds: [] }] })).rejects.toThrow(/unknown identity/);
+  });
+
+  it("excludes stale edges from attack paths and prunes them on import", async () => {
+    const { authorizer, issue } = createTestInventoryOperatorAuthorizer();
+    const operator = issue({ id: "invop", principalId: "invop-one", tenantId: "tenant-a", permissions: ["inventory.import", "inventory.inspect"] });
+    let clock = new Date(NOW);
+    const controller = createLocalInventoryController({ path: inventoryPath("inv-stale.json"), now: () => clock, operatorAuthorizer: authorizer, freshnessDays: { edgeStaleDays: 90 } });
+    await controller.import(operator, tenantAPayload());
+    const fresh = await controller.attackPaths(operator, "agent-order");
+    expect(fresh.paths.some((path) => path.complete && path.edges.length > 0)).toBe(true);
+
+    clock = new Date("2029-04-11T00:00:00.000Z");
+    const aged = await controller.attackPaths(operator, "agent-order");
+    expect(aged.paths.filter((path) => path.complete).every((path) => path.edges.length === 0)).toBe(true);
+
+    await controller.import(operator, { schemaVersion: 1, kind: "ghostapi.inventory-import", source: { sourceId: "ci-refresh", sourceType: "ci", sourceName: "CI refresh" } });
+    const graph = await controller.graph(operator);
+    expect(graph).toEqual([]);
+  });
+
+  it("reopens a finding when an applied remediation stops being effective", async () => {
+    const { controller, operator } = setup({ permissions: ["inventory.import", "inventory.analyze", "inventory.remediate", "inventory.inspect"] });
+    await controller.import(operator, tenantAPayload());
+    await controller.analyze(operator);
+    const snapshot = await controller.inspect(operator);
+    const excessive = snapshot.findings.find((finding) => finding.kind === "excessive_permissions");
+    expect(excessive).toBeDefined();
+    const proposed = await controller.proposeRemediation(operator, {
+      findingId: excessive!.findingId,
+      kind: "reduce_scope",
+      targetKind: "credential",
+      targetId: "cred-stripe",
+      rationale: "Drop the unused admin scope.",
+      reducedScopes: ["read", "charge"]
+    });
+    await controller.applyRemediation(operator, proposed.remediationId);
+    expect((await controller.inspect(operator)).findings.find((finding) => finding.kind === "excessive_permissions")?.status).toBe("resolved");
+    await controller.analyze(operator);
+    expect((await controller.inspect(operator)).findings.find((finding) => finding.kind === "excessive_permissions")).toBeUndefined();
+
+    await controller.import(operator, tenantAPayload());
+    await controller.analyze(operator);
+    expect((await controller.inspect(operator)).findings.find((finding) => finding.kind === "excessive_permissions")?.status).toBe("open");
+  });
+
+  it("verifies eval scenarios exist before proposing create_eval remediation", async () => {
+    const { authorizer, issue } = createTestInventoryOperatorAuthorizer();
+    const operator = issue({ id: "invop", principalId: "invop-one", tenantId: "tenant-a", permissions: ["inventory.import", "inventory.analyze", "inventory.remediate", "inventory.inspect"] });
+    const controller = createLocalInventoryController({ path: inventoryPath("inv-eval.json"), now: () => new Date(NOW), operatorAuthorizer: authorizer, evalScenarioExists: (scenarioId) => scenarioId === "eval-safety-baseline" });
+    await controller.import(operator, tenantAPayload());
+    await controller.analyze(operator);
+    const evidence = (await controller.inspect(operator)).findings.find((finding) => finding.kind === "missing_evidence");
+    await expect(controller.proposeRemediation(operator, {
+      findingId: evidence!.findingId,
+      kind: "create_eval",
+      targetKind: "agent",
+      targetId: "agent-legacy",
+      rationale: "Require an evaluation before rollout.",
+      evalScenarioId: "eval-missing"
+    })).rejects.toThrow("was not found");
+    const proposed = await controller.proposeRemediation(operator, {
+      findingId: evidence!.findingId,
+      kind: "create_eval",
+      targetKind: "agent",
+      targetId: "agent-legacy",
+      rationale: "Require an evaluation before rollout.",
+      evalScenarioId: "eval-safety-baseline"
+    });
+    expect(proposed.status).toBe("proposed");
+  });
+
+  it("rotates import runs beyond the per-tenant cap", async () => {
+    const { authorizer, issue } = createTestInventoryOperatorAuthorizer();
+    const operator = issue({ id: "invop", principalId: "invop-one", tenantId: "tenant-a", permissions: ["inventory.import", "inventory.inspect"] });
+    const controller = createLocalInventoryController({ path: inventoryPath("inv-rotation.json"), now: () => new Date(NOW), operatorAuthorizer: authorizer });
+    for (let index = 0; index < INVENTORY_LIMITS.maxImports + 5; index += 1) {
+      await controller.import(operator, { schemaVersion: 1, kind: "ghostapi.inventory-import", source: { sourceId: "src-rotate", sourceType: "ci", sourceName: "CI rotation" } });
+    }
+    const snapshot = await controller.inspect(operator);
+    expect(snapshot.importRuns.length).toBeLessThanOrEqual(INVENTORY_LIMITS.maxImports);
+  }, 30000);
+
+  it("accepts an environment remediation target that is actually referenced", async () => {
+    const { controller, operator } = setup({ permissions: ["inventory.import", "inventory.analyze", "inventory.remediate", "inventory.inspect"] });
+    await controller.import(operator, tenantAPayloadWith({ agents: [...tenantAPayload().agents!, { agentId: "agent-staging", name: "Staging bot", environmentIds: ["staging"], gatewayManaged: true, killSwitchEnabled: true, identityIds: [] }] }));
+    await controller.analyze(operator);
+    const snapshot = await controller.inspect(operator);
+    const drift = snapshot.findings.find((finding) => finding.kind === "policy_drift" && finding.targetKind === "environment");
+    expect(drift).toBeDefined();
+    const proposed = await controller.proposeRemediation(operator, {
+      findingId: drift!.findingId,
+      kind: "assign_owner",
+      targetKind: "environment",
+      targetId: "staging",
+      rationale: "Record an owner for the staging environment.",
+      ownerId: "sre-one"
+    });
+    expect(proposed.status).toBe("proposed");
   });
 });
 

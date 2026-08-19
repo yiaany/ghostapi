@@ -49,6 +49,39 @@ describe("local cost governance", () => {
     await controller.removeBudget({ identity: operator, budgetId: "budget.requests" });
     expect((await controller.report({ identity: operator })).budgets).toHaveLength(0);
   });
+
+  it("rejects duplicate cost records per tenant and action, and scopes reports and alerts by tenant", async () => {
+    const { authorizer, issue } = createTestCostOperatorAuthorizer();
+    const tenantA = issue({ id: "finops-a", principalId: "finops-a-one", tenantId: "tenant-a", permissions: ["cost.record", "cost.configure", "cost.inspect"] });
+    const tenantB = issue({ id: "finops-b", principalId: "finops-b-one", tenantId: "tenant-b", permissions: ["cost.record", "cost.configure", "cost.inspect"] });
+    const controller = createLocalCostGovernance({ path: costPath("costs-tenants.json"), now: () => new Date("2029-01-01T00:00:00.000Z"), operatorAuthorizer: authorizer });
+
+    const attribution = { agentId: "agent-one", projectId: "checkout-project", provider: "ghostapi-synthetic", actionClass: "subscription_failure", workflowId: "recovery-workflow" };
+    await controller.recordCost({ identity: tenantA, record: { tenantId: "tenant-a", runId: "run-1", actionId: "action-1", attribution, amounts: { monetaryAmountMinor: 1_000, requests: 10, messages: 0, mutations: 0, deletes: 0, tokenCost: 0 } } });
+    await expect(controller.recordCost({ identity: tenantA, record: { tenantId: "tenant-a", runId: "run-2", actionId: "action-1", attribution, amounts: { monetaryAmountMinor: 1_000, requests: 10, messages: 0, mutations: 0, deletes: 0, tokenCost: 0 } } })).rejects.toThrow("already exists");
+    await controller.recordCost({ identity: tenantB, record: { tenantId: "tenant-b", runId: "run-1", actionId: "action-1", attribution, amounts: { monetaryAmountMinor: 5_000, requests: 50, messages: 0, mutations: 0, deletes: 0, tokenCost: 0 } } });
+
+    const reportA = await controller.report({ identity: tenantA });
+    expect(reportA.tenantId).toBe("tenant-a");
+    expect(reportA.totals.requests).toBe(10);
+    const reportB = await controller.report({ identity: tenantB });
+    expect(reportB.totals.requests).toBe(50);
+  });
+
+  it("keeps report pure and only persists alerts when alerts are listed", async () => {
+    const { authorizer, issue } = createTestCostOperatorAuthorizer();
+    const operator = issue({ id: "finops", principalId: "finops-one", permissions: ["cost.record", "cost.configure", "cost.inspect"] });
+    const controller = createLocalCostGovernance({ path: costPath("costs-pure.json"), now: () => new Date("2029-01-01T00:00:00.000Z"), operatorAuthorizer: authorizer });
+    const attribution = { agentId: "agent-one", projectId: "checkout-project", provider: "ghostapi-synthetic", actionClass: "subscription_failure", workflowId: "recovery-workflow" };
+    await controller.recordCost({ identity: operator, record: { tenantId: "tenant-a", runId: "run-1", actionId: "action-1", attribution, amounts: { monetaryAmountMinor: 0, requests: 50, messages: 0, mutations: 0, deletes: 0, tokenCost: 500 } } });
+    await controller.configureBudget({ identity: operator, budget: { id: "budget.requests", scope: { dimension: "project", value: "checkout-project" }, windowMs: 24 * 60 * 60 * 1000, limits: { requests: 35 }, alertOnExceed: true } });
+    await controller.configureBudget({ identity: operator, budget: { id: "budget.silent", scope: { dimension: "project", value: "checkout-project" }, windowMs: 24 * 60 * 60 * 1000, limits: { tokenCost: 1 }, alertOnExceed: false } });
+
+    const report = await controller.report({ identity: operator });
+    expect(report.alerts.length).toBeGreaterThan(0);
+    expect(report.budgets.some((budget) => budget.id === "budget.silent" && budget.status === "exceeded")).toBe(true);
+    expect((await controller.listAlerts({ identity: operator })).some((alert) => alert.budgetId === "budget.silent")).toBe(false);
+  });
 });
 
 function costPath(fileName: string): string {

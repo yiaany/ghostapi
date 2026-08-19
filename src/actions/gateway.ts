@@ -307,7 +307,7 @@ export class LocalActionGateway {
       try {
         execution = await this.adapter.execute(record.envelope, { commit: safety.commit });
       } catch {
-        await safety.complete({ success: false, latencyMs: 0, reason: "synthetic execution failed or was stopped" }).catch(() => undefined);
+        await safety.complete({ success: false, latencyMs: 0, reason: "synthetic execution failed or was stopped" });
         const failed = createReceipt(record, "failed", this.now().toISOString(), undefined, undefined, { code: "execution_error", retrySafe: false });
         appendReceipt(record, failed);
         await writeStoredAction(path, record);

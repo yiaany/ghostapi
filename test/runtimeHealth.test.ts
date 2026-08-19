@@ -87,6 +87,42 @@ describe("runtime health and backup/restore", () => {
     await expect(restoreRuntimeBackup({ sourceDir: backup.path, targetDir: join(root, "reliability", "backups", "dr-restored-four") })).rejects.toThrow("invalid");
   });
 
+  it("reports degraded when the inventory store is corrupt", async () => {
+    const root = process.env.GHOSTAPI_DATA_DIR!;
+    await writeFile(join(root, "inventory.json"), "{ broken", "utf8");
+    const degraded = await checkRuntimeHealth();
+    expect(degraded.ready).toBe(false);
+    expect(degraded.stores.find((store) => store.id === "inventory")?.status).toBe("degraded");
+    await rm(join(root, "inventory.json"), { force: true });
+  });
+
+  it("refuses to restore into a non-empty target directory", async () => {
+    const root = process.env.GHOSTAPI_DATA_DIR!;
+    await createWorld({ id: "dr-world-six", seed: "dr-seed-six" });
+    const backup = await backupRuntime({ destinationDir: join(root, "reliability", "backups", "dr-backup-six") });
+    const occupied = join(root, "reliability", "backups", "dr-restored-occupied");
+    await mkdir(occupied, { recursive: true });
+    await writeFile(join(occupied, "existing.json"), "{}", "utf8");
+    await expect(restoreRuntimeBackup({ sourceDir: backup.path, targetDir: occupied })).rejects.toThrow("non-empty directory");
+  });
+
+  it("excludes only the canonical cache, runs, and backups locations", async () => {
+    const root = process.env.GHOSTAPI_DATA_DIR!;
+    await mkdir(join(root, "cache"), { recursive: true });
+    await mkdir(join(root, "runs"), { recursive: true });
+    await mkdir(join(root, "contracts", "sub", "cache"), { recursive: true });
+    await writeFile(join(root, "cache", "drop.txt"), "drop", "utf8");
+    await writeFile(join(root, "runs", "drop.txt"), "drop", "utf8");
+    await writeFile(join(root, "contracts", "sub", "cache", "keep.txt"), "keep", "utf8");
+    const backup = await backupRuntime({ destinationDir: join(root, "reliability", "backups", "dr-backup-exclusions") });
+    const manifest = JSON.parse(await readFile(join(backup.path, "manifest.json"), "utf8")) as { entries: Array<{ path: string }> };
+    const paths = manifest.entries.map((entry) => entry.path);
+    expect(paths).toContain("contracts/sub/cache/keep.txt");
+    expect(paths).not.toContain("cache/drop.txt");
+    expect(paths).not.toContain("runs/drop.txt");
+    expect(paths.every((path) => !path.startsWith("reliability/backups/"))).toBe(true);
+  });
+
   it("verifies the backup left the source data directory untouched", async () => {
     const root = process.env.GHOSTAPI_DATA_DIR!;
     await createWorld({ id: "dr-world-five", seed: "dr-seed-five" });

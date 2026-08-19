@@ -125,6 +125,57 @@ describe("local safety controller", () => {
     await writeFile(fixture.path, JSON.stringify(state), "utf8");
     await expect(fixture.controller.inspect()).rejects.toThrow("audit record hash is invalid");
   });
+
+  it("expires reserved leases after the lease TTL and reclaims the idempotency key", async () => {
+    const emergency = createTestSafetyEmergencyAuthorizer();
+    const path = join(getDataPaths().root, "safety-lease-ttl.json");
+    let tick = new Date("2026-08-16T12:00:00.000Z");
+    const controller = createLocalSafetyController({ path, now: () => tick, emergencyAuthorizer: emergency.authorizer, leaseTtlMs: 5_000 });
+    const configureOperator = emergency.issue({ id: "configure", principalId: "configure-principal", permissions: ["safety.configure"] });
+    await controller.configureBudget({ identity: configureOperator, budget: budget("requests", { requests: 1 }) });
+
+    const first = await controller.admit(safetyAction("ttl-one"));
+    expect(first.replay).toBe(false);
+    tick = new Date("2026-08-16T12:00:06.000Z");
+    const second = await controller.admit(safetyAction("ttl-two"));
+    expect(second.replay).toBe(false);
+    await expect(first.commit(async () => {})).rejects.toThrow(/lease/);
+    await second.commit(async () => {});
+    await second.complete({ success: true, latencyMs: 1 });
+    tick = new Date("2026-08-16T12:01:07.000Z");
+    const reclaimed = await controller.admit(safetyAction("ttl-one"));
+    expect(reclaimed.replay).toBe(false);
+    const state = await controller.inspect();
+    expect(state.ledger.map((entry) => entry.action.idempotencyKey)).toContain("idem-ttl-one");
+    expect(state.audit.map((record) => record.event)).toContain("action.completed");
+  });
+
+  it("records a complete outcome in the audit chain even when the lease was pruned", async () => {
+    const emergency = createTestSafetyEmergencyAuthorizer();
+    const path = join(getDataPaths().root, "safety-complete-pruned.json");
+    let tick = new Date("2026-08-16T12:00:00.000Z");
+    const controller = createLocalSafetyController({ path, now: () => tick, emergencyAuthorizer: emergency.authorizer, leaseTtlMs: 5_000 });
+    const lease = await controller.admit(safetyAction("pruned"));
+    tick = new Date("2026-08-16T12:00:06.000Z");
+    await controller.admit(safetyAction("other"));
+    await lease.complete({ success: false, latencyMs: 0, reason: "synthetic failure" });
+    expect((await controller.inspect()).audit.map((record) => record.event)).toContain("action.unknown");
+  });
+
+  it("evicts the oldest dead letter instead of failing a kill switch on a full dead-letter queue", async () => {
+    const emergency = createTestSafetyEmergencyAuthorizer();
+    const path = join(getDataPaths().root, "safety-dlq-full.json");
+    const controller = createLocalSafetyController({ path, now: () => new Date("2026-08-16T12:00:00.000Z"), emergencyAuthorizer: emergency.authorizer });
+    const stopOperator = emergency.issue({ id: "stop-operator", principalId: "stop-principal", permissions: ["safety.stop"] });
+    const deadLetters = Array.from({ length: 1_000 }, (_, index) => ({ id: `dead-${index}`, action: safetyAction(`old-${index}`), queuedAt: "2026-08-16T11:59:00.000Z", reason: "seeded", deadLetteredAt: "2026-08-16T11:59:30.000Z" }));
+    const seeded = { schemaVersion: 1, switches: [], budgets: [], circuits: [], ledger: [], queue: [{ id: "queued-1", action: safetyAction("new"), queuedAt: "2026-08-16T11:59:40.000Z" }], deadLetters, auditAnchor: hash("ghostapi.safety.audit.v1"), audit: [] };
+    await writeFile(path, JSON.stringify(seeded), "utf8");
+    await controller.stop({ identity: stopOperator, scope: { kind: "global" }, reason: "drain with a full dead-letter queue" });
+    const evicted = await controller.inspect();
+    expect(evicted.deadLetters).toHaveLength(1_000);
+    expect(evicted.deadLetters.some((item) => item.action.idempotencyKey === "idem-new")).toBe(true);
+    expect(evicted.deadLetters.some((item) => item.action.idempotencyKey === "idem-old-0")).toBe(false);
+  });
 });
 
 function safetyFixture(name: string) {

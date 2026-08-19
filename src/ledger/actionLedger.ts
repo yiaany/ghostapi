@@ -6,7 +6,7 @@ import { type ActionApproval, type ActionEnvelope, type ActionExecutionReceipt, 
 import { createScenarioReplayer, prepareScenarioRecording, validateScenarioBundle, type ScenarioBundle, type ScenarioReplayRequest, writeScenarioBundle } from "../scenarios/scenarioBundle.js";
 import { sanitizeSecretString } from "../security/secrets.js";
 import { atomicWriteJson, ensurePrivateDirectory, withFileLock } from "../storage/fileStore.js";
-import { createWorld, inspectWorld } from "../worlds/index.js";
+import { createWorld, inspectWorld, SyntheticWorldError } from "../worlds/index.js";
 
 const LEDGER_SCHEMA_VERSION = 1;
 const LEDGER_KIND = "ghostapi.action-ledger";
@@ -64,7 +64,7 @@ export type ActionLedgerRecord = {
   credentialGrant?: { grantIdHash: string; credentialVersion: number };
 };
 
-export type LedgerVerification = { valid: true; entryCount: number; headHash: string } | { valid: false; error: string };
+export type LedgerVerification = { valid: true; entryCount: number; headHash: string; tracked: boolean } | { valid: false; error: string };
 
 export type LedgerExport = {
   schemaVersion: 1;
@@ -141,8 +141,8 @@ export class LocalActionLedger {
         reversibility: record.envelope.reversibility
       });
       append("identity", { actorId: record.envelope.actor.id, workloadId: record.envelope.actor.workloadId, actorType: record.envelope.actor.type });
-      append("policy_decision", { policyVersion: record.envelope.policy.version, policyHash: record.envelope.policy.hash, allowed: true });
-      append("approval", { approvalHash: actionApprovalHash(record.approval), approverId: record.approval.approvedBy, status: "approved" });
+      append("policy_decision", { policyVersion: record.envelope.policy.version, policyHash: record.envelope.policy.hash, allowed: true, basis: "caller_claimed" });
+      append("approval", { approvalHash: actionApprovalHash(record.approval), approverId: record.approval.approvedBy, status: "approved", basis: "caller_claimed" });
       append("credential_grant", record.credentialGrant === undefined
         ? { status: "not_used" }
         : { status: "granted", grantIdHash: hash(record.credentialGrant.grantIdHash, "Credential grant reference"), credentialVersion: positiveInteger(record.credentialGrant.credentialVersion, "Credential version") });
@@ -245,7 +245,7 @@ export class LocalActionLedger {
       const world = await inspectWorld(worldId);
       if (world.manifest.seed !== seed) throw new ActionLedgerError("Incident synthetic world id collides with a different deterministic seed.");
     } catch (error) {
-      if (error instanceof Error && error.message.includes("was not found")) await createWorld({ id: worldId, seed, title: `Incident replay ${actionId}` });
+      if (error instanceof SyntheticWorldError && error.code === "WORLD_NOT_FOUND") await createWorld({ id: worldId, seed, title: `Incident replay ${actionId}` });
       else if (error instanceof ActionLedgerError) throw error;
       else throw error;
     }
@@ -432,7 +432,10 @@ function validateTenant(value: unknown): LedgerTenantState {
 
 function appendEntry(state: ActionLedgerState, tenantId: string, actionId: string, actionDigest: string, stage: LedgerStage, data: LedgerEntry["data"], timestampValue: string): LedgerEntry {
   const tenant = getOrCreateTenant(state, tenantId);
-  if (state.entries.length >= MAX_ENTRIES) throw new ActionLedgerError(`Action ledger entry limit of ${MAX_ENTRIES} was reached; export and controlled retention review are required.`);
+  if (state.entries.length >= MAX_ENTRIES) {
+    rotateForRetention(state, timestampValue);
+    if (state.entries.length >= MAX_ENTRIES) throw new ActionLedgerError(`Action ledger entry limit of ${MAX_ENTRIES} was reached; export and controlled retention review are required.`);
+  }
   const entry: Omit<LedgerEntry, "entryHash"> = {
     schemaVersion: 1,
     kind: "ghostapi.action-ledger-entry",
@@ -452,6 +455,32 @@ function appendEntry(state: ActionLedgerState, tenantId: string, actionId: strin
   return appended;
 }
 
+function rotateForRetention(state: ActionLedgerState, now: string): void {
+  for (const tenant of state.tenants) {
+    if (tenant.retentionDays === null || tenant.legalHold) continue;
+    const cutoff = Date.parse(now) - tenant.retentionDays * 86_400_000;
+    const surviving = state.entries
+      .filter((entry) => entry.tenantId === tenant.tenantId)
+      .sort((left, right) => left.sequence - right.sequence)
+      .filter((entry) => Date.parse(entry.timestamp) >= cutoff);
+    if (surviving.length === state.entries.filter((entry) => entry.tenantId === tenant.tenantId).length) continue;
+    const rebuilt = relinkTenantChain(tenant.tenantId, surviving);
+    state.entries = state.entries.filter((entry) => entry.tenantId !== tenant.tenantId).concat(rebuilt);
+    tenant.entryCount = rebuilt.length;
+    tenant.headHash = rebuilt.at(-1)?.entryHash ?? genesisHash(tenant.tenantId);
+  }
+}
+
+function relinkTenantChain(tenantId: string, surviving: LedgerEntry[]): LedgerEntry[] {
+  let previousHash = genesisHash(tenantId);
+  return surviving.map((entry, index) => {
+    const base: Omit<LedgerEntry, "entryHash"> = { schemaVersion: 1, kind: "ghostapi.action-ledger-entry", tenantId, sequence: index + 1, timestamp: entry.timestamp, actionId: entry.actionId, actionHash: entry.actionHash, stage: entry.stage, data: entry.data, previousHash };
+    const entryHash = sha256(canonicalJson(base));
+    previousHash = entryHash;
+    return { ...base, entryHash };
+  });
+}
+
 function getOrCreateTenant(state: ActionLedgerState, tenantId: string): LedgerTenantState {
   const existing = state.tenants.find((tenant) => tenant.tenantId === tenantId);
   if (existing !== undefined) return existing;
@@ -468,7 +497,7 @@ function assertTenantIntegrity(state: ActionLedgerState, tenantId: string): void
 
 function verifyTenantState(state: ActionLedgerState, tenantId: string): LedgerVerification {
   const tenant = state.tenants.find((candidate) => candidate.tenantId === tenantId);
-  if (tenant === undefined) return { valid: true, entryCount: 0, headHash: genesisHash(tenantId) };
+  if (tenant === undefined) return { valid: true, entryCount: 0, headHash: genesisHash(tenantId), tracked: false };
   const entries = state.entries.filter((entry) => entry.tenantId === tenantId);
   if (entries.length !== tenant.entryCount) return { valid: false, error: "Ledger tenant entry count does not match the append-only record." };
   let previousHash = genesisHash(tenantId);
@@ -480,7 +509,7 @@ function verifyTenantState(state: ActionLedgerState, tenantId: string): LedgerVe
     previousHash = entry.entryHash;
   }
   if (tenant.headHash !== previousHash) return { valid: false, error: "Ledger tenant head hash does not match the append-only record." };
-  return { valid: true, entryCount: entries.length, headHash: tenant.headHash };
+  return { valid: true, entryCount: entries.length, headHash: tenant.headHash, tracked: true };
 }
 
 function entriesForAction(state: ActionLedgerState, tenantId: string, actionId: string): LedgerEntry[] {

@@ -155,6 +155,8 @@ export async function restoreRuntimeBackup(options: { sourceDir: string; targetD
   if (!manifest.verified) throw new RuntimeHealthError("Refusing to restore a backup that did not verify after creation.");
   if (targetDir === sourceDir || targetDir.startsWith(sourceDir + sep)) throw new RuntimeHealthError("Restore target must not be inside the backup source.");
   await ensurePrivateDirectory(targetDir);
+  const existingTarget = await readdir(targetDir);
+  if (existingTarget.length > 0) throw new RuntimeHealthError("Refusing to restore into a non-empty directory.");
 
   for (const entry of manifest.entries) {
     const relativePath = normalizeEntryPath(entry.path);
@@ -175,7 +177,8 @@ function canonicalStores(): Array<{ id: string; kind: "file" | "dir"; path: stri
     ["config", paths.config], ["state", paths.state], ["behaviors", paths.behaviors], ["approvals", paths.approvals],
     ["credential-broker", paths.credentialBroker], ["trust-ladder", paths.trustLadder], ["safety-controller", paths.safetyController],
     ["action-ledger", paths.actionLedger], ["team-control-plane", paths.teamControlPlane], ["fault-lab", paths.faultLab],
-    ["product-telemetry", paths.productTelemetry], ["slo", paths.sloStore], ["reconciliation", paths.reconciliationStore], ["costs", paths.costStore]
+    ["product-telemetry", paths.productTelemetry], ["slo", paths.sloStore], ["reconciliation", paths.reconciliationStore], ["costs", paths.costStore],
+    ["inventory", paths.inventoryStore]
   ] as const;
   const dirs = [
     ["cache", paths.cache], ["reports", paths.reports], ["scenarios", paths.scenarios], ["contracts", paths.contracts],
@@ -189,13 +192,15 @@ function canonicalStores(): Array<{ id: string; kind: "file" | "dir"; path: stri
 
 async function collectBackupFiles(sourceDir: string, destinationDir: string): Promise<Array<{ relativePath: string; sourcePath: string; size: number; sha256: string }>> {
   const files: Array<{ relativePath: string; sourcePath: string; size: number; sha256: string }> = [];
+  const skipRoots = new Set([resolve(getDataPaths().cache), resolve(getDataPaths().backups)]);
   const walk = async (directory: string): Promise<void> => {
     const entries = await readdir(directory, { withFileTypes: true });
     for (const entry of entries) {
       const fullPath = join(directory, entry.name);
       const relativePath = relative(sourceDir, fullPath);
       if (entry.isDirectory()) {
-        if (entry.name === "cache" || entry.name === "runs" || entry.name === "backups" || fullPath === destinationDir) continue;
+        const relativeDirectory = relative(sourceDir, fullPath);
+        if (fullPath === destinationDir || skipRoots.has(resolve(fullPath)) || relativeDirectory === "runs") continue;
         await walk(fullPath);
         continue;
       }

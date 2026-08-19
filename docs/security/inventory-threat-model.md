@@ -48,13 +48,19 @@ Every graph edge, record, finding, remediation, import run, and source is filter
 
 Every record and edge carries `provenance` (`sourceId`, `sourceType`, `sourceName`, `importedAt`, `importedBy`) and `freshness` (`firstSeenAt`, `lastSeenAt`) built from the import payload source and the authenticated operator's principal id — never from client-supplied strings. `validateState` re-validates provenance/freshness on every read and write. Edge ids are derived from source/target/relation so re-imports refresh `lastSeenAt` instead of duplicating edges.
 
+Edges have a freshness lifecycle. Attack-path and blast-radius analysis only use edges whose `lastSeenAt` is within the configured `edgeStaleDays` window, so a long-unseen relationship cannot be cited as current reachability evidence. On every import the importing tenant's stale edges are garbage-collected from the store, keeping the graph from accumulating frozen relationships that were never refreshed.
+
 ### T5. A remediation expands permissions instead of reducing them
 
-`reduce_scope` proposals are rejected at proposal time unless the reduced scope list is a strict subset of the credential's current grant scopes and removes at least one scope; the same invariant is enforced again at apply time. `revoke` only ever sets a credential to revoked. `assign_owner` only sets an owner id. `onboard_through_gateway` only sets the gateway-managed flag. `create_eval` only records an eval scenario reference. No remediation path adds scopes or relaxes a control.
+`reduce_scope` proposals are rejected at proposal time unless the reduced scope list is a strict subset of the credential's current grant scopes and removes at least one scope; the same invariant is enforced again at apply time. `revoke` only ever sets a credential to revoked. `assign_owner` only sets an owner id. `onboard_through_gateway` only sets the gateway-managed flag. `create_eval` only records an eval scenario reference — and, when an `evalScenarioExists` resolver is configured, the referenced scenario must actually exist before the proposal is accepted, so a remediation cannot paper over a finding by pointing at a deleted scenario. No remediation path adds scopes or relaxes a control.
+
+Applied remediations are re-verified on every analysis pass: a finding stays resolved only while the remediation remains effective. If a later import re-expands a reduced scope, revokes nothing, clears an assigned owner, un-gates an agent, or deletes the referenced eval scenario, the finding is re-opened instead of staying permanently marked resolved.
+
+Remediation targets are validated against the tenant's live data before a proposal is accepted: an `environment` target must actually be referenced by at least one agent, identity, provider, resource, credential, or policy of the tenant, so a remediation cannot be proposed against a stale or invented environment.
 
 ### T6. The store is poisoned or exploded
 
-The store is validated on every read (`validateState`) and write (`atomicWriteJson(this.path, validateState(state))`). Store bytes are capped at 8 MiB; every collection is bounded (`maxAgents`, `maxEdges` 6,000, `maxFindings` 3,000, etc.). The store must be a regular non-symlink file. Oversized or non-JSON stores are rejected, not partially loaded.
+The store is validated on every read (`validateState`) and write (`atomicWriteJson(this.path, validateState(state))`). Store bytes are capped at 8 MiB; every collection is bounded (`maxAgents`, `maxEdges` 6,000, `maxFindings` 3,000, etc.), and `assertStoreBounds` rejects edges and findings over their caps on every mutation. Import runs are rotated per tenant at `maxImports` (256), keeping the oldest runs trimmed rather than failing the write. The store must be a regular non-symlink file. Oversized or non-JSON stores are rejected, not partially loaded.
 
 ### T7. Secret-shaped or control-character data enters the inventory
 

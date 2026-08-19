@@ -11,6 +11,7 @@ const MAX_STORE_BYTES = 4 * 1024 * 1024;
 const MAX_TARGETS = 32;
 const MAX_SAMPLES_PER_METRIC = 5_000;
 const MAX_SAMPLES = 10_000;
+const MAX_RECORD_BATCH = 1_000;
 const MIN_WINDOW_MS = 60 * 60 * 1000;
 const MAX_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const IDENTIFIER = /^[a-z0-9][a-z0-9._-]{0,127}$/;
@@ -158,6 +159,7 @@ export class LocalSloController {
 
   async recordSamples(input: SloRecordSampleInput[], capability: object): Promise<SloSample[]> {
     this.assertRecordPermission(capability);
+    if (input.length > MAX_RECORD_BATCH) throw new SloError(`SLO record batch is too large; limit is ${MAX_RECORD_BATCH} samples per call.`);
     const now = this.now().toISOString();
     const recorded = input.map((sample) => validateSample(sample, now));
     return this.mutate((state) => {
@@ -353,7 +355,7 @@ function evaluateTarget(target: SloTarget, samples: SloSample[], now: string): S
   let okCount = 0;
   for (const sample of inWindow) {
     if ((SLO_LATENCY_METRICS as readonly string[]).includes(sample.metric)) {
-      if (sample.durationMs !== undefined && sample.durationMs <= target.latencyMaxMs!) okCount += 1;
+      if (sample.ok && sample.durationMs !== undefined && sample.durationMs <= target.latencyMaxMs!) okCount += 1;
     } else if (sample.ok) {
       okCount += 1;
     }

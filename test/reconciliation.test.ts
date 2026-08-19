@@ -56,7 +56,7 @@ describe("local reconciliation service", () => {
     const provider = createWorldStateReconciliationProvider(async (actionId) => worldByAction[actionId] ?? null);
     const service = createLocalReconciliationService({ path: reconPath("recon-state.json"), now: () => new Date(FIXED_NOW), ledger, capability, provider, sloController, operatorAuthorizer: authorizer });
 
-    const report = await service.runReconciliation();
+    const report = await service.runReconciliation({ identity: operator });
     expect(report.integrity).toBe("valid");
     expect(report.counts).toEqual({ committed: 1, not_committed: 1, unknown: 1, compensated: 0, drifted: 1 });
 
@@ -108,17 +108,22 @@ describe("local reconciliation service", () => {
     const ledger = createLedger(access.authorizer, "recon-clean-ledger.json");
     await ledger.recordAction(capability, await gateway.inspect("recon-clean"));
 
+    const { authorizer, issue } = createTestReconciliationOperatorAuthorizer();
+    const operator = issue({ id: "recon-clean-ops", principalId: "recon-clean-ops-one", permissions: ["reconciliation.manage"] });
     const provider = createWorldStateReconciliationProvider(async (actionId) => actionId === "recon-clean" ? "recon-clean-world" : null);
-    const service = createLocalReconciliationService({ path: reconPath("recon-clean-state.json"), now: () => new Date(FIXED_NOW), ledger, capability, provider });
-    const report = await service.runReconciliation();
+    const service = createLocalReconciliationService({ path: reconPath("recon-clean-state.json"), now: () => new Date(FIXED_NOW), ledger, capability, provider, operatorAuthorizer: authorizer });
+    const report = await service.runReconciliation({ identity: operator });
     expect(report.counts).toEqual({ committed: 1, not_committed: 0, unknown: 0, compensated: 0, drifted: 0 });
     expect(report.findingsOpened).toBe(0);
+
+    const readOnly = issue({ id: "recon-ro", principalId: "recon-ro-one", permissions: ["reconciliation.inspect"] });
+    await expect(service.runReconciliation({ identity: readOnly })).rejects.toThrow("permission");
 
     const path = join(process.env.GHOSTAPI_DATA_DIR!, "recon-clean-ledger.json");
     const modified = JSON.parse(await readFile(path, "utf8")) as { entries: Array<{ data: Record<string, unknown> }> };
     modified.entries[0]!.data.operation = "synthetic.tampered";
     await writeFile(path, JSON.stringify(modified), "utf8");
-    await expect(service.runReconciliation()).rejects.toThrow("integrity verification");
+    await expect(service.runReconciliation({ identity: operator })).rejects.toThrow("integrity verification");
   });
 });
 
