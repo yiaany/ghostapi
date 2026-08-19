@@ -27,6 +27,14 @@ The format follows the spirit of [Keep a Changelog](https://keepachangelog.com/e
 - Added deterministic malformed-input regression coverage for policy, OpenAPI, and scenario-bundle parsers.
 - Added release-readiness and migration/rollback documentation with platform-specific guarantees and known gaps.
 
+### Fixed
+
+- Hardened the safety controller and action gateway: time-bounded synthetic leases with a default 60 s TTL, a two-phase final commit that re-checks the lease and records `action.final_check` after the operation, a tolerant terminal `complete()`, a stable `SAFETY_KILL_SWITCH` error code, and bounded dead-letter eviction. Gateway commit errors are no longer silently swallowed.
+- Hardened the action ledger: caller-claimed basis markers on echoed policy/approval records, per-tenant retention rotation with hash-chain relinking at the 2,000-entry bound, and a `tracked` flag so a tenant without entries verifies distinctly from a broken chain.
+- Hardened local reliability: SLO sampling is batch-bounded and latency counts only successful samples, reconciliation rejects missing worlds structurally and requires the `reconciliation.manage` permission, and cost governance is idempotent with a pure report path and tenant-scoped alerts.
+- Hardened runtime health and backups: the inventory store is part of health checks, restores refuse non-empty directories, and backup exclusions use canonical cache/backup paths instead of folder names.
+- Hardened the inventory controller: stale attack-path edges are filtered and garbage-collected, findings and import runs are bounded with per-tenant rotation, ineffective remediations can be reopened and are gated by injected eval-scenario existence, and remediation targets validate the environment reference.
+
 ## 0.1.7 - 2026-07-18
 
 ### Changed
