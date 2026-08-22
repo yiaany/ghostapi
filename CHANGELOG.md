@@ -27,7 +27,7 @@ The format follows the spirit of [Keep a Changelog](https://keepachangelog.com/e
 ### Changed
 
 - Published a valid package root with ESM and declaration exports, and extended packed-artifact smoke coverage to import `@yiaany/ghostapi` directly.
-- Corrected repository identity to `yiaany/ghostapi`, standardized public commands on `@yiaany/ghostapi`, replaced landing-page editorial placeholders with finished product copy, and clarified setup generation and scenario arming behavior.
+- Corrected repository identity to `yiaany/ghostapi`, standardized public commands on `@yiaany/ghostapi`, removed the bundled landing page so `/` opens the dashboard, and clarified setup generation and scenario arming behavior.
 - Upgraded Vite and Vitest to audited compatible versions, added formatting checks, and expanded CI across Node.js and desktop platforms with package, production audit, and hosted-pilot checks.
 - Clarified that `GET /health` is a liveness response that stays HTTP 200 while `GET /health/readiness` returns the structural report and HTTP 503 when dependencies are degraded.
 - Added deterministic malformed-input regression coverage for policy, OpenAPI, and scenario-bundle parsers.
