@@ -60,9 +60,13 @@ jobs:
   linux-egress:
     name: Required Ubuntu Linux egress enforcement
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     container:
       image: node:22-bookworm
       options: --privileged
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -82,11 +86,11 @@ jobs:
           GHOSTAPI_REQUIRE_LINUX_EGRESS: "1"
         run: |
           set -o pipefail
-          npm test -- --run test/egressRun.test.ts --reporter=verbose | tee "$RUNNER_TEMP/egress-vitest.log"
-          grep -F "allows GhostAPI loopback and preserves the target exit code" "$RUNNER_TEMP/egress-vitest.log"
-          grep -F "blocks fetch, https, direct IP, and child-process bypass attempts" "$RUNNER_TEMP/egress-vitest.log"
-          grep -F "blocks curl executed by the target" "$RUNNER_TEMP/egress-vitest.log"
-          if grep -E "[0-9]+ skipped|SKIP" "$RUNNER_TEMP/egress-vitest.log"; then
+          timeout 300s npm test -- --run test/egressRun.test.ts --reporter=verbose | tee /tmp/egress-vitest.log
+          grep -F "allows GhostAPI loopback and preserves the target exit code" /tmp/egress-vitest.log
+          grep -F "blocks fetch, https, direct IP, and child-process bypass attempts" /tmp/egress-vitest.log
+          grep -F "blocks curl executed by the target" /tmp/egress-vitest.log
+          if grep -E "[0-9]+ skipped|SKIP" /tmp/egress-vitest.log; then
             echo "Linux egress enforcement tests must execute without skips."
             exit 1
           fi
