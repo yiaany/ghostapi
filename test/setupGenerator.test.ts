@@ -19,8 +19,9 @@ describe("repo setup generator", () => {
     const setup = await generateRepoSetup(tempDir);
 
     expect(setup.detected).toEqual(["stripe", "openai"]);
-    expect(setup.commands).toContain("ghostapi doctor");
-    expect(setup.commands).toContain("ghostapi run -- npm test");
+    expect(setup.commands).toContain("npx @yiaany/ghostapi doctor");
+    expect(setup.commands).toContain("npx @yiaany/ghostapi run -- npm test");
+    expect(setup.commands[0]).toContain("project root");
     expect(setup.files.map((file) => file.path)).toEqual(expect.arrayContaining([
       "ghostapi.policy.yaml",
       ".gitignore",
@@ -43,8 +44,8 @@ describe("repo setup generator", () => {
     ]));
     expect(setup.files.find((file) => file.path === ".cursor/mcp.json")?.content).toContain('"command": "npx"');
     expect(setup.files.find((file) => file.path === ".cursor/mcp.json")?.content).toContain('"@yiaany/ghostapi"');
-    expect(setup.files.find((file) => file.path === "AGENTS.md")?.content).toContain("ghostapi mcp");
-    expect(setup.files.find((file) => file.path === "AGENTS.md")?.content).toContain("ghostapi run -- npm test");
+    expect(setup.files.find((file) => file.path === "AGENTS.md")?.content).toContain("do not run it manually in a terminal");
+    expect(setup.files.find((file) => file.path === "AGENTS.md")?.content).toContain("npx @yiaany/ghostapi run -- npm test");
     expect(setup.files.find((file) => file.path === "ghostapi.policy.yaml")?.content).toContain("maxProductionEgressAttempts: 0");
     expect(setup.patches.map((patch) => patch.title)).toEqual(expect.arrayContaining(["Stripe client patch", "OpenAI client patch"]));
   });

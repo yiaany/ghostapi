@@ -307,10 +307,10 @@ body {
 .modal-action:hover { filter: brightness(1.08); }
 .rules-body { max-height: 70vh; overflow: auto; padding: 16px; background: radial-gradient(circle at top left, rgba(96,165,250,0.08), transparent 28%), rgba(255,255,255,0.01); }
 .rules-body pre { font-family: var(--font-mono); font-size: 12px; line-height: 1.7; white-space: pre-wrap; color: var(--foreground); }
-.setup-modal-content { max-width: 980px; }
-.setup-grid, .scenario-shell { display: grid; grid-template-columns: 300px minmax(0, 1fr); min-height: 560px; max-height: 74vh; }
-.setup-list, .scenario-list { border-right: 1px solid var(--border); overflow: auto; padding: 10px; background: rgba(255,255,255,0.01); }
-.setup-output, .scenario-output { max-height: none; height: 100%; }
+.setup-modal-content { max-width: 980px; height: min(74vh, 680px); display: flex; flex-direction: column; }
+.setup-grid, .scenario-shell { display: grid; grid-template-columns: 300px minmax(0, 1fr); flex: 1 1 auto; min-height: 0; }
+.setup-list, .scenario-list { min-height: 0; border-right: 1px solid var(--border); overflow: auto; padding: 10px; background: rgba(255,255,255,0.01); }
+.setup-output, .scenario-output { min-height: 0; max-height: none; height: 100%; overflow: auto; }
 .setup-item { width: 100%; border: 1px solid transparent; background: transparent; color: var(--muted-foreground); border-radius: 8px; padding: 10px; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
 .setup-item:hover, .setup-item.active { background: rgba(255,255,255,0.05); border-color: var(--border); color: var(--foreground); }
 .setup-item strong { font: 600 12px var(--font-sans); color: inherit; }
@@ -325,12 +325,12 @@ body {
 
 @media (max-width: 900px) {
   .modal-overlay { padding-top: 24px; }
-  .setup-grid, .scenario-shell { grid-template-columns: 1fr; min-height: auto; }
-  .setup-list, .scenario-list { border-right: none; border-bottom: 1px solid var(--border); max-height: 260px; }
+  .setup-grid, .scenario-shell { grid-template-columns: 1fr; grid-template-rows: minmax(0, 260px) minmax(0, 1fr); }
+  .setup-list, .scenario-list { border-right: none; border-bottom: 1px solid var(--border); max-height: none; }
 }
 
 @media (max-height: 720px) {
-  .setup-grid, .scenario-shell { min-height: 0; }
+  .setup-modal-content { height: calc(100vh - 48px); }
 }
 
 @keyframes zoomIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }

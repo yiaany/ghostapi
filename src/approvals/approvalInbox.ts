@@ -1,8 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { lstat, readFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import { actionHash, createLocalActionGateway, createSyntheticActionAdapter, validateActionEnvelope, type ActionApproval, type ActionEnvelope, type ActionExecutionIdentity, type ActionExecutionReceipt, type ActionPolicyCheck, type LocalActionGateway } from "../actions/index.js";
-import { createApprovalInboxCapability } from "../actions/gateway.js";
+import { actionApprovalHash, actionHash, createLocalActionGateway, createSyntheticActionAdapter, validateActionApproval, validateActionEnvelope, type ActionApproval, type ActionApprovalSigner, type ActionApprovalVerifier, type ActionEnvelope, type ActionExecutionIdentity, type ActionExecutionReceipt, type ActionGatewayOptions, type ActionPolicyCheck, type LocalActionGateway } from "../actions/index.js";
 import { getDataPaths } from "../config/dataPaths.js";
 import { sanitizeSecretString } from "../security/secrets.js";
 import { atomicWriteJson, ensurePrivateDirectory, withFileLock } from "../storage/fileStore.js";
@@ -70,7 +69,15 @@ export type ApprovalRequest = {
 };
 export type ApprovalAuditRecord = { sequence: number; event: string; requestId: string; actionHash: string; actionReceiptHash?: string; actorId: string; timestamp: string; previousHash: string; recordHash: string };
 export type ApprovalInboxState = { schemaVersion: 1; requests: ApprovalRequest[]; auditAnchor: string; audit: ApprovalAuditRecord[] };
-export type ApprovalInboxOptions = { path?: string; now?: () => Date; approverVerifier: ApprovalApproverVerifier; actionGateway?: LocalActionGateway };
+export type ApprovalInboxOptions = {
+  path?: string;
+  now?: () => Date;
+  approverVerifier: ApprovalApproverVerifier;
+  approvalSigner: ActionApprovalSigner;
+  approvalVerifier: ActionApprovalVerifier;
+  actionGatewayOptions?: Omit<ActionGatewayOptions, "now" | "approvalVerifier">;
+  testing?: { onExecutionCheckpoint?: (checkpoint: "inbox-executing" | "gateway-submitted" | "gateway-verified") => void | Promise<void> };
+};
 
 export class ApprovalInboxError extends Error {
   constructor(message: string) { super(message); this.name = "ApprovalInboxError"; }
@@ -80,19 +87,36 @@ export function createLocalApprovalInbox(options: ApprovalInboxOptions): LocalAp
   return new LocalApprovalInbox(options);
 }
 
+export function createApprovalInboxExecutionFlow(options: ApprovalInboxOptions): LocalApprovalInbox {
+  return new LocalApprovalInbox(options);
+}
+
 export class LocalApprovalInbox {
   private readonly path: string;
   private readonly now: () => Date;
   private readonly approverVerifier: ApprovalApproverVerifier;
+  private readonly approvalSigner: ActionApprovalSigner;
   private readonly actionGateway: LocalActionGateway;
-  private readonly actionGatewayCapability: object;
+  private readonly onExecutionCheckpoint?: NonNullable<ApprovalInboxOptions["testing"]>["onExecutionCheckpoint"];
 
   constructor(options: ApprovalInboxOptions) {
     this.path = options.path ?? getDataPaths().approvals;
     this.now = options.now ?? (() => new Date());
     this.approverVerifier = options.approverVerifier;
-    this.actionGateway = options.actionGateway ?? createLocalActionGateway({ now: this.now });
-    this.actionGatewayCapability = createApprovalInboxCapability();
+    this.approvalSigner = options.approvalSigner;
+    this.onExecutionCheckpoint = options.testing?.onExecutionCheckpoint;
+    const inboxVerifier: ActionApprovalVerifier = {
+      verify: async (action, approvalValue, context) => {
+        const verified = await options.approvalVerifier.verify(action, approvalValue, context);
+        const approval = validateActionApproval(approvalValue);
+        const state = await this.read();
+        const request = state.requests.find((candidate) => candidate.id === approval.approvalId);
+        const active = request?.status === "executing" || (request?.status === "executed" && request.executionReceiptHash !== undefined);
+        if (request === undefined || !active || request.consumedAt === undefined || request.artifact === undefined || request.actionHash !== actionHash(action) || actionApprovalHash(request.artifact) !== actionApprovalHash(approval)) throw new ApprovalInboxError("Approval inbox provenance is not active for execution.");
+        return { ...verified, approvalInboxRequestId: request.id };
+      }
+    };
+    this.actionGateway = createLocalActionGateway({ ...options.actionGatewayOptions, now: this.now, approvalVerifier: inboxVerifier });
   }
 
   async request(actionValue: unknown, policyValue: unknown, contextValue: unknown): Promise<ApprovalRequest> {
@@ -126,7 +150,7 @@ export class LocalApprovalInbox {
   async approve(requestIdValue: string, identity: unknown): Promise<ApprovalRequest> {
     const approver = await this.approverVerifier.authenticate(identity);
     const requestId = identifier(requestIdValue, "Approval request id");
-    return this.mutate((state, now) => {
+    return this.mutate(async (state, now) => {
       refresh(state, now);
       const request = findRequest(state, requestId);
       requirePending(request);
@@ -137,7 +161,7 @@ export class LocalApprovalInbox {
       appendAudit(state, "request.approved", request, approver.id, now);
       if (request.decisions.filter((entry) => entry.kind === "approve").length >= request.policy.requiredApprovals) {
         request.status = "approved";
-        request.artifact = createArtifact(request, now);
+        request.artifact = await createArtifact(request, now, this.approvalSigner);
         appendAudit(state, "artifact.issued", request, "approval-inbox", now);
       }
       return clone(request);
@@ -180,27 +204,43 @@ export class LocalApprovalInbox {
       const now = this.timestamp();
       refresh(state, now);
       const request = findRequest(state, requestId);
-      if (request.status !== "approved" || request.artifact === undefined || request.consumedAt !== undefined) throw new ApprovalInboxError("Approval is not active for execution.");
+      if ((request.status !== "approved" && request.status !== "executing" && request.status !== "executed") || request.artifact === undefined) throw new ApprovalInboxError("Approval is not active for execution.");
       if (request.policy.id !== policy.id || request.policy.version !== policy.version || request.policy.hash !== policyHash(policy)) throw new ApprovalInboxError("Approval policy changed after approval.");
       const decision = evaluate(policy, request.action, request.context, state.requests, now, request.id);
       if (!decision.allowed || decision.requiredApprovals !== request.policy.requiredApprovals) throw new ApprovalInboxError("Current approval policy no longer authorizes execution.");
       if (identity.actorId !== request.action.actor.id || identity.workloadId !== request.action.actor.workloadId) throw new ApprovalInboxError("Execution identity does not match the approved action.");
-      request.consumedAt = now;
-      request.status = "executing";
-      appendAudit(state, "artifact.consumed", request, identity.actorId, now);
-      await this.write(state);
+      if (request.status === "executed") {
+        const receipt = await this.actionGateway.execute(request.action, identity, actionPolicy);
+        if (receipt.status !== "verified" || receipt.receiptHash !== request.executionReceiptHash) throw new ApprovalInboxError("Executed approval does not match its durable action receipt.");
+        return receipt;
+      }
+      if (request.status === "approved") {
+        if (request.consumedAt !== undefined) throw new ApprovalInboxError("Approval consumption state is invalid.");
+        request.consumedAt = now;
+        request.status = "executing";
+        appendAudit(state, "artifact.consumed", request, identity.actorId, now);
+        await this.write(state);
+      } else if (request.consumedAt === undefined) {
+        throw new ApprovalInboxError("Approval consumption state is invalid.");
+      }
       try {
-        await this.actionGateway.submitFromApprovalInbox(request.action, request.artifact, actionPolicy, this.actionGatewayCapability);
-        const receipt = await this.actionGateway.executeFromApprovalInbox(request.action, identity, actionPolicy, this.actionGatewayCapability);
+        await this.onExecutionCheckpoint?.("inbox-executing");
+        await this.actionGateway.submit(request.action, request.artifact, actionPolicy);
+        await this.onExecutionCheckpoint?.("gateway-submitted");
+        const receipt = await this.actionGateway.execute(request.action, identity, actionPolicy);
+        await this.onExecutionCheckpoint?.("gateway-verified");
         request.status = "executed";
         request.executionReceiptHash = receipt.receiptHash;
         appendAudit(state, "execution.verified", request, identity.actorId, this.timestamp(), receipt.receiptHash);
         await this.write(state);
         return receipt;
       } catch (error) {
-        request.status = "execution_failed";
-        appendAudit(state, "execution.failed", request, identity.actorId, this.timestamp());
-        await this.write(state);
+        const failedReceipt = await this.latestDurableFailedReceipt(request.action.actionId);
+        if (failedReceipt !== undefined) {
+          request.status = "execution_failed";
+          appendAudit(state, "execution.failed", request, identity.actorId, this.timestamp(), failedReceipt.receiptHash);
+          await this.write(state);
+        }
         throw error;
       }
     });
@@ -244,11 +284,19 @@ export class LocalApprovalInbox {
     try { return validateState(JSON.parse(source)); } catch (error) { if (error instanceof ApprovalInboxError) throw error; throw new ApprovalInboxError("Approval inbox store is not valid JSON."); }
   }
 
-  private async mutate<T>(operation: (state: ApprovalInboxState, now: string) => T): Promise<T> {
-    return withFileLock(this.path, async () => { const state = await this.read(); const result = operation(state, this.timestamp()); await this.write(state); return result; });
+  private async mutate<T>(operation: (state: ApprovalInboxState, now: string) => T | Promise<T>): Promise<T> {
+    return withFileLock(this.path, async () => { const state = await this.read(); const result = await operation(state, this.timestamp()); await this.write(state); return result; });
   }
 
   private async write(state: ApprovalInboxState): Promise<void> { await atomicWriteJson(this.path, validateState(state)); }
+  private async latestDurableFailedReceipt(actionId: string): Promise<ActionExecutionReceipt | undefined> {
+    try {
+      const record = await this.actionGateway.inspect(actionId);
+      return [...record.receipts].reverse().find((receipt) => receipt.status === "failed");
+    } catch {
+      return undefined;
+    }
+  }
   private timestamp(): string { const value = this.now(); if (!(value instanceof Date) || !Number.isFinite(value.getTime())) throw new ApprovalInboxError("Approval inbox clock is invalid."); return value.toISOString(); }
 }
 
@@ -324,8 +372,8 @@ function evaluate(policy: ApprovalPolicy, action: ActionEnvelope, context: Appro
 }
 function display(action: ActionEnvelope, context: ApprovalContext, policyReason: string[]): ApprovalDisplay { return { intent: "Update a local synthetic subscription failure workflow.", target: `${action.resource.type}/${action.resource.id}`, normalizedArgumentDiff: { before: {}, after: clone(action.arguments) }, expectedSideEffects: [...action.expectedSideEffects], reversibility: action.reversibility, impact: { amountMinor: context.amountMinor ?? null, amountKnown: context.amountMinor !== undefined, irreversible: action.reversibility === "none" }, policyReason, evidenceHash: action.evidence.hash, simulation: { status: "passed", summary: "Synthetic adapter preflight found the local target world." } }; }
 function displayRecord(value: unknown, action: ActionEnvelope, context: ApprovalContext): ApprovalDisplay { const candidate = object(value, "Approval display is invalid."); exactKeys(candidate, ["intent", "target", "normalizedArgumentDiff", "expectedSideEffects", "reversibility", "impact", "policyReason", "evidenceHash", "simulation"], "Approval display"); const generated = display(action, context, array(candidate.policyReason, "Approval policy reason", 16).map((item) => text(item, "Approval policy reason", 200))); if (canonical(candidate) !== canonical(generated)) throw new ApprovalInboxError("Approval display does not match normalized action data."); return generated; }
-function createArtifact(request: ApprovalRequest, now: string): ActionApproval { return { schemaVersion: 1, kind: "ghostapi.action-approval", approvalId: request.id, actionHash: request.actionHash, approvedBy: "approval-inbox", approvedAt: now, expiresAt: request.expiresAt, nonce: `inbox-${request.actionHash.slice(0, 32)}` }; }
-function validateArtifact(value: unknown, actionDigest: string): ActionApproval { const artifact = object(value, "Approval artifact is invalid."); exactKeys(artifact, ["schemaVersion", "kind", "approvalId", "actionHash", "approvedBy", "approvedAt", "expiresAt", "nonce"], "Approval artifact"); if (artifact.schemaVersion !== 1 || artifact.kind !== "ghostapi.action-approval" || artifact.actionHash !== actionDigest || artifact.approvedBy !== "approval-inbox") throw new ApprovalInboxError("Approval artifact is invalid."); return { schemaVersion: 1, kind: "ghostapi.action-approval", approvalId: identifier(artifact.approvalId, "Approval artifact id"), actionHash: actionDigest, approvedBy: "approval-inbox", approvedAt: timestamp(artifact.approvedAt, "Approval artifact issue time"), expiresAt: timestamp(artifact.expiresAt, "Approval artifact expiry"), nonce: identifier(artifact.nonce, "Approval artifact nonce") }; }
+async function createArtifact(request: ApprovalRequest, now: string, signer: ActionApprovalSigner): Promise<ActionApproval> { return signer.issue({ schemaVersion: 1, kind: "ghostapi.action-approval", approvalId: request.id, actionHash: request.actionHash, approvedBy: "approval-inbox", approvedAt: now, expiresAt: request.expiresAt, nonce: `inbox-${request.actionHash.slice(0, 32)}` }); }
+function validateArtifact(value: unknown, actionDigest: string): ActionApproval { const artifact = object(value, "Approval artifact is invalid."); exactKeys(artifact, ["schemaVersion", "kind", "approvalId", "actionHash", "approvedBy", "approvedAt", "expiresAt", "nonce", "provenance"], "Approval artifact"); if (artifact.schemaVersion !== 1 || artifact.kind !== "ghostapi.action-approval" || artifact.actionHash !== actionDigest || artifact.approvedBy !== "approval-inbox") throw new ApprovalInboxError("Approval artifact is invalid."); const provenance = object(artifact.provenance, "Approval artifact provenance is invalid."); exactKeys(provenance, ["kind", "keyId", "signature"], "Approval artifact provenance"); if (provenance.kind !== "ghostapi.ed25519-signature" || typeof provenance.signature !== "string" || !/^[A-Za-z0-9_-]{86}$/.test(provenance.signature)) throw new ApprovalInboxError("Approval artifact provenance is invalid."); return { schemaVersion: 1, kind: "ghostapi.action-approval", approvalId: identifier(artifact.approvalId, "Approval artifact id"), actionHash: actionDigest, approvedBy: "approval-inbox", approvedAt: timestamp(artifact.approvedAt, "Approval artifact issue time"), expiresAt: timestamp(artifact.expiresAt, "Approval artifact expiry"), nonce: identifier(artifact.nonce, "Approval artifact nonce"), provenance: { kind: "ghostapi.ed25519-signature", keyId: identifier(provenance.keyId, "Approval artifact key id"), signature: provenance.signature } }; }
 function policyRecord(value: unknown): ApprovalRequest["policy"] { const policy = object(value, "Approval policy record is invalid."); exactKeys(policy, ["id", "version", "hash", "requiredApprovals"], "Approval policy record"); const requiredApprovals = policy.requiredApprovals; if (requiredApprovals !== 1 && requiredApprovals !== 2) throw new ApprovalInboxError("Approval requirement is invalid."); return { id: identifier(policy.id, "Approval policy id"), version: positive(policy.version, "Approval policy version"), hash: hash(policy.hash, "Approval policy hash"), requiredApprovals }; }
 function validateContext(value: unknown): ApprovalContext { const context = object(value, "Approval context is invalid."); exactKeys(context, ["confidence", "amountMinor"], "Approval context", ["amountMinor"]); return { confidence: percentage(context.confidence, "Approval confidence"), ...(context.amountMinor === undefined ? {} : { amountMinor: nonNegative(context.amountMinor, "Approval amount") }) }; }
 function validateApprover(value: unknown): ApprovalApprover { const approver = object(value, "Approver identity is invalid."); exactKeys(approver, ["id", "principalId", "independenceKey"], "Approver identity"); return { id: identifier(approver.id, "Approver id"), principalId: identifier(approver.principalId, "Approver principal id"), independenceKey: identifier(approver.independenceKey, "Approver independence key") }; }

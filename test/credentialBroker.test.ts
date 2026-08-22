@@ -77,6 +77,19 @@ describe("credential broker and workload identity", () => {
     await expect(executorBoundary.broker.executeServerSide({ identity: executorWorkload, grantId: executorGrant.id, request: { ...request(), scopes: ["test-extra"] } })).rejects.toThrow("executor denies the requested scope");
   });
 
+  it("binds grants to the authenticated subject and run", async () => {
+    const fixture = brokerFixture("subject-run-binding");
+    fixture.vault.put("test-vault/checkout", testSecretBytes());
+    await fixture.broker.registerCredential(credential());
+    const owner = fixture.identities.issue(identity());
+    const grant = await fixture.broker.issueGrant({ identity: owner, request: request(), expiresAt: "2026-08-14T12:10:00.000Z" });
+    const otherSubject = fixture.identities.issue({ ...identity(), subjectId: "agent-two", runId: "run-two" });
+
+    expect(grant).toMatchObject({ subjectId: "agent-one", runId: "run-one" });
+    await expect(fixture.broker.executeServerSide({ identity: otherSubject, grantId: grant.id, request: request() })).rejects.toThrow("subject and run");
+    expect(fixture.executor.executions).toEqual([]);
+  });
+
   it("records failed server-side use, returns idempotent executed receipts, and detects orphaned workloads", async () => {
     const fixture = brokerFixture("execution");
     fixture.vault.put("test-vault/checkout", testSecretBytes());

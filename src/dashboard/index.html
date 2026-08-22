@@ -48,7 +48,7 @@
             <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v6"></path><path d="m16 6-4 4-4-4"></path><rect x="4" y="12" width="16" height="8" rx="2"></rect><path d="M8 16h.01"></path><path d="M12 16h.01"></path></svg>
             <span class="nav-item-title">Agent Setup</span>
           </div>
-          <div class="nav-item-right"><div class="sc-badge">1-click</div></div>
+          <div class="nav-item-right"><div class="sc-badge">generate</div></div>
         </div>
         <div class="nav-item" onclick="openScenarios(event)">
           <div class="nav-item-left">
@@ -251,10 +251,10 @@
       <div class="modal-header rules-modal-header">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5V4a2 2 0 0 1 2-2h9l5 5v12.5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"></path><path d="M14 2v6h6"></path></svg>
         <div class="rules-title-block">
-          <strong>.cursorrules</strong>
+          <strong id="rules-title">.cursorrules</strong>
           <span id="rules-subtitle">Generated from package.json</span>
         </div>
-        <button class="modal-action" onclick="copyRules()">Copy</button>
+        <button class="modal-action" id="rules-copy-button" onclick="copyRules()">Copy</button>
         <button class="modal-action ghost" onclick="closeRulesModal()">Close</button>
       </div>
       <div class="rules-body">
@@ -269,9 +269,9 @@
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v6"></path><path d="m16 6-4 4-4-4"></path><rect x="4" y="12" width="16" height="8" rx="2"></rect></svg>
         <div class="rules-title-block">
           <strong>Agent Setup</strong>
-          <span id="setup-subtitle">One-click onboarding for this repo</span>
+          <span id="setup-subtitle">Generate and copy setup for this repo</span>
         </div>
-        <button class="modal-action" onclick="copySetupOutput()">Copy Selected</button>
+        <button class="modal-action" id="setup-copy-button" onclick="copySetupOutput()">Copy Selected</button>
         <button class="modal-action ghost" onclick="closeSetupModal()">Close</button>
       </div>
       <div class="setup-grid">
@@ -287,7 +287,7 @@
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"></path><path d="M4 12h10"></path><path d="M4 18h7"></path><path d="m15 16 2 2 4-4"></path></svg>
         <div class="rules-title-block">
           <strong>Scenario Presets</strong>
-          <span id="scenarios-subtitle">Replay, export, or share agent-ready API flows</span>
+          <span id="scenarios-subtitle">Arm, export, or share agent-ready API behavior</span>
         </div>
         <button class="modal-action ghost" onclick="closeScenariosModal()">Close</button>
       </div>

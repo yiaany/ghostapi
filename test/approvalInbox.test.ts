@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { createLocalActionGateway } from "../src/actions/index.js";
+import { createLocalActionGateway, createSyntheticActionAdapter, createTestActionApprovalVerifier } from "../src/actions/index.js";
 import { ApprovalInboxError, createLocalApprovalInbox, createTestApprovalApproverVerifier } from "../src/approvals/index.js";
 import { getDataPaths } from "../src/config/dataPaths.js";
 import { createWorld, inspectWorld } from "../src/worlds/index.js";
@@ -27,12 +27,12 @@ describe("local human approval inbox", () => {
     expect(approved.artifact?.actionHash).toBe(approved.actionHash);
 
     const receipt = await fixture.inbox.execute(request.id, { actorId: "agent-one", workloadId: "checkout-worker" }, actionPolicy(), criticalPolicy());
-    const replay = await fixture.inbox.execute(request.id, { actorId: "agent-one", workloadId: "checkout-worker" }, actionPolicy(), criticalPolicy()).catch((error: unknown) => error);
+    const replay = await fixture.inbox.execute(request.id, { actorId: "agent-one", workloadId: "checkout-worker" }, actionPolicy(), criticalPolicy());
     const stored = await fixture.inbox.get(request.id);
     const world = await inspectWorld("approval-world");
 
     expect(receipt.status).toBe("verified");
-    expect(replay).toBeInstanceOf(ApprovalInboxError);
+    expect(replay).toEqual(receipt);
     expect(world.state.receipts).toHaveLength(1);
     expect(stored).toMatchObject({ status: "executed", executionReceiptHash: receipt.receiptHash });
     const state = await fixture.inbox.readStateForTesting();
@@ -87,20 +87,135 @@ describe("local human approval inbox", () => {
     await createWorld({ id: "gateway-bypass-world", seed: "gateway-bypass-seed" });
     const request = await fixture.inbox.request(action("gateway-bypass", "gateway-bypass-world"), standardPolicy(), { confidence: 99 });
     const approved = await fixture.inbox.approve(request.id, fixture.identities.issue({ id: "reviewer", independenceKey: "reviewer" }));
-    const directGateway = createLocalActionGateway({ now: () => new Date("2026-08-14T12:00:00.000Z"), pathForAction: (actionId) => join(getDataPaths().root, "direct-actions", `${actionId}.json`) });
+    const directGateway = createLocalActionGateway({ now: () => new Date("2026-08-14T12:00:00.000Z"), approvalVerifier: fixture.approvals.verifier, pathForAction: (actionId) => join(getDataPaths().root, "direct-actions", `${actionId}.json`) });
 
-    await expect(directGateway.submit(approved.action, approved.artifact, actionPolicy())).rejects.toThrow("only through the approval inbox");
+    await expect(directGateway.submit(approved.action, approved.artifact, actionPolicy())).rejects.toThrow("provenance is not active");
     expect((await fixture.inbox.get(request.id)).status).toBe("approved");
     expect((await inspectWorld("gateway-bypass-world")).state.receipts).toHaveLength(0);
   });
+
+  it.each(["inbox-executing", "gateway-submitted", "gateway-verified"] as const)("recovers repeatedly after a crash at %s without replaying the action", async (checkpoint) => {
+    let crashesRemaining = 2;
+    const fixture = inboxFixture(`recovery-${checkpoint}`, undefined, async (current) => {
+      if (current === checkpoint && crashesRemaining > 0) {
+        crashesRemaining -= 1;
+        throw new Error(`simulated crash at ${checkpoint}`);
+      }
+    });
+    const worldId = `recovery-${checkpoint}`;
+    const actionId = `action-${checkpoint}`;
+    await createWorld({ id: worldId, seed: `${worldId}-seed` });
+    const request = await fixture.inbox.request(action(actionId, worldId), standardPolicy(), { confidence: 99 });
+    await fixture.inbox.approve(request.id, fixture.identities.issue({ id: "reviewer", independenceKey: "reviewer" }));
+
+    await expect(fixture.inbox.execute(request.id, executionIdentity(), actionPolicy(), standardPolicy())).rejects.toThrow("simulated crash");
+    await expect(fixture.inbox.execute(request.id, executionIdentity(), actionPolicy(), standardPolicy())).rejects.toThrow("simulated crash");
+    expect((await fixture.inbox.get(request.id)).status).toBe("executing");
+
+    const recovered = await fixture.inbox.execute(request.id, executionIdentity(), actionPolicy(), standardPolicy());
+    const repeated = await fixture.inbox.execute(request.id, executionIdentity(), actionPolicy(), standardPolicy());
+    const stored = await fixture.inbox.get(request.id);
+    const gatewayRecord = await fixture.gateway.inspect(actionId);
+
+    expect(repeated).toEqual(recovered);
+    expect(stored).toMatchObject({ status: "executed", executionReceiptHash: recovered.receiptHash });
+    expect((await inspectWorld(worldId)).state.receipts).toHaveLength(1);
+    expect(gatewayRecord.receipts.filter((receipt) => receipt.status === "verified")).toHaveLength(1);
+    expect((await fixture.inbox.readStateForTesting()).audit.filter((record) => record.event === "artifact.consumed")).toHaveLength(1);
+  });
+
+  it("reconciles a crash after the gateway durably commits without invoking the provider again", async () => {
+    let verificationCrash = true;
+    let providerCalls = 0;
+    const baseAdapter = createSyntheticActionAdapter();
+    const fixture = inboxFixture("gateway-recovery-committed", undefined, undefined, {
+      adapter: {
+        ...baseAdapter,
+        async execute(action, controls) {
+          providerCalls += 1;
+          return baseAdapter.execute(action, controls);
+        },
+        async verify(action) {
+          if (verificationCrash) {
+            verificationCrash = false;
+            throw new Error("simulated crash after durable commit");
+          }
+          return baseAdapter.verify(action);
+        }
+      }
+    });
+    const worldId = "gateway-recovery-committed";
+    const actionId = "gateway-action-committed";
+    await createWorld({ id: worldId, seed: `${worldId}-seed` });
+    const request = await fixture.inbox.request(action(actionId, worldId), standardPolicy(), { confidence: 99 });
+    await fixture.inbox.approve(request.id, fixture.identities.issue({ id: "reviewer", independenceKey: "reviewer" }));
+
+    await expect(fixture.inbox.execute(request.id, executionIdentity(), actionPolicy(), standardPolicy())).rejects.toThrow("simulated crash after durable commit");
+    expect((await fixture.gateway.inspect(actionId)).receipts.map((receipt) => receipt.status)).toEqual(["requested", "attempted", "committed"]);
+    const recovered = await fixture.inbox.execute(request.id, executionIdentity(), actionPolicy(), standardPolicy());
+    const repeated = await fixture.inbox.execute(request.id, executionIdentity(), actionPolicy(), standardPolicy());
+
+    expect(repeated).toEqual(recovered);
+    expect(providerCalls).toBe(1);
+    expect((await inspectWorld(worldId)).state.receipts).toHaveLength(1);
+    expect((await fixture.gateway.inspect(actionId)).receipts.map((receipt) => receipt.status)).toEqual(["requested", "attempted", "committed", "verified"]);
+  });
+
+  it("re-verifies the signed approval while recovering an executing request", async () => {
+    let crash = true;
+    const fixture = inboxFixture("recovery-signature", undefined, () => {
+      if (crash) {
+        crash = false;
+        throw new Error("simulated crash");
+      }
+    });
+    await createWorld({ id: "recovery-signature-world", seed: "recovery-signature-seed" });
+    const request = await fixture.inbox.request(action("recovery-signature", "recovery-signature-world"), standardPolicy(), { confidence: 99 });
+    await fixture.inbox.approve(request.id, fixture.identities.issue({ id: "reviewer", independenceKey: "reviewer" }));
+    await expect(fixture.inbox.execute(request.id, executionIdentity(), actionPolicy(), standardPolicy())).rejects.toThrow("simulated crash");
+
+    const state = await fixture.inbox.readStateForTesting();
+    const stored = state.requests.find((candidate) => candidate.id === request.id)!;
+    stored.artifact!.provenance.signature = "A".repeat(86);
+    const { writeFile } = await import("node:fs/promises");
+    await writeFile(fixture.path, JSON.stringify(state), "utf8");
+
+    await expect(fixture.inbox.execute(request.id, executionIdentity(), actionPolicy(), standardPolicy())).rejects.toThrow("authenticity could not be verified");
+    expect((await fixture.inbox.get(request.id)).status).toBe("executing");
+    expect((await inspectWorld("recovery-signature-world")).state.receipts).toHaveLength(0);
+  });
+
+  it("does not start an expired unattempted action during recovery", async () => {
+    let now = new Date("2026-08-14T12:00:00.000Z");
+    let crash = true;
+    const fixture = inboxFixture("recovery-expired", () => now, (checkpoint) => {
+      if (checkpoint === "gateway-submitted" && crash) {
+        crash = false;
+        throw new Error("simulated crash after submit");
+      }
+    });
+    await createWorld({ id: "recovery-expired-world", seed: "recovery-expired-seed" });
+    const request = await fixture.inbox.request(action("recovery-expired", "recovery-expired-world"), standardPolicy({ approvalTtlMs: 2_000, escalationTimeoutMs: 1_000 }), { confidence: 99 });
+    await fixture.inbox.approve(request.id, fixture.identities.issue({ id: "reviewer", independenceKey: "reviewer" }));
+    await expect(fixture.inbox.execute(request.id, executionIdentity(), actionPolicy(), standardPolicy({ approvalTtlMs: 2_000, escalationTimeoutMs: 1_000 }))).rejects.toThrow("simulated crash");
+
+    now = new Date("2026-08-14T12:00:03.000Z");
+    await expect(fixture.inbox.execute(request.id, executionIdentity(), actionPolicy(), standardPolicy({ approvalTtlMs: 2_000, escalationTimeoutMs: 1_000 }))).rejects.toThrow("expired");
+    expect((await fixture.inbox.get(request.id)).status).toBe("executing");
+    expect((await fixture.gateway.inspect("recovery-expired")).receipts.map((receipt) => receipt.status)).toEqual(["requested"]);
+    expect((await inspectWorld("recovery-expired-world")).state.receipts).toHaveLength(0);
+  });
 });
 
-function inboxFixture(name: string, now = () => new Date("2026-08-14T12:00:00.000Z")) {
+function inboxFixture(name: string, now = () => new Date("2026-08-14T12:00:00.000Z"), onExecutionCheckpoint?: (checkpoint: "inbox-executing" | "gateway-submitted" | "gateway-verified") => void | Promise<void>, actionGatewayOptions: NonNullable<Parameters<typeof createLocalApprovalInbox>[0]["actionGatewayOptions"]> = {}) {
   const identities = createTestApprovalApproverVerifier();
+  const approvals = createTestActionApprovalVerifier();
   const root = getDataPaths().root;
-  const gateway = createLocalActionGateway({ now, pathForAction: (actionId) => join(root, "approval-actions", `${actionId}.json`) });
-  const inbox = createLocalApprovalInbox({ path: join(root, `approvals-${name}.json`), now, approverVerifier: identities.verifier, actionGateway: gateway });
-  return { inbox, identities };
+  const path = join(root, `approvals-${name}.json`);
+  const pathForAction = (actionId: string) => join(root, "approval-actions", `${actionId}.json`);
+  const inbox = createLocalApprovalInbox({ path, now, approverVerifier: identities.verifier, approvalSigner: approvals.signer, approvalVerifier: approvals.verifier, actionGatewayOptions: { ...actionGatewayOptions, pathForAction }, testing: { onExecutionCheckpoint } });
+  const gateway = createLocalActionGateway({ now, approvalVerifier: approvals.verifier, pathForAction });
+  return { inbox, identities, approvals, gateway, path };
 }
 
 function action(actionId: string, worldId: string) {
@@ -113,3 +228,4 @@ function standardPolicy(overrides: Record<string, unknown> = {}) {
 
 function criticalPolicy() { return standardPolicy({ criticalRisks: ["update"] }); }
 function actionPolicy() { return { version: 1, hash: POLICY_HASH, allowed: true }; }
+function executionIdentity() { return { actorId: "agent-one", workloadId: "checkout-worker" }; }

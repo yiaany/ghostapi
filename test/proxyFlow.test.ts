@@ -1,3 +1,4 @@
+import { writeFile } from "node:fs/promises";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createServer } from "../src/server/createServer.js";
 import { clearCache } from "../src/cache/index.js";
@@ -8,6 +9,7 @@ import { clearApiBehaviorsForTests, setApiBehavior } from "../src/behavior/behav
 import type { ServerConfig } from "../src/config/serverConfig.js";
 import { genericTaskBody, stripeCustomerCreateBody } from "./fixtures/requests.js";
 import { closeServer } from "./serverTestUtils.js";
+import { getDataPaths } from "../src/config/dataPaths.js";
 
 const baseConfig = { host: "127.0.0.1", port: 8080, model: "gpt-4o-mini" } satisfies ServerConfig;
 
@@ -84,7 +86,7 @@ describe("proxy flow integration", () => {
 
       expect(response.status).toBe(200);
       expect(body).toMatchObject({ provider: "generic", object: "task", title: genericTaskBody.title });
-      expect(getEventsHistory().at(-1)).toMatchObject({ source: "ai", provider: "generic:rest-like" });
+      expect(getEventsHistory().at(-1)).toMatchObject({ source: "fallback", provider: "generic:rest-like" });
     });
   });
 
@@ -159,6 +161,30 @@ describe("proxy flow integration", () => {
       expect(body).toEqual({ error: "agent configured" });
       expect(getEventsHistory().at(-1)).toMatchObject({ source: "behavior", statusCode: 429, path: "/tasks" });
     });
+  });
+
+  it("follows a safe relative behavior redirect on the same origin", async () => {
+    await setApiBehavior({ method: "GET", path: "/redirect-start", status: 302, body: {}, headers: { location: "/redirect-target" } });
+    await setApiBehavior({ method: "GET", path: "/redirect-target", status: 200, body: { reached: true } });
+
+    await withServer(baseConfig, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/redirect-start`);
+      expect(response.url).toBe(`${baseUrl}/redirect-target`);
+      expect(await response.json()).toEqual({ reached: true });
+    });
+  });
+
+  it("does not follow unsafe persisted Location values", async () => {
+    const unsafeLocations = ["//outside.invalid/escape", "https://outside.invalid/escape", "javascript:alert(1)", "data:text/plain,escape", "/\\outside.invalid/escape"];
+    for (const [index, location] of unsafeLocations.entries()) {
+      await writeFile(getDataPaths().behaviors, JSON.stringify({ [`GET /unsafe-${index}`]: { method: "GET", path: `/unsafe-${index}`, status: 302, body: {}, headers: { location } } }), "utf8");
+      await withServer(baseConfig, async (baseUrl) => {
+        const response = await fetch(`${baseUrl}/unsafe-${index}`);
+        expect(response.status).toBe(302);
+        expect(response.url).toBe(`${baseUrl}/unsafe-${index}`);
+        expect(response.headers.get("location")).toBeNull();
+      });
+    }
   });
 
   it("applies a bounded deterministic behavior delay", async () => {

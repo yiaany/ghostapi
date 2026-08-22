@@ -47,6 +47,10 @@ describe("State Management", () => {
       expect(await getStateStore()).toEqual({ "github:secret": { access_token: "***", note: "Bearer ***" } });
       expect(await readFile(getDataPaths().state, "utf8")).not.toContain(secret);
     });
+
+    it("rejects an oversized persistent state entry", async () => {
+      await expect(saveToStateStore("generic:large", { payload: "x".repeat(513 * 1024) })).rejects.toThrow("size limit");
+    });
   });
 
   describe("Extractor", () => {

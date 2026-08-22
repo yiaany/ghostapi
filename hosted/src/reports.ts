@@ -1,5 +1,6 @@
 import type { Pool, PoolClient } from "pg";
 import { constantTimeHexEqual, sha256, stableJson } from "./crypto.js";
+import { enforceQuota, organizationIdForProject } from "./quotas.js";
 
 const MAX_REPORT_BYTES = 512 * 1024;
 const IDEMPOTENCY_RETENTION_DAYS = 7;
@@ -29,6 +30,10 @@ export async function authenticateIngestKey(primary: Pool, projectId: string, ke
   return record.id;
 }
 
+export async function markIngestKeyUsed(primary: Pick<Pool, "query">, projectId: string, keyId: string): Promise<void> {
+  await primary.query("update app.ci_ingest_keys set last_used_at = now() where id = $1 and project_id = $2", [keyId, projectId]);
+}
+
 export async function acceptReport(client: PoolClient, input: {
   projectId: string;
   ingestKeyId: string;
@@ -42,10 +47,10 @@ export async function acceptReport(client: PoolClient, input: {
   const reportId = crypto.randomUUID();
   const ledger = await client.query<{ report_id: string; request_sha256: string }>(
     `insert into app.idempotency_ledger (project_id, key, request_sha256, report_id, expires_at)
-     values ($1, $2, $3, $4, now() + interval '${IDEMPOTENCY_RETENTION_DAYS} days')
+     values ($1, $2, $3, $4, now() + ($5::integer * interval '1 day'))
      on conflict (project_id, key) do nothing
      returning report_id, request_sha256`,
-    [input.projectId, input.idempotencyKey, requestHash, reportId]
+    [input.projectId, input.idempotencyKey, requestHash, reportId, IDEMPOTENCY_RETENTION_DAYS]
   );
 
   if (ledger.rows[0] === undefined) {
@@ -58,6 +63,11 @@ export async function acceptReport(client: PoolClient, input: {
     if (!constantTimeHexEqual(record.request_sha256, requestHash)) throw new IdempotencyConflictError("Idempotency-Key was reused with a different request.");
     return { reportId: record.report_id, status: "duplicate" };
   }
+
+
+  const organizationId = await organizationIdForProject(client, input.projectId);
+  if (organizationId === null) throw new ReportInputError("Project is unavailable.");
+  await enforceQuota(client, organizationId, "reports");
 
   await client.query(
     `insert into app.reports (id, project_id, ingest_key_id, schema_version, run_id, payload_sha256, payload)

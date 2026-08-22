@@ -78,7 +78,7 @@ describe("dashboard access control", () => {
     });
   });
 
-  it("requires remote proxy authentication before external LLM use", async () => {
+  it("requires remote proxy authentication in every generation mode", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     await withServer({ ...remoteConfig, allowExternalLlm: true, apiKey: "external-secret" }, async (baseUrl) => {
       fetchSpy.mockClear();
@@ -92,5 +92,12 @@ describe("dashboard access control", () => {
       expect(fetchSpy).toHaveBeenCalledTimes(1);
     });
     fetchSpy.mockRestore();
+
+    await withServer(remoteConfig, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/tasks`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: "local" }) });
+      expect(response.status).toBe(401);
+      const authorized = await fetch(`${baseUrl}/tasks`, { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify({ title: "local" }) });
+      expect(authorized.status).toBe(200);
+    });
   });
 });

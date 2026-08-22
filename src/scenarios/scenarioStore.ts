@@ -1,11 +1,16 @@
-import { readFile, readdir } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { setApiBehavior } from "../behavior/behaviorStore.js";
 import type { ProxyEvent } from "../server/eventsStore.js";
 import { getDataPaths } from "../config/dataPaths.js";
-import { atomicWriteJson } from "../storage/fileStore.js";
+import { atomicWriteJson, ensurePrivateDirectory, withFileLock } from "../storage/fileStore.js";
 import { sanitizeSecrets } from "../security/secrets.js";
 import { getProviderScenarios } from "../providers/registry.js";
+import { sanitizeResponseHeaders } from "../security/headerSanitizer.js";
+
+export const MAX_CUSTOM_SCENARIOS = 200;
+const MAX_SCENARIO_BYTES = 512 * 1024;
+const MAX_SCENARIO_STORE_BYTES = 20 * 1024 * 1024;
 
 export type ScenarioStep = {
   name: string;
@@ -169,14 +174,24 @@ async function readCustomScenario(id: string): Promise<ScenarioPreset | null> {
 }
 
 async function writeScenario(scenario: ScenarioPreset): Promise<void> {
-  await atomicWriteJson(join(getDataPaths().scenarios, `${scenario.id}.json`), sanitizeSecrets(scenario));
+  const sanitized = sanitizeSecrets(scenario);
+  const bytes = Buffer.byteLength(JSON.stringify(sanitized), "utf8");
+  if (bytes > MAX_SCENARIO_BYTES) throw new Error("Scenario exceeds its size limit.");
+  const directory = getDataPaths().scenarios;
+  await ensurePrivateDirectory(directory);
+  await withFileLock(join(directory, ".quota"), async () => {
+    const files = await readdir(directory, { withFileTypes: true });
+    const existing = await Promise.all(files.filter((entry) => entry.isFile() && entry.name.endsWith(".json") && entry.name !== `${scenario.id}.json`).map(async (entry) => ({ name: entry.name, size: (await stat(join(directory, entry.name))).size })));
+    if (existing.length >= MAX_CUSTOM_SCENARIOS || existing.reduce((total, entry) => total + entry.size, bytes) > MAX_SCENARIO_STORE_BYTES) throw new Error("Custom scenario persistence quota was reached.");
+    await atomicWriteJson(join(directory, `${scenario.id}.json`), sanitized);
+  }, { lockTimeoutMs: 60_000 });
 }
 
 function normalizeScenario(input: unknown): ScenarioPreset {
   if (input === null || typeof input !== "object" || Array.isArray(input)) throw new Error("Scenario must be an object.");
   const record = input as Record<string, unknown>;
-  if (typeof record.title !== "string" || record.title.trim() === "") throw new Error("Scenario title is required.");
-  if (!Array.isArray(record.steps) || record.steps.length === 0) throw new Error("Scenario steps are required.");
+  if (typeof record.title !== "string" || record.title.trim() === "" || record.title.length > 200 || /[\r\n\0]/.test(record.title)) throw new Error("Scenario title is invalid.");
+  if (!Array.isArray(record.steps) || record.steps.length === 0 || record.steps.length > 100) throw new Error("Scenario steps must contain 1-100 entries.");
   const id = typeof record.id === "string" && record.id.trim() !== "" ? slugify(record.id) : slugify(record.title);
   return sanitizeSecrets({
     id,
@@ -193,16 +208,25 @@ function normalizeStep(input: unknown): ScenarioStep {
   const method = String(record.method ?? "GET").toUpperCase();
   if (!isScenarioMethod(method)) throw new Error("Scenario step method is invalid.");
   const path = String(record.path ?? "");
-  if (!path.startsWith("/")) throw new Error("Scenario step path must start with '/'.");
+  if (!path.startsWith("/") || path.length > 2048 || /[\r\n\0]/.test(path)) throw new Error("Scenario step path is invalid.");
   const status = Number(record.status);
   if (!Number.isInteger(status) || status < 100 || status > 599) throw new Error("Scenario step status must be 100-599.");
-  return { name: typeof record.name === "string" ? record.name : `${method} ${path}`, method, path, status, body: record.body ?? {}, headers: readHeaders(record.headers) };
+  const name = typeof record.name === "string" ? record.name : `${method} ${path}`;
+  if (name.length === 0 || name.length > 200 || /[\r\n\0]/.test(name)) throw new Error("Scenario step name is invalid.");
+  return { name, method, path, status, body: record.body ?? {}, headers: readHeaders(record.headers) };
 }
 
 function readHeaders(value: unknown): Record<string, string> | undefined {
   if (value === undefined) return undefined;
   if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
-  return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, headerValue]) => [key, String(headerValue)]));
+  const raw = Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, headerValue]) => [key, String(headerValue)]));
+  const safe = sanitizeResponseHeaders(raw) as Record<string, string>;
+  if (Object.keys(raw).length !== Object.keys(safe).length) throw new Error("Scenario response headers contain an unsafe or unsupported header.");
+  return safe;
+}
+
+function isMissing(error: unknown): boolean {
+  return error instanceof Error && "code" in error && error.code === "ENOENT";
 }
 
 function isScenarioMethod(value: string): value is ScenarioStep["method"] {

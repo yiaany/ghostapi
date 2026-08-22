@@ -78,7 +78,7 @@ export async function withFileLock<T>(filePath: string, operation: () => Promise
     try {
       handle = await open(lockPath, "wx", 0o600);
     } catch (error) {
-      if (!isErrorCode(error, "EEXIST")) throw error;
+      if (!isErrorCode(error, "EEXIST") && !isTransientLockError(error)) throw error;
       await reclaimAbandonedLock(lockPath, staleLockMs);
       if (Date.now() - startedAt >= timeoutMs) {
         throw new Error(`Timed out waiting for local data lock: ${lockPath}`);

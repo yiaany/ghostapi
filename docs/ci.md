@@ -12,7 +12,7 @@ Set `GHOSTAPI_DATA_DIR` to an ephemeral CI directory and use one immutable Ghost
 set -u
 
 export GHOSTAPI_DATA_DIR="$CI_WORKSPACE/.ghostapi-ci"
-export GHOSTAPI_VERSION="0.1.7"
+export GHOSTAPI_VERSION="0.1.8"
 npm install --global "@yiaany/ghostapi@$GHOSTAPI_VERSION"
 
 run_status=0

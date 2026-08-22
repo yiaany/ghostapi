@@ -1,10 +1,9 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { ActionGatewayError, actionHash, createLocalActionGateway, createSyntheticActionAdapter } from "../src/actions/index.js";
+import { ActionGatewayError, actionHash, createLocalActionGateway, createSyntheticActionAdapter, createTestActionApprovalVerifier } from "../src/actions/index.js";
 import { createLocalSafetyController, createTestSafetyEmergencyAuthorizer } from "../src/safety/index.js";
 import { createWorld, inspectWorld } from "../src/worlds/index.js";
 
@@ -12,6 +11,7 @@ const POLICY_HASH = "a".repeat(64);
 const EVIDENCE_HASH = "b".repeat(64);
 const EXPIRES_AT = "2030-01-01T00:00:00.000Z";
 const cliPath = fileURLToPath(new URL("../src/cli/index.ts", import.meta.url));
+const approvalAuthority = createTestActionApprovalVerifier();
 
 describe("synthetic production action gateway", () => {
   it("binds approval to canonical arguments, executes synthetic state exactly once, and writes a receipt chain", async () => {
@@ -43,7 +43,7 @@ describe("synthetic production action gateway", () => {
     const mutated = { ...action, resource: { ...action.resource, id: "other-world" }, arguments: { worldId: "other-world" } };
     await expect(gateway.execute(mutated, { actorId: "agent-one", workloadId: "checkout-worker" }, policy())).rejects.toThrow("changed after approval");
     await expect(gateway.submit(actionEnvelope("action-self", "mutated-world"), approvalFor(actionEnvelope("action-self", "mutated-world"), "agent-one"), policy())).rejects.toThrow("cannot approve");
-    await expect(gateway.submit(actionEnvelope("action-expired", "mutated-world"), { ...approvalFor(actionEnvelope("action-expired", "mutated-world")), expiresAt: "2028-12-31T23:59:59.000Z" }, policy())).rejects.toThrow("expired");
+    await expect(gateway.submit(actionEnvelope("action-expired", "mutated-world"), approvalFor(actionEnvelope("action-expired", "mutated-world"), "reviewer-one", { expiresAt: "2028-12-31T23:59:59.000Z" }), policy())).rejects.toThrow("expired");
     await expect(gateway.submit({ ...actionEnvelope("action-expired-envelope", "mutated-world"), expiresAt: "2028-12-31T23:59:59.000Z" }, approvalFor({ ...actionEnvelope("action-expired-envelope", "mutated-world"), expiresAt: "2028-12-31T23:59:59.000Z" }), policy())).rejects.toThrow("Action has expired");
   });
 
@@ -99,33 +99,60 @@ describe("synthetic production action gateway", () => {
     expect((await gateway.inspect("action-stopped")).receipts.map((entry) => entry.status)).toEqual(["requested", "attempted", "failed"]);
   });
 
-  it("submits, inspects, and executes a synthetic action through the CLI", async () => {
-    await createWorld({ id: "cli-action-world", seed: "cli-action-seed" });
-    const root = process.env.GHOSTAPI_DATA_DIR!;
-    const actionPath = join(root, "cli-action.json");
-    const approvalPath = join(root, "cli-approval.json");
-    const policyPath = "test/fixtures/strict.policy.yaml";
-    const policySource = await readFile(fileURLToPath(new URL("./fixtures/strict.policy.yaml", import.meta.url)), "utf8");
-    const action = { ...actionEnvelope("cli-action", "cli-action-world"), policy: { version: 1, hash: createHash("sha256").update(policySource, "utf8").digest("hex") } };
-    const approval = { ...approvalFor(action), approvedAt: "2026-08-12T00:00:00.000Z" };
-    await writeFile(actionPath, JSON.stringify(action), "utf8");
-    await writeFile(approvalPath, JSON.stringify(approval), "utf8");
-
-    const submitted = await runCli(["action", "submit", "--action", actionPath, "--approval", approvalPath, "--policy", policyPath, "--json"]);
-    expect(submitted.exitCode).toBe(0);
-    expect(JSON.parse(submitted.stdout)).toMatchObject({ envelope: { actionId: "cli-action" } });
-    const inspected = await runCli(["action", "inspect", "cli-action", "--json"]);
-    expect(inspected.exitCode).toBe(0);
-    expect(JSON.parse(inspected.stdout).receipts).toHaveLength(1);
-    const executed = await runCli(["action", "execute", "--action", actionPath, "--policy", policyPath, "--actor", "agent-one", "--workload", "checkout-worker", "--json"]);
-    expect(executed.exitCode).toBe(0);
-    expect(JSON.parse(executed.stdout)).toMatchObject({ status: "verified", actionId: "cli-action", providerRequestId: "synthetic_cli-action" });
+  it("does not advertise dead CLI submit or execute commands", async () => {
+    const submitted = await runCli(["action", "submit"]);
+    const executed = await runCli(["action", "execute"]);
+    expect(submitted).toMatchObject({ exitCode: 1 });
+    expect(executed).toMatchObject({ exitCode: 1 });
+    expect(submitted.stderr).toContain("verifier-backed approval inbox API");
+    expect(executed.stderr).toContain("verifier-backed approval inbox API");
   }, 20_000);
+
+  it("accepts a serialized signed approval and rejects forged provenance", async () => {
+    await createWorld({ id: "forged-approval-world", seed: "forged-approval-seed" });
+    const action = actionEnvelope("action-forged", "forged-approval-world");
+    const gateway = createLocalActionGateway({ now: () => new Date("2029-01-01T00:00:00.000Z"), approvalVerifier: approvalAuthority.verifier, pathForAction: (actionId) => join(process.env.GHOSTAPI_DATA_DIR!, "forged-actions", `${actionId}.json`) });
+    const serialized = JSON.parse(JSON.stringify(approvalFor(action)));
+
+    await expect(gateway.submit(action, serialized, policy())).resolves.toMatchObject({ actionHash: actionHash(action) });
+    const forgedAction = actionEnvelope("action-forged-two", "forged-approval-world");
+    await expect(gateway.submit(forgedAction, { ...approvalFor(forgedAction), provenance: { kind: "ghostapi.ed25519-signature", keyId: "test-approval-key", signature: "A".repeat(86) } }, policy())).rejects.toThrow("authenticity could not be verified");
+  });
+
+  it("rejects a trusted approval object that was modified after issuance", async () => {
+    await createWorld({ id: "tampered-approval-world", seed: "tampered-approval-seed" });
+    const action = actionEnvelope("action-tampered-approval", "tampered-approval-world");
+    const approval = approvalFor(action);
+    approval.approvedBy = "attacker";
+
+    await expect(createGateway().submit(action, approval, policy())).rejects.toThrow("authenticity could not be verified");
+  });
+
+  it("re-authenticates persisted approval provenance at execution", async () => {
+    await createWorld({ id: "reauth-world", seed: "reauth-seed" });
+    const action = actionEnvelope("action-reauth", "reauth-world");
+    let verifierAvailable = true;
+    const gateway = createLocalActionGateway({
+      now: () => new Date("2029-01-01T00:00:00.000Z"),
+      approvalVerifier: {
+        verify: async (...args) => {
+          if (!verifierAvailable) throw new ActionGatewayError("Action approval authenticity could not be verified.");
+          return approvalAuthority.verifier.verify(...args);
+        }
+      },
+      pathForAction: (actionId) => join(process.env.GHOSTAPI_DATA_DIR!, "reauth-actions", `${actionId}.json`)
+    });
+    await gateway.submit(action, approvalFor(action), policy());
+    verifierAvailable = false;
+
+    await expect(gateway.execute(action, { actorId: "agent-one", workloadId: "checkout-worker" }, policy())).rejects.toThrow("authenticity could not be verified");
+    expect((await inspectWorld("reauth-world")).state.receipts).toEqual([]);
+  });
 });
 
 function createGateway(adapter = createSyntheticActionAdapter(), safetyController?: ReturnType<typeof createLocalSafetyController>) {
   const root = process.env.GHOSTAPI_DATA_DIR!;
-  return createLocalActionGateway({ now: () => new Date("2029-01-01T00:00:00.000Z"), adapter, safetyController, pathForAction: (actionId) => join(root, "actions", `${actionId}.action.json`) });
+  return createLocalActionGateway({ now: () => new Date("2029-01-01T00:00:00.000Z"), adapter, safetyController, approvalVerifier: approvalAuthority.verifier, pathForAction: (actionId) => join(root, "actions", `${actionId}.action.json`) });
 }
 
 function actionEnvelope(actionId: string, worldId: string) {
@@ -150,17 +177,17 @@ function actionEnvelope(actionId: string, worldId: string) {
   } as const;
 }
 
-function approvalFor(action: ReturnType<typeof actionEnvelope> | { [key: string]: unknown }, approvedBy = "reviewer-one") {
-  return {
+function approvalFor(action: ReturnType<typeof actionEnvelope> | { [key: string]: unknown }, approvedBy = "reviewer-one", overrides: Partial<{ expiresAt: string }> = {}) {
+  return approvalAuthority.issue({
     schemaVersion: 1,
     kind: "ghostapi.action-approval",
     approvalId: `approval-${String(action.actionId)}`,
     actionHash: actionHash(action),
     approvedBy,
     approvedAt: "2028-12-31T00:00:00.000Z",
-    expiresAt: EXPIRES_AT,
+    expiresAt: overrides.expiresAt ?? EXPIRES_AT,
     nonce: `approval-nonce-${String(action.actionId)}`
-  };
+  });
 }
 
 function policy() {

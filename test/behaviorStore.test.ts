@@ -23,6 +23,11 @@ describe("behavior store", () => {
     await expect(setApiBehavior({ method: "GET", path: "/tasks", status: 200, body: {}, delayMs: 10_001 })).rejects.toThrow("delayMs");
   });
 
+  it("rejects unsafe response headers", async () => {
+    await expect(setApiBehavior({ method: "GET", path: "/tasks", status: 200, body: {}, headers: { "set-cookie": "session=stolen" } })).rejects.toThrow("unsafe or unsupported");
+    await expect(setApiBehavior({ method: "GET", path: "/tasks", status: 200, body: {}, headers: { location: "https://safe.example\r\nX-Evil: yes" } })).rejects.toThrow("unsafe or unsupported");
+  });
+
   it("preserves concurrent writes", async () => {
     await Promise.all(Array.from({ length: 12 }, (_, index) => setApiBehavior({ method: "GET", path: `/items/${index}`, status: 200, body: { index } })));
 

@@ -5,7 +5,7 @@ Baseline captured on 2026-08-05 before product changes.
 ## Repository
 
 - Working copy: `./repo`
-- Remote: `https://github.com/yiaany/ghostapi.git`
+- Remote: `https://github.com/yiaany/ghostapi.git` (repository identity metadata corrected on 2026-08-22; historical verification outcomes are unchanged)
 - Branch: `main`
 - Commit before baseline documentation: `f02d3e914c50ab6ade952aa38347b4e7ac4a35d8`
 - Package: `@yiaany/ghostapi@0.1.7`

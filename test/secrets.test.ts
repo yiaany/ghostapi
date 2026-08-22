@@ -74,6 +74,18 @@ describe("sanitizeSecrets", () => {
     );
   });
 
+  it("masks cloud credentials, JWTs, private keys, package tokens, and credential URLs", () => {
+    const input = [
+      "AKIAIOSFODNN7EXAMPLE",
+      "AIzaSyDUMMYDUMMYDUMMYDUMMYDUMMYDUMMY1",
+      "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature123456",
+      "npm_abcdefghijklmnopqrstuvwxyz123456",
+      "postgres://user:password@db.example/app",
+      "-----BEGIN PRIVATE KEY-----\nprivate-material\n-----END PRIVATE KEY-----"
+    ].join(" | ");
+    expect(sanitizeSecretString(input)).not.toMatch(/AKIA|AIza|eyJhbGci|npm_|password@|private-material/);
+  });
+
   it("masks fixture secrets without removing safe fields", () => {
     expect(sanitizeSecrets(secretFixture)).toEqual({
       authorization: "Bearer ***",

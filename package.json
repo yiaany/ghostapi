@@ -1,6 +1,6 @@
 {
   "name": "@yiaany/ghostapi",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "The local internet for AI coding agents.",
   "type": "module",
   "repository": {
@@ -11,6 +11,16 @@
     "url": "https://github.com/yiaany/ghostapi/issues"
   },
   "homepage": "https://github.com/yiaany/ghostapi#readme",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "bin": {
     "ghostapi": "dist/cli/index.js"
   },
@@ -31,7 +41,9 @@
     "start": "node dist/cli/index.js start",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "smoke:package": "node scripts/package-smoke.mjs"
+    "smoke:package": "node scripts/package-smoke.mjs",
+    "lint": "npm run format:check",
+    "format:check": "prettier --check package.json tsconfig.json vitest.config.ts vite.landing.config.ts scripts/package-smoke.mjs test/dashboardAssets.test.ts test/landingAssets.test.ts"
   },
   "keywords": [
     "mcp",
@@ -68,12 +80,13 @@
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.7.0",
+    "prettier": "^3.9.6",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "tsx": "^4.16.2",
     "typescript": "^5.5.3",
-    "vite": "^5.4.21",
-    "vitest": "^2.0.3"
+    "vite": "^6.4.3",
+    "vitest": "^4.1.11"
   },
   "engines": {
     "node": ">=20"

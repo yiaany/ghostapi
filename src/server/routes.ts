@@ -48,11 +48,14 @@ export function registerRoutes(app: Express, config: ServerConfig): void {
   app.get("/dashboard/app.js", dashboardJsHandler);
 
   app.get("/events", (_request: Request, response: Response) => {
+    if (!addSseClient(response)) {
+      response.status(503).json({ error: { code: "sse_capacity_reached", message: "Too many event stream clients." } });
+      return;
+    }
     response.setHeader("Content-Type", "text/event-stream");
     response.setHeader("Cache-Control", "no-cache");
     response.setHeader("Connection", "keep-alive");
     response.flushHeaders();
-    addSseClient(response);
   });
 
   app.get("/api/events", (_request: Request, response: Response) => {

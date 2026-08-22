@@ -159,10 +159,14 @@ The pipeline creates a deterministic synthetic world and one sanitized, sequence
 
 Retention is per-tenant and opt-in: a tenant with a configured `retentionDays` is bounded by the 2,000-entry store cap — when the cap is reached, entries older than the retention window are rotated out and the tenant's chain is relinked so verification still passes. A tenant without a retention policy, and any tenant on a local legal hold, is never rotated. Local legal hold blocks deletion requests, and a deletion request is only an auditable request, not an erasure or compliance claim. See the [action-ledger and incident-replay threat model](security/action-ledger-incident-replay-threat-model.md).
 
-Use the public API to construct the exact action and approval hash, then keep the JSON as reviewed artifacts:
+Use the public API to construct the exact action, then execute it through a verifier-backed approval inbox. Load the Ed25519 private key from a durable protected secret store available only to the approval authority and load the matching public key in the executor. Do not generate a new key for each process start.
 
 ```ts
-import { actionHash, createLocalActionGateway } from "@yiaany/ghostapi";
+import {
+  createApprovalInboxExecutionFlow,
+  createEd25519ActionApprovalSigner,
+  createEd25519ActionApprovalVerifier
+} from "@yiaany/ghostapi";
 
 const action = {
   schemaVersion: 1,
@@ -189,31 +193,45 @@ const action = {
   nonce: "review-001"
 } as const;
 
-const approval = {
+const approvalSigner = createEd25519ActionApprovalSigner({ keyId: "local-approval-2026", privateKey: privateKeyPem });
+const approvalVerifier = createEd25519ActionApprovalVerifier({ trustedKeys: { "local-approval-2026": publicKeyPem } });
+const inbox = createApprovalInboxExecutionFlow({
+  approverVerifier,
+  approvalSigner,
+  approvalVerifier
+});
+
+const approvalPolicy = {
   schemaVersion: 1,
-  kind: "ghostapi.action-approval",
-  approvalId: "approval-recover-subscription-001",
-  actionHash: actionHash(action),
-  approvedBy: "human-reviewer",
-  approvedAt: "2026-08-13T00:00:00.000Z",
-  expiresAt: "2030-01-01T00:00:00.000Z",
-  nonce: "approval-review-001"
+  kind: "ghostapi.approval-policy",
+  id: "synthetic-recovery",
+  version: 1,
+  allowedEnvironments: ["synthetic"],
+  minimumConfidence: 80,
+  criticalRisks: ["update"],
+  velocity: { maxActions: 10, windowMs: 60_000 },
+  approvalTtlMs: 10 * 60_000,
+  escalationTimeoutMs: 5 * 60_000
 } as const;
 
-const gateway = createLocalActionGateway();
-await gateway.submit(action, approval, { version: 1, hash: action.policy.hash, allowed: true });
-const receipt = await gateway.execute(action, { actorId: "billing-agent", workloadId: "recovery-worker" }, { version: 1, hash: action.policy.hash, allowed: true });
+const request = await inbox.request(action, approvalPolicy, { confidence: 95 });
+await inbox.approve(request.id, authenticatedReviewerOne);
+await inbox.approve(request.id, authenticatedReviewerTwo);
+const receipt = await inbox.execute(
+  request.id,
+  { actorId: "billing-agent", workloadId: "recovery-worker" },
+  { version: 1, hash: action.policy.hash, allowed: true },
+  approvalPolicy
+);
 ```
 
-CLI commands accept only regular non-symlink local JSON under the project root or `GHOSTAPI_DATA_DIR` and re-load the supplied policy at submit and execution:
+The action CLI is intentionally inspect-only because policy schema v1 has no action-level authorization rule and the CLI has no approver authentication or signing-key boundary:
 
 ```bash
-ghostapi action submit --action action.json --approval approval.json --policy ghostapi.policy.yaml
 ghostapi action inspect recover-subscription-001 --json
-ghostapi action execute --action action.json --policy ghostapi.policy.yaml --actor billing-agent --workload recovery-worker --json
 ```
 
-Before the synthetic side effect, the gateway checks exact action hash, independent approval, action/approval expiry, current policy version/hash, execution actor/workload identity, adapter operation support, and idempotency state. Receipts progress through `requested`, `attempted`, `committed`, `verified`, or `failed`; an attempted action is reconciled before any re-execution. Unknown provider outcomes and verification failures are explicitly not safe to retry. Unsupported operations or compensation fail visibly. The local store is bounded to 128 KiB per record and 20 receipts, uses per-action locks and atomic writes, and rejects symlink records.
+Before the synthetic side effect, the gateway verifies the Ed25519 approval provenance again from the persisted action record, then checks exact action hash, independent approval, action/approval expiry, current policy version/hash, execution actor/workload identity, adapter operation support, and idempotency state. Inbox artifacts additionally require durable consumed inbox state; a signing-key-only gateway cannot execute them. Missing, unknown, invalid, or unavailable verification authority fails closed. Receipts progress through `requested`, `attempted`, `committed`, `verified`, or `failed`; an attempted action is reconciled before any re-execution. If a process stops after the inbox records `consumedAt`/`executing`, call `inbox.execute()` again with the same request, identity, action policy, and approval policy. Recovery uses the gateway's durable receipt chain, never consumes a second approval, and repeated calls return the same verified receipt without repeating the side effect. Expiry still blocks a first attempt, while an already durable `attempted`, `committed`, or `verified` receipt may be reconciled or returned after expiry without starting another attempt. A durable failed receipt is terminal; an ambiguous outcome remains fail-closed for reconciliation. Unknown provider outcomes and verification failures are explicitly not safe to retry. Unsupported operations or compensation fail visibly. The local store is bounded to 128 KiB per record and 20 receipts, uses per-action locks and atomic writes, and rejects symlink records. Legacy unsigned approval records are intentionally not executable.
 
 Policy schema v1 does not yet contain action-level authorization rules. This release verifies the reviewed policy reference at execution to prevent stale-policy use; it does not claim that a generic policy authorizes a production action. Read [`docs/security/action-gateway-threat-model.md`](security/action-gateway-threat-model.md) before extending the adapter boundary.
 
@@ -229,11 +247,11 @@ Rotation changes the opaque vault reference, increments the credential version, 
 
 ## Local Approval Inbox
 
-`createLocalApprovalInbox()` is a typed local API for a human approval workflow over the existing synthetic action gateway. It has no CLI, hosted UI, Slack/email integration, bearer approval link, external notification, real credential, or production provider path. An injected approver verifier authenticates local approver objects; messages and LLM text are never approval authority.
+`createApprovalInboxExecutionFlow()` and `createLocalApprovalInbox()` expose the supported typed local human-approval execution flow over the existing synthetic action gateway. They require an approver identity verifier, approval signer, and approval signature verifier. They have no execution CLI, hosted UI, Slack/email integration, bearer approval link, external notification, real credential, or production provider path. Messages and LLM text are never approval authority.
 
 Requests are generated from an exact action envelope and display the intent, target, normalized argument diff, expected side effects, reversibility, amount impact, policy reason, evidence hash, and successful synthetic preflight result. The risk taxonomy includes `read`, `create`, `update`, `communicate`, `money_movement`, `delete`, `permission_change`, and `deployment`; risk is derived by GhostAPI, not supplied by an agent. The current synthetic subscription workflow is an `update` action only.
 
-Policies can restrict environment, actor, resource, amount, confidence, and action velocity. Actions requiring two-person review require distinct verified principals and approver independence keys. Approval artifacts are exact-action-hash-bound, expiring, single-use, and rechecked along with the current policy before the action gateway is called. Public action-gateway methods reject inbox-issued artifacts, so artifact data alone cannot bypass consumption, revoke, or inbox audit state. Reject, revoke, timeout, expiry, changed arguments, changed identity, and policy drift all fail closed. Read [`docs/security/approval-inbox-threat-model.md`](security/approval-inbox-threat-model.md) before connecting any future identity, notification, or provider execution system.
+Policies can restrict environment, actor, resource, amount, confidence, and action velocity. Actions requiring two-person review require distinct verified principals and approver independence keys. Approval artifacts are exact-action-hash-bound, expiring, single-use, and Ed25519-signed. The gateway re-verifies the signature at submit and execution, while the inbox execution verifier also checks the durable consumed request state. An `executing` request is safely resumable with the same inputs: durable gateway receipts decide whether to continue, reconcile, return the existing verified result, or fail closed, and the inbox links the verified receipt before becoming `executed`. A caller holding only artifact JSON or the public verification key cannot bypass consumption, revoke, recovery checks, or inbox audit state. Reject, revoke, timeout, expiry, changed arguments, changed identity, policy drift, missing verification keys, and invalid signatures all fail closed. Read [`docs/security/approval-inbox-threat-model.md`](security/approval-inbox-threat-model.md) before connecting any future identity, notification, or provider execution system.
 
 ## Local Synthetic Trust Ladder
 

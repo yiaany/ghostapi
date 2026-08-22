@@ -21,6 +21,8 @@ import { createProviderRuntime } from "../providers/runtime.js";
 import type { ProviderPackExecution } from "../providers/types.js";
 import { transactState } from "../state/stateStore.js";
 import { corruptStripeWebhookSignature, createStripeWebhookSignature, isStripeWebhookDeliveryRequest, readStripeWebhookDelivery } from "../providers/stripeWebhook.js";
+import { randomUUID } from "node:crypto";
+import { sanitizeResponseHeaders } from "../security/headerSanitizer.js";
 
 
 export async function proxyHandler(request: Request, response: Response, config: ServerConfig): Promise<void> {
@@ -42,7 +44,7 @@ export async function proxyHandler(request: Request, response: Response, config:
   async function completeRequest(source: EventSource, status: number, body: unknown) {
     const durationMs = Math.round(performance.now() - t0);
     const event = {
-      id: `evt_${Date.now().toString(36)}`,
+      id: randomUUID(),
       timestamp: new Date().toISOString(),
       provider: providerLabel,
       method: normalizedRequest.method,
@@ -63,7 +65,7 @@ export async function proxyHandler(request: Request, response: Response, config:
 
   const behavior = await findApiBehavior(normalizedRequest);
   if (behavior !== null) {
-    for (const [key, value] of Object.entries(behavior.headers ?? {})) {
+    for (const [key, value] of Object.entries(sanitizeResponseHeaders(behavior.headers ?? {}))) {
       response.setHeader(key, value);
     }
     response.setHeader("x-ghostapi-behavior", "HIT");
@@ -177,7 +179,7 @@ export async function proxyHandler(request: Request, response: Response, config:
   const cachedResponse = await getCachedResponse(provider, cacheKey);
 
   if (cachedResponse !== null) {
-    for (const [key, value] of Object.entries(cachedResponse.headers)) {
+    for (const [key, value] of Object.entries(sanitizeResponseHeaders(cachedResponse.headers))) {
       response.setHeader(key, value);
     }
     response.setHeader("x-ghostapi-cache", "HIT");
@@ -220,11 +222,11 @@ export async function proxyHandler(request: Request, response: Response, config:
     }
   }
 
-  for (const [key, value] of Object.entries(generatedOption.headers)) {
+  for (const [key, value] of Object.entries(sanitizeResponseHeaders(generatedOption.headers))) {
     response.setHeader(key, value);
   }
   
   response.setHeader("x-ghostapi-cache", "MISS");
   response.status(generatedOption.status).json(generatedOption.body);
-  await completeRequest(generatedOption.status >= 400 ? "error" : (String(generatedOption.body)?.includes("mock_response") ? "fallback" : "ai"), generatedOption.status, generatedOption.body);
+  await completeRequest(generatedOption.status >= 400 ? "error" : generatedOption.headers["x-ghostapi-generation-source"] === "local-fallback" ? "fallback" : "ai", generatedOption.status, generatedOption.body);
 }

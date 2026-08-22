@@ -68,7 +68,9 @@ export type CredentialGrant = {
   projectId: string;
   environment: string;
   workloadId: string;
+  subjectId: string;
   workloadKind: WorkloadKind;
+  runId: string;
   provider: string;
   scopes: string[];
   audience: "ghostapi-server";
@@ -234,7 +236,9 @@ export class CredentialBroker {
         projectId: credential.projectId,
         environment: credential.environment,
         workloadId: workload.workloadId,
+        subjectId: workload.subjectId,
         workloadKind: workload.workloadKind,
+        runId: workload.runId,
         provider: credential.provider,
         scopes: [...request.scopes],
         audience: "ghostapi-server",
@@ -517,14 +521,14 @@ function validateCredentialMetadata(value: unknown): CredentialMetadata {
 
 function validateGrant(value: unknown): CredentialGrant {
   const grant = object(value, "Credential grant is invalid.");
-  exactKeys(grant, ["id", "credentialId", "credentialVersion", "tenantId", "projectId", "environment", "workloadId", "workloadKind", "provider", "scopes", "audience", "action", "issuedAt", "expiresAt", "breakGlass", "revokedAt"], "Credential grant", ["breakGlass", "revokedAt"]);
+  exactKeys(grant, ["id", "credentialId", "credentialVersion", "tenantId", "projectId", "environment", "workloadId", "subjectId", "workloadKind", "runId", "provider", "scopes", "audience", "action", "issuedAt", "expiresAt", "breakGlass", "revokedAt"], "Credential grant", ["breakGlass", "revokedAt"]);
   const issuedAt = timestamp(grant.issuedAt, "Credential grant issue time");
   const expiresAt = timestamp(grant.expiresAt, "Credential grant expiry");
   if (Date.parse(expiresAt) <= Date.parse(issuedAt) || Date.parse(expiresAt) - Date.parse(issuedAt) > MAX_GRANT_TTL_MS) throw new CredentialBrokerError("Credential grant lifetime is invalid.");
   const breakGlass = grant.breakGlass === undefined ? undefined : breakGlassRecord(grant.breakGlass);
   if (breakGlass !== undefined && Date.parse(expiresAt) - Date.parse(issuedAt) > MAX_BREAK_GLASS_TTL_MS) throw new CredentialBrokerError("Break-glass grant lifetime is invalid.");
   if (grant.audience !== "ghostapi-server") throw new CredentialBrokerError("Credential grant audience is invalid.");
-  return { id: identifier(grant.id, "Credential grant id"), credentialId: identifier(grant.credentialId, "Credential id"), credentialVersion: positiveInteger(grant.credentialVersion, "Credential version"), tenantId: identifier(grant.tenantId, "Credential tenant id"), projectId: identifier(grant.projectId, "Credential project id"), environment: identifier(grant.environment, "Credential environment"), workloadId: identifier(grant.workloadId, "Credential workload id"), workloadKind: workloadKind(grant.workloadKind), provider: identifier(grant.provider, "Credential provider"), scopes: scopes(grant.scopes, "Credential grant scopes"), audience: "ghostapi-server", action: actionReference(grant.action), issuedAt, expiresAt, ...(breakGlass === undefined ? {} : { breakGlass }), ...(grant.revokedAt === undefined ? {} : { revokedAt: timestamp(grant.revokedAt, "Credential grant revocation time") }) };
+  return { id: identifier(grant.id, "Credential grant id"), credentialId: identifier(grant.credentialId, "Credential id"), credentialVersion: positiveInteger(grant.credentialVersion, "Credential version"), tenantId: identifier(grant.tenantId, "Credential tenant id"), projectId: identifier(grant.projectId, "Credential project id"), environment: identifier(grant.environment, "Credential environment"), workloadId: identifier(grant.workloadId, "Credential workload id"), subjectId: identifier(grant.subjectId, "Credential subject id"), workloadKind: workloadKind(grant.workloadKind), runId: identifier(grant.runId, "Credential run id"), provider: identifier(grant.provider, "Credential provider"), scopes: scopes(grant.scopes, "Credential grant scopes"), audience: "ghostapi-server", action: actionReference(grant.action), issuedAt, expiresAt, ...(breakGlass === undefined ? {} : { breakGlass }), ...(grant.revokedAt === undefined ? {} : { revokedAt: timestamp(grant.revokedAt, "Credential grant revocation time") }) };
 }
 
 function validateReceipt(value: unknown): CredentialUseReceipt {
@@ -589,7 +593,7 @@ function assertRequestMatchesCredential(request: CredentialAccessRequest, creden
 
 function assertGrantUsable(grant: CredentialGrant, workload: WorkloadIdentity, request: CredentialAccessRequest, now: string): void {
   if (grant.revokedAt !== undefined || Date.parse(grant.expiresAt) <= Date.parse(now)) throw new CredentialBrokerError("Credential grant is expired or revoked.");
-  if (grant.tenantId !== workload.tenantId || grant.projectId !== workload.projectId || grant.environment !== workload.environment || grant.workloadId !== workload.workloadId || grant.workloadKind !== workload.workloadKind) throw new CredentialBrokerError("Credential grant does not belong to this workload.");
+  if (grant.tenantId !== workload.tenantId || grant.projectId !== workload.projectId || grant.environment !== workload.environment || grant.workloadId !== workload.workloadId || grant.subjectId !== workload.subjectId || grant.workloadKind !== workload.workloadKind || grant.runId !== workload.runId) throw new CredentialBrokerError("Credential grant does not belong to this workload subject and run.");
   if (grant.credentialId !== request.credentialId || grant.provider !== request.provider || grant.audience !== request.audience || !sameScopes(grant.scopes, request.scopes) || !sameAction(grant.action, request.action)) throw new CredentialBrokerError("Credential request differs from the granted action.");
 }
 

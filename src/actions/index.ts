@@ -5,7 +5,11 @@ export {
   actionHash,
   canonicalizeActionEnvelope,
   createLocalActionGateway,
+  createDisabledActionApprovalVerifier,
+  createEd25519ActionApprovalSigner,
+  createEd25519ActionApprovalVerifier,
   createSyntheticActionAdapter,
+  createTestActionApprovalVerifier,
   getActionPath,
   validateActionApproval,
   validateActionEnvelope,
@@ -13,6 +17,10 @@ export {
 } from "./gateway.js";
 export type {
   ActionApproval,
+  ActionApprovalVerifier,
+  ActionApprovalSigner,
+  ActionApprovalVerification,
+  ActionApprovalVerificationContext,
   ActionEnvelope,
   ActionExecutionAdapter,
   ActionExecutionIdentity,
@@ -22,5 +30,6 @@ export type {
   ActionReceiptStatus,
   ActionReversibility,
   ActionRiskClass,
-  StoredAction
+  StoredAction,
+  UnsignedActionApproval
 } from "./gateway.js";
