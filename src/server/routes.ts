@@ -4,7 +4,6 @@ import type { ServerConfig } from "../config/serverConfig.js";
 import { addSseClient } from "./sse.js";
 import { clearEvents, getEventsHistory } from "./eventsStore.js";
 import { dashboardHandler, dashboardCssHandler, dashboardJsHandler } from "../dashboard/dashboard.js";
-import { landingAssetsHandler, landingHandler } from "../landing/landing.js";
 import { clearCache } from "../cache/index.js";
 import { clearState } from "../state/stateStore.js";
 import { getFaultLabConfig, updateFaultLabConfig } from "../fault/faultLab.js";
@@ -22,8 +21,7 @@ const CLEAR_TARGETS = ["cache", "state", "events", "all"] as const;
 type ClearTarget = typeof CLEAR_TARGETS[number];
 
 export function registerRoutes(app: Express, config: ServerConfig): void {
-  app.get("/", landingHandler);
-  app.use("/landing/assets", landingAssetsHandler);
+  app.get("/", (_request: Request, response: Response) => response.redirect(302, "/dashboard"));
 
   app.get("/health", async (_request: Request, response: Response, next: NextFunction) => {
     try {

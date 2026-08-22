@@ -67,7 +67,7 @@ function isDashboardPath(path: string): boolean {
 }
 
 function isPublicRoute(path: string): boolean {
-  return path === "/" || path === "/health" || path === "/landing/assets" || path.startsWith("/landing/assets/");
+  return path === "/" || path === "/health";
 }
 
 function canonicalPath(path: string): string {

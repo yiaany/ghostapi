@@ -13,8 +13,8 @@ This record is intentionally separate from the historical baseline and onboardin
 | --- | --- | --- |
 | Root lint | PASS | `npm run lint`; configured Prettier check passed |
 | Root typecheck | PASS | `npm run typecheck`; completed without diagnostics |
-| Root tests | PASS | `npm test`; 56 files and 342 tests passed with zero skipped |
-| Root build | PASS | `npm run build`; TypeScript, landing-page, and static dashboard builds completed |
+| Root tests | PASS | `npm test`; 55 files and 341 tests passed with zero skipped |
+| Root build | PASS | `npm run build`; TypeScript and static dashboard builds completed |
 | Package smoke | PASS | `npm run smoke:package`; packed artifact installed and its CLI, package export, generated project, doctor, and provider checks passed |
 | Root dependency audits | PASS | Full `npm audit` and production-only `npm audit --omit=dev` both reported zero vulnerabilities |
 | Hosted clean install and check | PASS | Fresh `npm ci`, then `npm run check`; hosted typecheck, 26 tests with zero skipped, and Bun build passed |

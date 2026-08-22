@@ -9,6 +9,14 @@
 </p>
 
 <p align="center">
+  <a href="https://www.npmjs.com/package/@yiaany/ghostapi"><img alt="npm" src="https://img.shields.io/npm/v/@yiaany/ghostapi?color=0f172a&label=npm"></a>
+  <a href="https://github.com/yiaany/ghostapi/blob/main/LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-0f172a"></a>
+  <a href="https://github.com/yiaany/ghostapi/actions/workflows/ci.yml"><img alt="ci" src="https://github.com/yiaany/ghostapi/actions/workflows/ci.yml/badge.svg"></a>
+  <img alt="node" src="https://img.shields.io/badge/node-%3E%3D20-0f172a">
+  <img alt="MCP" src="https://img.shields.io/badge/MCP-enabled-0f172a">
+</p>
+
+<p align="center">
   <a href="#quickstart">Quickstart</a> ·
   <a href="#what-you-get">Features</a> ·
   <a href="#provider-support">Providers</a> ·
@@ -91,10 +99,6 @@ On Windows and macOS, `ghostapi run` fails closed because an equivalent process-
 | Fault testing | Forces latency, provider errors, card declines, rate limits, and other unhappy paths. |
 | Safety controls | Includes local approvals, scoped budgets, kill switches, circuit breakers, ledgers, and reconciliation for synthetic actions. |
 | Reliability tooling | Tracks local SLO samples, cost attribution, runtime health, backups, inventory, and attack-path metadata. |
-
-<p align="center">
-  <img src="docs/assets/landing.png" alt="GhostAPI landing page showing the local API workflow for coding agents">
-</p>
 
 ## Dashboard
 

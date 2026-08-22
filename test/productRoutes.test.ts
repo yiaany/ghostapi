@@ -23,6 +23,14 @@ describe("product routes", () => {
     await resetFaultLabForTests();
   });
 
+  it("redirects the root page to the dashboard", async () => {
+    await withServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/`, { redirect: "manual" });
+      expect(response.status).toBe(302);
+      expect(response.headers.get("location")).toBe("/dashboard");
+    });
+  });
+
   it("serves generated setup and scenario actions", async () => {
     await withServer(async (baseUrl) => {
       const setupResponse = await fetch(`${baseUrl}/api/setup`, { method: "POST" });
