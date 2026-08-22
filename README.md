@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/ghostapi-avatar.png" alt="GhostAPI" width="104" height="104">
+</p>
+
 <h1 align="center">GhostAPI</h1>
 
 <p align="center">

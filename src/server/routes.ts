@@ -1,4 +1,10 @@
+import express from "express";
+import { join } from "path";
+import { dirname } from "path";
+import { fileURLToPath } from "url";
 import type { Express, Request, Response, NextFunction } from "express";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 import { proxyHandler } from "../proxy/proxyHandler.js";
 import type { ServerConfig } from "../config/serverConfig.js";
 import { addSseClient } from "./sse.js";
@@ -21,6 +27,7 @@ const CLEAR_TARGETS = ["cache", "state", "events", "all"] as const;
 type ClearTarget = typeof CLEAR_TARGETS[number];
 
 export function registerRoutes(app: Express, config: ServerConfig): void {
+  app.use("/docs/assets", express.static(join(__dirname, "../../docs/assets")));
   app.get("/", (_request: Request, response: Response) => response.redirect(302, "/dashboard"));
 
   app.get("/health", async (_request: Request, response: Response, next: NextFunction) => {
