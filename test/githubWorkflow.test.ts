@@ -18,8 +18,11 @@ describe("GhostAPI PR safety workflow", () => {
 
     expect(workflow).toContain("GHOSTAPI_VERSION: \"0.1.8\"");
     expect(workflow).toContain("actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683");
-    expect(workflow).toContain("actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020");
     expect(workflow).toContain("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02");
+    expect(workflow).toContain("image: node:22-bookworm");
+    expect(workflow).toContain("options: --privileged");
+    expect(workflow).toContain("EVIDENCE_DIR: /tmp/ghostapi-evidence");
+    expect(workflow).toContain("GHOSTAPI_DATA_DIR: /tmp/ghostapi-data");
     expect(workflow).toContain("ghostapi run --policy examples/ci-smoke/ghostapi.policy.yaml -- npm --prefix examples/ci-smoke run test:safe");
     expect(workflow).toContain("ghostapi run --policy examples/ci-smoke/ghostapi.policy.yaml -- npm --prefix examples/ci-smoke run test:production-egress");
     expect(workflow).toContain("ghostapi evidence generate --policy examples/ci-smoke/ghostapi.policy.yaml");
@@ -52,7 +55,9 @@ describe("standard CI workflow", () => {
     expect(workflow).toContain("macos-latest");
     expect(workflow).toContain("Hosted pilot checks");
     expect(workflow).toContain("Required Ubuntu Linux egress enforcement");
-    expect(workflow).toContain("sudo apt-get install --yes util-linux iproute2 curl");
+    expect(workflow).toContain("image: node:22-bookworm");
+    expect(workflow).toContain("options: --privileged");
+    expect(workflow).toContain("apt-get install --yes util-linux iproute2 curl");
     expect(workflow).toContain("unshare --user --map-root-user --net --mount --pid --fork");
     expect(workflow).toContain('GHOSTAPI_REQUIRE_LINUX_EGRESS: "1"');
     expect(workflow).toContain("npm test -- --run test/egressRun.test.ts --reporter=verbose");
