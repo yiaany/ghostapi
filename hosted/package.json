@@ -3,14 +3,19 @@
   "private": true,
   "type": "module",
   "engines": {
-    "bun": ">=1.3.14"
+    "bun": "1.3.14",
+    "node": ">=20.19.0"
   },
   "scripts": {
     "dev": "bun --watch src/server.ts",
-    "start": "bun src/server.ts",
-    "typecheck": "bunx tsc --noEmit",
+    "start": "bun run src/server.ts",
+    "dispatcher": "bun run src/dispatcher.ts",
+    "cleanup": "bun run src/cleanup.ts",
+    "build": "bun build src/server.ts src/dispatcher.ts src/cleanup.ts --target=bun --outdir=dist",
+    "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test test/**/*.test.ts",
-    "auth:migrate": "bunx auth@latest migrate --config src/auth.ts --yes"
+    "check": "npm run typecheck && npm test && npm run build",
+    "auth:migrate": "bunx auth@1.6.26 migrate --config src/auth.ts --yes"
   },
   "dependencies": {
     "@elysiajs/cors": "1.4.2",
@@ -23,7 +28,7 @@
   "devDependencies": {
     "@types/bun": "1.3.14",
     "@types/pg": "8.21.0",
-    "tsx": "4.16.2",
+    "tsx": "4.23.12",
     "typescript": "5.9.3"
   }
 }

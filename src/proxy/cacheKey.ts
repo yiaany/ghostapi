@@ -20,7 +20,7 @@ export function createCacheKey(normalizedRequest: NormalizedRequest, provider: s
     importantHeaders: extractImportantHeaders(normalizedRequest.headers)
   };
 
-  return createHash("sha256").update(stableStringify(input)).digest("hex").slice(0, 10);
+  return createHash("sha256").update(stableStringify(input)).digest("hex");
 }
 
 function extractImportantHeaders(headers: NormalizedRequest["headers"]): Record<string, string | string[]> {

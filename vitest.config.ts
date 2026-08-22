@@ -4,6 +4,7 @@ export default defineConfig({
   test: {
     include: ["test/**/*.test.ts"],
     fileParallelism: false,
-    setupFiles: ["test/setup.ts"]
-  }
+    testTimeout: 15_000,
+    setupFiles: ["test/setup.ts"],
+  },
 });

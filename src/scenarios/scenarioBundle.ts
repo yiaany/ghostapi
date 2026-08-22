@@ -3,6 +3,7 @@ import { basename, dirname, isAbsolute, relative, resolve, sep, join } from "nod
 import { getDataPaths } from "../config/dataPaths.js";
 import { atomicWriteJson } from "../storage/fileStore.js";
 import { isSecretFieldName, sanitizeSecretString, sanitizeSecrets } from "../security/secrets.js";
+import { isSafeRelativeLocation } from "../security/headerSanitizer.js";
 
 const MAX_CAPTURE_BYTES = 1024 * 1024;
 const MAX_BUNDLE_BYTES = 512 * 1024;
@@ -403,7 +404,7 @@ function sanitizeHeaders(headers: Record<string, string>, allowed: Set<string>, 
       continue;
     }
     if (!allowed.has(lower)) continue;
-    if (response && lower === "location" && !isSafeRedirect(value)) {
+    if (response && lower === "location" && !isSafeRelativeLocation(value)) {
       sanitized.location = "/__ghostapi_redirect_blocked__";
       mark(state, "external-redirect");
       continue;
@@ -619,7 +620,7 @@ function validateHeaders(input: unknown, allowed: Set<string>, variableNames: Se
   for (const [name, value] of Object.entries(headers)) {
     const lower = name.toLowerCase();
     if (!allowed.has(lower) || typeof value !== "string" || value.length > 2_000 || isSecretFieldName(lower)) throw new ScenarioBundleError(`Scenario bundle header is not allowed: ${name}`);
-    if (response && lower === "location" && !isSafeRedirect(value)) throw new ScenarioBundleError("Scenario bundle redirect location must be relative.");
+    if (response && lower === "location" && !isSafeRelativeLocation(value)) throw new ScenarioBundleError("Scenario bundle redirect location must be relative.");
     validateTemplate(value, variableNames);
     normalized[lower] = value;
   }
@@ -775,10 +776,6 @@ function isMultipart(headers: Record<string, string>): boolean {
 
 function isMultipartMime(value: unknown): boolean {
   return typeof value === "string" && /^multipart\//i.test(value);
-}
-
-function isSafeRedirect(value: string): boolean {
-  return value.startsWith("/") && !value.startsWith("//") && !/[\r\n]/.test(value);
 }
 
 function isTimestamp(value: unknown): value is string {

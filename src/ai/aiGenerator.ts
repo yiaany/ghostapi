@@ -38,7 +38,7 @@ export async function generateAiMock(request: NormalizedRequest, provider: Provi
   if (config.offline || config.allowExternalLlm !== true || !config.apiKey) {
     return {
       status: 200,
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", "x-ghostapi-generation-source": "local-fallback" },
       body: generateOfflineMock(request, provider)
     };
   }
@@ -56,19 +56,23 @@ export async function generateAiMock(request: NormalizedRequest, provider: Provi
     if (repaired === null) {
       return {
         status: 500,
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", "x-ghostapi-generation-source": "external-llm-error" },
         body: createProviderError(provider, { status: 500, type: "api_error", message: "Failed to generate valid JSON from AI." })
       };
     }
 
     body = repaired;
-  } catch (error) {
-    body = generateOfflineMock(request, provider);
+  } catch {
+    return {
+      status: 502,
+      headers: { "content-type": "application/json", "x-ghostapi-generation-source": "external-llm-error" },
+      body: createProviderError(provider, { status: 502, type: "api_error", message: "External LLM generation failed; no local fallback was substituted." })
+    };
   }
 
   return {
     status: 200,
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", "x-ghostapi-generation-source": "external-llm" },
     body
   };
 }

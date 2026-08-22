@@ -11,7 +11,7 @@ on:
 permissions: {}
 
 env:
-  GHOSTAPI_VERSION: "0.1.7"
+  GHOSTAPI_VERSION: "0.1.8"
   EVIDENCE_DIR: ${{ runner.temp }}/ghostapi-evidence
   GHOSTAPI_DATA_DIR: ${{ runner.temp }}/ghostapi-data
 
@@ -23,6 +23,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 20

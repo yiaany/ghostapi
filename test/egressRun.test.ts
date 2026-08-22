@@ -10,10 +10,14 @@ const targetPath = fileURLToPath(new URL("./fixtures/egressTarget.mjs", import.m
 const cliPath = fileURLToPath(new URL("../src/cli/index.ts", import.meta.url));
 const canRunLinuxNamespace = process.platform === "linux" && await canRun(["unshare", "--user", "--map-root-user", "--net", "--mount", "--pid", "--fork", "--kill-child=SIGTERM", "--mount-proc", "--propagation", "private", "--", "true"]);
 const hasCurl = process.platform === "linux" && await canRun(["curl", "--version"]);
-const linuxIt = canRunLinuxNamespace ? it : it.skip;
+if (process.env.GHOSTAPI_REQUIRE_LINUX_EGRESS === "1" && (!canRunLinuxNamespace || !hasCurl)) {
+  throw new Error("Required Linux egress enforcement prerequisites are unavailable.");
+}
 
 describe("ghostapi run Linux network namespace backend", () => {
-  linuxIt("allows GhostAPI loopback and preserves the target exit code", async () => {
+  it("allows GhostAPI loopback and preserves the target exit code", async () => {
+    if (!canRunLinuxNamespace) return expectEnforcementUnavailable();
+
     const result = await runTarget("ghostapi");
     expect(result.exitCode).toBe(0);
     await expectEvidence(result.evidencePath, "finished");
@@ -22,19 +26,25 @@ describe("ghostapi run Linux network namespace backend", () => {
     expect(exited.exitCode).toBe(23);
   });
 
-  linuxIt("blocks fetch, https, direct IP, and child-process bypass attempts", async () => {
+  it("blocks fetch, https, direct IP, and child-process bypass attempts", async () => {
+    if (!canRunLinuxNamespace) return expectEnforcementUnavailable();
+
     for (const mode of ["fetch-external", "https-external", "direct-ip", "child-fetch"]) {
       const result = await runTarget(mode);
       expect(result.exitCode, mode).toBe(0);
     }
   }, 15_000);
 
-  (canRunLinuxNamespace && hasCurl ? it : it.skip)("blocks curl executed by the target", async () => {
+  it("blocks curl executed by the target", async () => {
+    if (!canRunLinuxNamespace) return expectEnforcementUnavailable();
+
     const result = await runTarget("curl");
-    expect(result.exitCode).toBe(0);
+    expect(result.exitCode).toBe(hasCurl ? 0 : 1);
   });
 
-  linuxIt("does not persist command arguments or secrets in evidence", async () => {
+  it("does not persist command arguments or secrets in evidence", async () => {
+    if (!canRunLinuxNamespace) return expectEnforcementUnavailable();
+
     const result = await runTarget("exit", "0", "sk_live_should_not_persist");
     const evidence = await readFile(result.evidencePath, "utf8");
 
@@ -46,7 +56,9 @@ describe("ghostapi run Linux network namespace backend", () => {
     });
   });
 
-  linuxIt("forwards interruption and finalizes run evidence", async () => {
+  it("forwards interruption and finalizes run evidence", async () => {
+    if (!canRunLinuxNamespace) return expectEnforcementUnavailable();
+
     const before = new Set(await listRunDirectories());
     const child = spawn(process.execPath, ["--import", "tsx", cliPath, "run", "--", process.execPath, "-e", "setInterval(() => undefined, 1000)"], {
       env: process.env,
@@ -61,7 +73,9 @@ describe("ghostapi run Linux network namespace backend", () => {
     await expect(readFile(evidencePath, "utf8")).resolves.toContain('"type": "run-interrupted"');
   }, 15_000);
 
-  linuxIt("terminates the namespace process tree for eval timeout and output limits", async () => {
+  it("terminates the namespace process tree for eval timeout and output limits", async () => {
+    if (!canRunLinuxNamespace) return expectEnforcementUnavailable();
+
     const timedOut = await runEgressCommand({ command: [process.execPath, targetPath, "wait"], allowHosts: [], timeoutMs: 100 });
     const timeoutEvidence = JSON.parse(await readFile(timedOut.evidencePath, "utf8")) as { output?: { timedOut?: boolean }; events?: Array<{ type?: string }> };
     expect(timeoutEvidence.output?.timedOut).toBe(true);
@@ -73,7 +87,9 @@ describe("ghostapi run Linux network namespace backend", () => {
     expect(outputEvidence.events).toEqual(expect.arrayContaining([expect.objectContaining({ type: "run-output-limit-exceeded" })]));
   }, 15_000);
 
-  linuxIt("summarizes secret-shaped target output without persisting raw output", async () => {
+  it("summarizes secret-shaped target output without persisting raw output", async () => {
+    if (!canRunLinuxNamespace) return expectEnforcementUnavailable();
+
     const result = await runEgressCommand({ command: [process.execPath, targetPath, "secret-output"], allowHosts: [], maxOutputBytes: 1024 });
     const evidence = await readFile(result.evidencePath, "utf8");
 
@@ -81,7 +97,9 @@ describe("ghostapi run Linux network namespace backend", () => {
     expect(evidence).not.toContain("sk_live_output_should_not_persist");
   });
 
-  linuxIt("redacts secret-shaped target output before terminal forwarding", async () => {
+  it("redacts secret-shaped target output before terminal forwarding", async () => {
+    if (!canRunLinuxNamespace) return expectEnforcementUnavailable();
+
     const result = await runCli(["run", "--", process.execPath, targetPath, "split-secret-output"]);
 
     expect(result.exitCode).toBe(0);
@@ -117,16 +135,26 @@ describe("ghostapi run degraded modes", () => {
     });
   });
 
-  (process.platform === "linux" ? it.skip : it)("fails closed where no enforcement backend exists", async () => {
-    await expect(runEgressCommand({ command: [process.execPath, targetPath, "exit", "0"], allowHosts: [] })).rejects.toMatchObject({
-      name: EgressRunError.name,
-      message: expect.stringContaining("enforcement is unavailable")
-    });
+  it("fails closed where no enforcement backend exists", async () => {
+    if (!canRunLinuxNamespace) return expectEnforcementUnavailable();
+
+    const result = await runTarget("exit", "0");
+    expect(result.exitCode).toBe(0);
   });
 });
 
 function runTarget(mode: string, ...args: string[]) {
   return runEgressCommand({ command: [process.execPath, targetPath, mode, ...args], allowHosts: [] });
+}
+
+async function expectEnforcementUnavailable(): Promise<void> {
+  const expectedMessage = process.platform === "linux"
+    ? "Linux user, mount, and network namespace preflight failed"
+    : "enforcement is unavailable";
+  await expect(runTarget("exit", "0")).rejects.toMatchObject({
+    name: EgressRunError.name,
+    message: expect.stringContaining(expectedMessage)
+  });
 }
 
 async function expectEvidence(path: string, status: string): Promise<void> {

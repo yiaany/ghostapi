@@ -7,6 +7,7 @@ export function createAuth(config: HostedConfig, database: Pool) {
     baseURL: config.publicUrl,
     secret: config.betterAuthSecret,
     database,
+    trustedOrigins: config.allowedOrigins,
     emailAndPassword: { enabled: true },
     socialProviders: {
       google: {
@@ -15,7 +16,15 @@ export function createAuth(config: HostedConfig, database: Pool) {
       }
     },
     advanced: {
-      database: { generateId: "uuid" }
-    }
+      database: { generateId: "uuid" },
+      useSecureCookies: true,
+      cookiePrefix: "ghostapi"
+    },
+    session: {
+      expiresIn: 60 * 60 * 24 * 7,
+      updateAge: 60 * 60 * 24,
+      freshAge: 60 * 10
+    },
+    account: { accountLinking: { enabled: false } }
   });
 }

@@ -23,8 +23,8 @@ export function dashboardAccessControl(config: ServerConfig) {
   return (request: Request, response: Response, next: NextFunction): void => {
     const path = canonicalPath(request.path);
     const dashboardRoute = isDashboardPath(path);
-    const externalLlmProxyRoute = config.allowExternalLlm === true && !isPublicRoute(path) && !dashboardRoute;
-    if (!dashboardRoute && !externalLlmProxyRoute) {
+    const protectedRoute = dashboardRoute || !isPublicRoute(path);
+    if (!protectedRoute) {
       next();
       return;
     }

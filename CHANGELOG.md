@@ -4,7 +4,7 @@ All notable changes to GhostAPI will be documented in this file.
 
 The format follows the spirit of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project uses semantic versioning once public releases begin.
 
-## Unreleased
+## 0.1.8 - 2026-08-22
 
 ### Security
 
@@ -20,15 +20,22 @@ The format follows the spirit of [Keep a Changelog](https://keepachangelog.com/e
 - Redact secret-shaped target-start errors before writing Linux run evidence.
 - Redact secret-shaped target stdout/stderr before forwarding it to the operator or CI log, including tokens split across stream chunks; interrupted namespace runs now preserve the caller signal exit code and finalize evidence after escalation.
 - Added bounded queue-body handling to the separate undeployed hosted pilot before signature verification or JSON parsing.
+- Hardened the undeployed hosted pilot with explicit tenant/role authorization, tenant-safe cross-boundary responses, exact-origin mutation checks, secure session/cookie and response-header defaults, and one-time SHA-256-only invitation and ingest secrets.
+- Added hosted request/body limits, concurrency-safe durable quotas, bounded worker/outbox retries and dead-letter state, retention cleanup, and dependency-aware readiness checks; these controls are implemented and locally verified but not yet deployed.
 - Restricted the standard GitHub Actions CI token to `contents: read`.
 
 ### Changed
 
+- Published a valid package root with ESM and declaration exports, and extended packed-artifact smoke coverage to import `@yiaany/ghostapi` directly.
+- Corrected repository identity to `yiaany/ghostapi`, standardized public commands on `@yiaany/ghostapi`, replaced landing-page editorial placeholders with finished product copy, and clarified setup generation and scenario arming behavior.
+- Upgraded Vite and Vitest to audited compatible versions, added formatting checks, and expanded CI across Node.js and desktop platforms with package, production audit, and hosted-pilot checks.
+- Clarified that `GET /health` is a liveness response that stays HTTP 200 while `GET /health/readiness` returns the structural report and HTTP 503 when dependencies are degraded.
 - Added deterministic malformed-input regression coverage for policy, OpenAPI, and scenario-bundle parsers.
 - Added release-readiness and migration/rollback documentation with platform-specific guarantees and known gaps.
 
 ### Fixed
 
+- Fixed dashboard clear actions so non-2xx responses are reported as failures, filtered request counts reflect visible rows, and malformed SSE messages are ignored without breaking the stream handler.
 - Hardened the safety controller and action gateway: time-bounded synthetic leases with a default 60 s TTL, a two-phase final commit that re-checks the lease and records `action.final_check` after the operation, a tolerant terminal `complete()`, a stable `SAFETY_KILL_SWITCH` error code, and bounded dead-letter eviction. Gateway commit errors are no longer silently swallowed.
 - Hardened the action ledger: caller-claimed basis markers on echoed policy/approval records, per-tenant retention rotation with hash-chain relinking at the 2,000-entry bound, and a `tracked` flag so a tenant without entries verifies distinctly from a broken chain.
 - Hardened local reliability: SLO sampling is batch-bounded and latency counts only successful samples, reconciliation rejects missing worlds structurally and requires the `reconciliation.manage` permission, and cost governance is idempotent with a pure report path and tenant-scoped alerts.
@@ -45,8 +52,8 @@ The format follows the spirit of [Keep a Changelog](https://keepachangelog.com/e
 
 ### Fixed
 
-- Updated npm package repository, bugs, and homepage URLs to point to `yiaany/ghostapi` instead of broken legacy links.
-- Replaced custom CI badge with live GitHub Actions workflow status badge (`yiaany/ghostapi/actions/workflows/ci.yml/badge.svg`).
+- Updated npm package repository, bugs, and homepage URLs to point to the then-current repository instead of broken legacy links.
+- Replaced the custom CI badge with a live GitHub Actions workflow status badge.
 
 ## 0.1.5 - 2026-07-18
 
@@ -98,7 +105,7 @@ The format follows the spirit of [Keep a Changelog](https://keepachangelog.com/e
 
 ### Security
 
-- Added a local reliability layer with bounded stores and reference-bound capabilities: a local SLO controller (`slo.json`) that records samples only with a verified record capability, restricts configure/evaluate to authenticated operators, trims evaluation windows, and caps samples per metric and store bytes; a local reconciliation service (`reconciliation.json`) that blocks on ledger integrity failure, classifies ledger timelines as committed/not-committed/unknown/compensated/drifted against synthetic provider state, opens resolveable findings, and records duplicate-prevention, receipt-verification, availability, and execution-latency SLI samples; a local cost-governance store (`costs.json`) with capped attribution records, budgets, acknowledgeable alerts, and a linear-extrapolation forecast explicitly labeled as not a provider invoice; and runtime health plus verified local backup/restore (`reliability/backups/`) with sha256 manifests, tamper and path-traversal rejection, and no egress. `GET /health` and `GET /health/readiness` now report structural readiness and return 503 when a store is degraded.
+- Added a local reliability layer with bounded stores and reference-bound capabilities: a local SLO controller (`slo.json`) that records samples only with a verified record capability, restricts configure/evaluate to authenticated operators, trims evaluation windows, and caps samples per metric and store bytes; a local reconciliation service (`reconciliation.json`) that blocks on ledger integrity failure, classifies ledger timelines as committed/not-committed/unknown/compensated/drifted against synthetic provider state, opens resolveable findings, and records duplicate-prevention, receipt-verification, availability, and execution-latency SLI samples; a local cost-governance store (`costs.json`) with capped attribution records, budgets, acknowledgeable alerts, and a linear-extrapolation forecast explicitly labeled as not a provider invoice; and runtime health plus verified local backup/restore (`reliability/backups/`) with sha256 manifests, tamper and path-traversal rejection, and no egress. `GET /health` reports liveness with readiness state at HTTP 200, while `GET /health/readiness` returns the structural report and HTTP 503 when a store is degraded.
 
 - No real external provider API calls by default.
 - Secrets are masked before prompt construction, cache key generation, event logging, and dashboard rendering.

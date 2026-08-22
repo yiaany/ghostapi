@@ -1,7 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { addEvent, clearEvents, clearEventsHistoryForTests, EVENT_LOG_ARCHIVES, getEventsHistory, MAX_EVENT_LOG_BYTES } from "../src/server/eventsStore.js";
-import { addSseClient, broadcastEvent, getSseClientCount } from "../src/server/sse.js";
+import { addSseClient, broadcastEvent, getSseClientCount, MAX_SSE_CLIENTS } from "../src/server/sse.js";
 import EventEmitter from "node:events";
+import { randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { getDataPaths } from "../src/config/dataPaths.js";
 
@@ -16,7 +17,7 @@ describe("Events Store", () => {
 
   it("stores events and exposes history", async () => {
     const event = {
-      id: "evt_1",
+      id: randomUUID(),
       timestamp: "2026-07-13",
       provider: "stripe",
       method: "POST",
@@ -33,20 +34,21 @@ describe("Events Store", () => {
   });
 
   it("respects ring buffer max size of 200", async () => {
+    const ids = Array.from({ length: 205 }, () => randomUUID());
     for (let i = 0; i < 205; i++) {
-        await addEvent({ id: `evt_${i}`, source: "fallback" } as any);
+        await addEvent({ id: ids[i], source: "fallback" } as any);
     }
     
     const history = getEventsHistory();
     expect(history.length).toBe(200);
-    expect(history[0]?.id).toBe("evt_5");
-    expect(history[199]?.id).toBe("evt_204");
+    expect(history[0]?.id).toBe(ids[5]);
+    expect(history[199]?.id).toBe(ids[204]);
   });
 
   it("redacts secrets before exposing or persisting events", async () => {
     const secret = ["sk", "live", "persisted-secret"].join("_");
     const safeEvent = await addEvent({
-      id: "evt_secret",
+      id: randomUUID(),
       timestamp: "2026-08-05T00:00:00.000Z",
       provider: "stripe",
       method: "POST",
@@ -71,7 +73,7 @@ describe("Events Store", () => {
     const eventCount = Math.ceil(MAX_EVENT_LOG_BYTES / Buffer.byteLength(payload)) + 2;
     for (let index = 0; index < eventCount; index += 1) {
       await addEvent({
-        id: `evt_large_${index}`,
+        id: randomUUID(),
         timestamp: "2026-08-05T00:00:00.000Z",
         provider: "generic",
         method: "POST",
@@ -125,5 +127,25 @@ describe("SSE Manager", () => {
     expect(payload).toContain("generic:rest-like");
 
     mockResponse.emit("close");
+  });
+
+  it("bounds clients and evicts a slow client on backpressure", async () => {
+    const responses = Array.from({ length: MAX_SSE_CLIENTS }, () => {
+      const response = new EventEmitter();
+      (response as any).write = () => true;
+      (response as any).end = vi.fn();
+      return response;
+    });
+    for (const response of responses) expect(addSseClient(response as any)).toBe(true);
+    const overflow = new EventEmitter();
+    expect(addSseClient(overflow as any)).toBe(false);
+
+    (responses[0] as any).write = () => false;
+    broadcastEvent({ id: randomUUID(), source: "ai" } as any);
+    expect((responses[0] as any).end).toHaveBeenCalled();
+    expect(getSseClientCount()).toBe(MAX_SSE_CLIENTS - 1);
+
+    for (const response of responses) response.emit("close");
+    await new Promise((resolve) => setTimeout(resolve, 5));
   });
 });

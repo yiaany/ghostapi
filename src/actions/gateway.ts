@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, KeyObject, randomUUID, sign, verify } from "node:crypto";
 import { lstat, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { getDataPaths } from "../config/dataPaths.js";
@@ -15,7 +15,6 @@ const MAX_ACTION_BYTES = 128 * 1024;
 const MAX_RECEIPTS = 20;
 const IDENTIFIER = /^[a-z0-9][a-z0-9._-]{0,127}$/;
 const HASH = /^[a-f0-9]{64}$/;
-const approvalInboxCapabilities = new WeakSet<object>();
 
 export type ActionRiskClass = "read" | "write" | "money_movement" | "external_communication" | "delete" | "deploy";
 export type ActionReversibility = "none" | "compensatable";
@@ -50,7 +49,10 @@ export type ActionApproval = {
   approvedAt: string;
   expiresAt: string;
   nonce: string;
+  provenance: { kind: "ghostapi.ed25519-signature"; keyId: string; signature: string };
 };
+
+export type UnsignedActionApproval = Omit<ActionApproval, "provenance">;
 
 export type ActionExecutionReceipt = {
   receiptId: string;
@@ -76,6 +78,10 @@ export type StoredAction = {
 
 export type ActionExecutionIdentity = { actorId: string; workloadId: string };
 export type ActionPolicyCheck = { version: number; hash: string; allowed: boolean };
+export type ActionApprovalVerificationContext = { phase: "submit" | "execute" };
+export type ActionApprovalVerification = { provenance: "verified"; approvalInboxRequestId?: string };
+export interface ActionApprovalVerifier { verify(action: ActionEnvelope, approval: unknown, context: ActionApprovalVerificationContext): Promise<ActionApprovalVerification>; }
+export interface ActionApprovalSigner { issue(approval: UnsignedActionApproval): ActionApproval | Promise<ActionApproval>; }
 
 export type ActionExecutionAdapter = {
   provider: ActionEnvelope["provider"];
@@ -92,9 +98,8 @@ export type ActionGatewayOptions = {
   pathForAction?: (actionId: string) => string;
   adapter?: ActionExecutionAdapter;
   safetyController?: LocalSafetyController;
+  approvalVerifier?: ActionApprovalVerifier;
 };
-
-type ApprovalInboxCapability = object;
 
 export class ActionGatewayError extends Error {
   constructor(message: string) {
@@ -167,12 +172,15 @@ export function validateActionEnvelope(value: unknown): ActionEnvelope {
 
 export function validateActionApproval(value: unknown): ActionApproval {
   const approval = object(value, "Action approval must be an object.");
-  exactKeys(approval, ["schemaVersion", "kind", "approvalId", "actionHash", "approvedBy", "approvedAt", "expiresAt", "nonce"], "Action approval");
+  exactKeys(approval, ["schemaVersion", "kind", "approvalId", "actionHash", "approvedBy", "approvedAt", "expiresAt", "nonce", "provenance"], "Action approval");
   if (approval.schemaVersion !== ACTION_SCHEMA_VERSION || approval.kind !== APPROVAL_KIND) throw new ActionGatewayError("Unsupported action approval schema.");
   const approvedAt = timestamp(approval.approvedAt, "Action approval timestamp");
   const expiresAt = futureTimestamp(approval.expiresAt, "Action approval expiry");
   if (Date.parse(expiresAt) <= Date.parse(approvedAt)) throw new ActionGatewayError("Action approval must expire after it was issued.");
-  return { schemaVersion: 1, kind: "ghostapi.action-approval", approvalId: identifier(approval.approvalId, "Action approval id"), actionHash: hash(approval.actionHash, "Action approval hash"), approvedBy: identifier(approval.approvedBy, "Action approver id"), approvedAt, expiresAt, nonce: identifier(approval.nonce, "Action approval nonce") };
+  const provenance = object(approval.provenance, "Action approval provenance is invalid.");
+  exactKeys(provenance, ["kind", "keyId", "signature"], "Action approval provenance");
+  if (provenance.kind !== "ghostapi.ed25519-signature" || typeof provenance.signature !== "string" || !/^[A-Za-z0-9_-]{86}$/.test(provenance.signature)) throw new ActionGatewayError("Action approval provenance is invalid.");
+  return { schemaVersion: 1, kind: "ghostapi.action-approval", approvalId: identifier(approval.approvalId, "Action approval id"), actionHash: hash(approval.actionHash, "Action approval hash"), approvedBy: identifier(approval.approvedBy, "Action approver id"), approvedAt, expiresAt, nonce: identifier(approval.nonce, "Action approval nonce"), provenance: { kind: "ghostapi.ed25519-signature", keyId: identifier(provenance.keyId, "Action approval provenance key id"), signature: provenance.signature } };
 }
 
 export function createSyntheticActionAdapter(): ActionExecutionAdapter {
@@ -199,41 +207,27 @@ export function createSyntheticActionAdapter(): ActionExecutionAdapter {
   };
 }
 
-/** Internal capability used only by the local approval inbox execution path. */
-export function createApprovalInboxCapability(): ApprovalInboxCapability {
-  const capability = Object.freeze({});
-  approvalInboxCapabilities.add(capability);
-  return capability;
-}
-
 export class LocalActionGateway {
   private readonly now: () => Date;
   private readonly pathForAction: (actionId: string) => string;
   private readonly adapter: ActionExecutionAdapter;
   private readonly safetyController: LocalSafetyController;
+  private readonly approvalVerifier: ActionApprovalVerifier;
 
   constructor(options: ActionGatewayOptions = {}) {
     this.now = options.now ?? (() => new Date());
     this.pathForAction = options.pathForAction ?? getActionPath;
     this.adapter = options.adapter ?? createSyntheticActionAdapter();
     this.safetyController = options.safetyController ?? createLocalSafetyController({ now: this.now });
+    this.approvalVerifier = options.approvalVerifier ?? createDisabledActionApprovalVerifier();
   }
 
   async submit(actionValue: unknown, approvalValue: unknown, policy: ActionPolicyCheck): Promise<StoredAction> {
-    return this.submitInternal(actionValue, approvalValue, policy, undefined);
-  }
-
-  async submitFromApprovalInbox(actionValue: unknown, approvalValue: unknown, policy: ActionPolicyCheck, capability: unknown): Promise<StoredAction> {
-    return this.submitInternal(actionValue, approvalValue, policy, requireApprovalInboxCapability(capability));
-  }
-
-  private async submitInternal(actionValue: unknown, approvalValue: unknown, policy: ActionPolicyCheck, capability: ApprovalInboxCapability | undefined): Promise<StoredAction> {
     const action = validateActionEnvelope(actionValue);
     const approval = validateActionApproval(approvalValue);
-    assertApprovalSubmissionPath(approval, capability);
+    const verification = await this.approvalVerifier.verify(action, approval, { phase: "submit" });
+    requireApprovalInboxVerification(approval, verification);
     const current = this.now().toISOString();
-    if (Date.parse(action.expiresAt) <= Date.parse(current)) throw new ActionGatewayError("Action has expired.");
-    verifyApproval(action, approval, current);
     verifyPolicy(action, policy);
     const actionDigest = actionHash(action);
     const path = this.pathForAction(action.actionId);
@@ -243,6 +237,8 @@ export class LocalActionGateway {
         if (existing.actionHash === actionDigest && actionApprovalHash(existing.approval) === actionApprovalHash(approval)) return existing;
         throw new ActionGatewayError("Action id already exists with a different immutable envelope or approval.");
       }
+      if (Date.parse(action.expiresAt) <= Date.parse(current)) throw new ActionGatewayError("Action has expired.");
+      verifyApproval(action, approval, current);
       const record: StoredAction = { schemaVersion: 1, kind: "ghostapi.action-record", envelope: action, actionHash: actionDigest, approval, receipts: [] };
       record.receipts.push(createReceipt(record, "requested", current));
       await writeStoredAction(path, record);
@@ -255,27 +251,19 @@ export class LocalActionGateway {
   }
 
   async execute(actionValue: unknown, identity: ActionExecutionIdentity, policy: ActionPolicyCheck): Promise<ActionExecutionReceipt> {
-    return this.executeInternal(actionValue, identity, policy, undefined);
-  }
-
-  async executeFromApprovalInbox(actionValue: unknown, identity: ActionExecutionIdentity, policy: ActionPolicyCheck, capability: unknown): Promise<ActionExecutionReceipt> {
-    return this.executeInternal(actionValue, identity, policy, requireApprovalInboxCapability(capability));
-  }
-
-  private async executeInternal(actionValue: unknown, identity: ActionExecutionIdentity, policy: ActionPolicyCheck, capability: ApprovalInboxCapability | undefined): Promise<ActionExecutionReceipt> {
     const requested = validateActionEnvelope(actionValue);
     const path = this.pathForAction(requested.actionId);
     return withFileLock(path, async () => {
       const record = await readStoredAction(path, true);
       if (record === null) throw new ActionGatewayError("Action was not submitted.");
-      assertApprovalExecutionPath(record.approval, capability);
+      const approvalVerification = await this.approvalVerifier.verify(record.envelope, record.approval, { phase: "execute" });
+      requireApprovalInboxVerification(record.approval, approvalVerification);
       const current = this.now().toISOString();
       if (actionHash(requested) !== record.actionHash || canonicalizeActionEnvelope(requested) !== canonicalizeActionEnvelope(record.envelope)) throw new ActionGatewayError("Action envelope changed after approval; execution is blocked.");
-      verifyApproval(record.envelope, record.approval, current);
+      verifyApproval(record.envelope, record.approval, current, false);
       verifyPolicy(record.envelope, policy);
       if (identity.actorId !== record.envelope.actor.id || identity.workloadId !== record.envelope.actor.workloadId) throw new ActionGatewayError("Execution identity does not match the approved action.");
       if (!this.adapter.supports(record.envelope.operation)) throw new ActionGatewayError(`Execution adapter does not support action operation: ${record.envelope.operation}`);
-      if (Date.parse(record.envelope.expiresAt) <= Date.parse(current)) throw new ActionGatewayError("Action has expired.");
       const verified = findLatestReceipt(record.receipts, "verified");
       if (verified !== undefined) return verified;
       const committed = findLatestReceipt(record.receipts, "committed");
@@ -297,6 +285,8 @@ export class LocalActionGateway {
         await writeStoredAction(path, record);
         return verifiedReceipt;
       }
+      if (Date.parse(record.envelope.expiresAt) <= Date.parse(current)) throw new ActionGatewayError("Action has expired.");
+      verifyApproval(record.envelope, record.approval, current);
       await this.adapter.plan(record.envelope);
       await this.adapter.simulate(record.envelope);
       const safety = await this.safetyController.admit(safetyAction(record.envelope, record.actionHash));
@@ -321,6 +311,7 @@ export class LocalActionGateway {
         throw new ActionGatewayError("Action provider outcome is unknown; it was not automatically retried.");
       }
       appendReceipt(record, createReceipt(record, "committed", this.now().toISOString(), execution.providerRequestId, execution.result));
+      await writeStoredAction(path, record);
       const verification = await this.adapter.verify(record.envelope);
       if (!verification.committed || verification.providerRequestId === undefined || verification.result === undefined) {
         await safety.complete({ success: false, reconciliationMismatch: true, latencyMs: 0, reason: "synthetic verification did not prove the result" });
@@ -363,6 +354,51 @@ function safetyAction(action: ActionEnvelope, actionDigest: string): SafetyActio
 
 export function createLocalActionGateway(options: ActionGatewayOptions = {}): LocalActionGateway {
   return new LocalActionGateway(options);
+}
+
+export function createDisabledActionApprovalVerifier(): ActionApprovalVerifier {
+  return { async verify(): Promise<never> { throw new ActionGatewayError("Action approval authenticity could not be verified."); } };
+}
+
+export function createEd25519ActionApprovalSigner(options: { keyId: string; privateKey: string | Buffer | KeyObject }): ActionApprovalSigner {
+  const keyId = identifier(options.keyId, "Action approval signing key id");
+  const privateKey = options.privateKey instanceof KeyObject ? options.privateKey : createPrivateKey(options.privateKey);
+  if (privateKey.type !== "private" || privateKey.asymmetricKeyType !== "ed25519") throw new ActionGatewayError("Action approval signing key must be an Ed25519 private key.");
+  return {
+    issue(value: UnsignedActionApproval): ActionApproval {
+      const approval = validateUnsignedActionApproval(value);
+      const signature = sign(null, Buffer.from(canonicalJson(approval), "utf8"), privateKey).toString("base64url");
+      return { ...approval, provenance: { kind: "ghostapi.ed25519-signature", keyId, signature } };
+    }
+  };
+}
+
+export function createEd25519ActionApprovalVerifier(options: { trustedKeys: Readonly<Record<string, string | Buffer | KeyObject>> }): ActionApprovalVerifier {
+  const keys = new Map(Object.entries(options.trustedKeys).map(([keyId, key]) => {
+    const parsedId = identifier(keyId, "Action approval verification key id");
+    const publicKey = key instanceof KeyObject && key.type === "public" ? key : createPublicKey(key);
+    if (publicKey.asymmetricKeyType !== "ed25519") throw new ActionGatewayError("Action approval verification key must be Ed25519.");
+    return [parsedId, publicKey] as const;
+  }));
+  return {
+    async verify(action: ActionEnvelope, approval: unknown): Promise<ActionApprovalVerification> {
+      const parsed = validateActionApproval(approval);
+      const publicKey = keys.get(parsed.provenance.keyId);
+      const valid = publicKey !== undefined && verify(null, Buffer.from(canonicalJson(unsignedActionApproval(parsed)), "utf8"), publicKey, Buffer.from(parsed.provenance.signature, "base64url"));
+      if (!valid || parsed.actionHash !== actionHash(action)) throw new ActionGatewayError("Action approval authenticity could not be verified.");
+      return { provenance: "verified" };
+    }
+  };
+}
+
+export function createTestActionApprovalVerifier(): { verifier: ActionApprovalVerifier; signer: ActionApprovalSigner; issue<T extends UnsignedActionApproval>(approval: T): ActionApproval } {
+  const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+  const signer = createEd25519ActionApprovalSigner({ keyId: "test-approval-key", privateKey });
+  return {
+    verifier: createEd25519ActionApprovalVerifier({ trustedKeys: { "test-approval-key": publicKey } }),
+    signer,
+    issue: (approval) => signer.issue(approval) as ActionApproval
+  };
 }
 
 export function getActionPath(actionId: string): string {
@@ -454,19 +490,6 @@ function verifyApproval(action: ActionEnvelope, approval: ActionApproval, now: s
   if (enforceExpiry && Date.parse(approval.expiresAt) <= Date.parse(now)) throw new ActionGatewayError("Action approval has expired.");
 }
 
-function requireApprovalInboxCapability(value: unknown): ApprovalInboxCapability {
-  if (value === null || typeof value !== "object" || !approvalInboxCapabilities.has(value)) throw new ActionGatewayError("Approval inbox capability is invalid.");
-  return value;
-}
-
-function assertApprovalSubmissionPath(approval: ActionApproval, capability: ApprovalInboxCapability | undefined): void {
-  if (approval.approvedBy === "approval-inbox" && capability === undefined) throw new ActionGatewayError("Approval inbox artifacts can be submitted only through the approval inbox.");
-}
-
-function assertApprovalExecutionPath(approval: ActionApproval, capability: ApprovalInboxCapability | undefined): void {
-  if (approval.approvedBy === "approval-inbox" && capability === undefined) throw new ActionGatewayError("Approval inbox artifacts can be executed only through the approval inbox.");
-}
-
 function verifyPolicy(action: ActionEnvelope, policy: ActionPolicyCheck): void {
   if (!policy.allowed) throw new ActionGatewayError("Current policy denies action execution.");
   if (policy.version !== action.policy.version || policy.hash !== action.policy.hash) throw new ActionGatewayError("Current policy reference does not match the approved action.");
@@ -533,6 +556,21 @@ function canonicalJson(value: unknown): string {
     return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`).join(",")}}`;
   }
   throw new ActionGatewayError("Canonical action values must be JSON data.");
+}
+
+function requireApprovalInboxVerification(approval: ActionApproval, verification: ActionApprovalVerification): void {
+  if (approval.approvedBy === "approval-inbox" && verification.approvalInboxRequestId !== approval.approvalId) throw new ActionGatewayError("Approval inbox provenance is not active for execution.");
+}
+
+function validateUnsignedActionApproval(value: unknown): UnsignedActionApproval {
+  const approval = object(value, "Action approval must be an object.");
+  exactKeys(approval, ["schemaVersion", "kind", "approvalId", "actionHash", "approvedBy", "approvedAt", "expiresAt", "nonce"], "Unsigned action approval");
+  return unsignedActionApproval(validateActionApproval({ ...approval, provenance: { kind: "ghostapi.ed25519-signature", keyId: "validation-key", signature: "A".repeat(86) } }));
+}
+
+function unsignedActionApproval(approval: ActionApproval): UnsignedActionApproval {
+  const { provenance: _provenance, ...unsigned } = approval;
+  return unsigned;
 }
 
 function sha256(value: string): string {

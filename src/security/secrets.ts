@@ -8,6 +8,13 @@ const SECRET_FIELD_NAMES = [
   "access_token",
   "refresh_token",
   "client_secret",
+  "private_key",
+  "privatekey",
+  "signing_key",
+  "webhook_secret",
+  "session_id",
+  "sessionid",
+  "passphrase",
   "cvc",
   "password",
   "secret",
@@ -22,7 +29,14 @@ const TOKEN_PATTERNS = [
   /ghp_[A-Za-z0-9_]+/g,
   /github_pat_[A-Za-z0-9_]+/g,
   /xoxb-[A-Za-z0-9\-]+/g,
-  /SG\.[A-Za-z0-9_\-\.]+/g
+  /SG\.[A-Za-z0-9_\-\.]+/g,
+  /(?:AKIA|ASIA)[A-Z0-9]{16}/g,
+  /AIza[0-9A-Za-z_-]{20,}/g,
+  /ya29\.[0-9A-Za-z_-]+/g,
+  /(?:eyJ[A-Za-z0-9_-]{8,})\.(?:[A-Za-z0-9_-]{8,})\.(?:[A-Za-z0-9_-]{8,})/g,
+  /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g,
+  /(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?):\/\/[^\s:@/]+:[^\s@/]+@[^\s]+/gi,
+  /(?:npm_[A-Za-z0-9]{20,}|pypi-[A-Za-z0-9_-]{20,})/g
 ];
 
 export const MASK = "***";

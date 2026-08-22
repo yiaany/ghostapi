@@ -26,11 +26,12 @@ export async function generateSafetyReport(projectRoot = process.cwd()): Promise
   const files = await collectFiles(projectRoot, projectRoot, 250);
   for (const file of files) {
     const content = await readFile(join(projectRoot, file), "utf8");
+    const fixture = isFixturePath(file);
     if (/api\.stripe\.com|api\.openai\.com|api\.twilio\.com/i.test(content)) {
-      findings.push({ severity: "high", message: "Production provider host appears in source.", file });
+      findings.push({ severity: fixture ? "low" : "high", message: fixture ? "Production provider host appears in a test, documentation, or example fixture." : "Production provider host appears in source.", file });
     }
-    if (/sk_live_[A-Za-z0-9]+/.test(content)) {
-      findings.push({ severity: "high", message: "Live-looking Stripe key appears in source.", file });
+    if (/sk_live_[A-Za-z0-9]{16,}/.test(content)) {
+      findings.push({ severity: fixture ? "low" : "high", message: fixture ? "Live-looking Stripe key appears in a test, documentation, or example fixture." : "Live-looking Stripe key appears in source.", file });
     }
     if (/STRIPE_SECRET_KEY|OPENAI_API_KEY|TWILIO_AUTH_TOKEN/.test(content) && !/GHOSTAPI_|host:|baseURL/.test(content)) {
       findings.push({ severity: "medium", message: "Provider secret is referenced without an obvious GhostAPI local override nearby.", file });
@@ -43,6 +44,10 @@ export async function generateSafetyReport(projectRoot = process.cwd()): Promise
     findings,
     recommendations: buildRecommendations(detected, findings)
   };
+}
+
+function isFixturePath(file: string): boolean {
+  return /^(?:test|docs|examples)\//.test(file) || /(?:^|\/)(?:fixtures?|__fixtures__)(?:\/|$)/.test(file);
 }
 
 async function collectFiles(root: string, dir: string, limit: number, acc: string[] = []): Promise<string[]> {

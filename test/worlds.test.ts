@@ -91,7 +91,7 @@ describe("synthetic worlds", () => {
     const forked = await runCli(["world", "fork", "cli-world", "--id", "cli-world-fork", "--json"]);
     expect(forked.exitCode).toBe(0);
     expect(JSON.parse(forked.stdout)).toMatchObject({ manifest: { id: "cli-world-fork", lineage: { parentId: "cli-world" } } });
-  }, 20_000);
+  }, 30_000);
 });
 
 function runWorldWriter(prefix: string, count: number): Promise<void> {

@@ -60,4 +60,4 @@ npm pack --dry-run
 npm audit --omit=dev
 ```
 
-Also review the package file list, tracked-source secret scan, direct runtime dependency licenses, GitHub workflow permissions/action pins, and the known gaps in [release readiness](release-readiness.md). The full `npm audit` result currently has known dev-toolchain findings and is not a publication pass signal.
+Also review the package file list, tracked-source secret scan, direct runtime dependency licenses, GitHub workflow permissions/action pins, and the known gaps in [release readiness](release-readiness.md). Both the production-only and full dependency audits must pass for this release.

@@ -1,4 +1,5 @@
 import { appendFile, chmod, rename, rm, stat } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { getDataPaths } from "../config/dataPaths.js";
 import { sanitizeSecrets } from "../security/secrets.js";
 import { ensurePrivateDirectory, withFileLock } from "../storage/fileStore.js";
@@ -27,7 +28,7 @@ const eventsBuffer: ProxyEvent[] = [];
 const pendingWrites = new Set<Promise<void>>();
 
 export async function addEvent(event: ProxyEvent): Promise<ProxyEvent> {
-  const boundedEvent = boundEvent(sanitizeSecrets(event) as ProxyEvent);
+  const boundedEvent = boundEvent(sanitizeSecrets({ ...event, id: isUuid(event.id) ? event.id : randomUUID() }) as ProxyEvent);
   eventsBuffer.push(boundedEvent);
 
   if (eventsBuffer.length > MAX_EVENTS) eventsBuffer.shift();
@@ -52,6 +53,10 @@ export async function addEvent(event: ProxyEvent): Promise<ProxyEvent> {
     pendingWrites.delete(write);
   }
   return boundedEvent;
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 export function getEventsHistory(): ProxyEvent[] {

@@ -11,12 +11,15 @@ const els = {
   searchModal: document.getElementById('search-modal'),
   searchInput: document.getElementById('search-input'),
   rulesModal: document.getElementById('rules-modal'),
+  rulesTitle: document.getElementById('rules-title'),
   rulesOutput: document.getElementById('rules-output'),
   rulesSubtitle: document.getElementById('rules-subtitle'),
+  rulesCopyButton: document.getElementById('rules-copy-button'),
   setupModal: document.getElementById('setup-modal'),
   setupList: document.getElementById('setup-list'),
   setupOutput: document.getElementById('setup-output'),
   setupSubtitle: document.getElementById('setup-subtitle'),
+  setupCopyButton: document.getElementById('setup-copy-button'),
   scenariosModal: document.getElementById('scenarios-modal'),
   scenarioList: document.getElementById('scenario-list'),
   scenarioOutput: document.getElementById('scenario-output'),
@@ -122,9 +125,12 @@ async function fetchHistory() {
   try {
     const res = await fetch('/api/events');
     const data = await res.json();
+    if (!res.ok || !Array.isArray(data)) throw new Error('Unable to load event history');
     events = data.reverse();
     renderList();
-  } catch(e) {}
+  } catch(e) {
+    console.warn('Event history load failed', e);
+  }
 }
 
 function setupSSE() {
@@ -138,11 +144,15 @@ function setupSSE() {
     els.statusText.textContent = 'Reconnecting...';
   };
   sse.onmessage = (e) => {
-    const payload = JSON.parse(e.data);
-    if (payload.type === 'proxy_event') {
-      events.unshift(payload.event);
-      if (events.length > 200) events.pop();
-      renderList();
+    try {
+      const payload = JSON.parse(e.data);
+      if (payload.type === 'proxy_event' && payload.event && typeof payload.event === 'object') {
+        events.unshift(payload.event);
+        if (events.length > 200) events.pop();
+        renderList();
+      }
+    } catch (error) {
+      console.warn('Ignored malformed SSE event', error);
     }
   };
 }
@@ -169,16 +179,22 @@ window.clearStorage = async (target, event) => {
     const originalText = btnText.textContent;
     btnText.textContent = 'Clearing...';
 
-    await fetch('/api/clear', {
+    const res = await fetch('/api/clear', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ target })
     });
+    const payload = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(payload?.error?.message || `Unable to clear ${target}`);
 
     btnText.textContent = 'Cleared!';
     setTimeout(() => { btnText.textContent = originalText; }, 1500);
   } catch(e) {
     console.error(e);
+    const btnText = event.currentTarget.querySelector('.nav-item-title');
+    const originalText = target === 'cache' ? 'Clear Cache' : target === 'state' ? 'Clear State' : 'Clear Storage';
+    btnText.textContent = 'Clear failed';
+    setTimeout(() => { btnText.textContent = originalText; }, 1500);
   }
 };
 
@@ -222,6 +238,7 @@ window.generateAiRules = async (event) => {
   const original = label.textContent;
   label.textContent = 'Generating...';
   els.rulesModal.classList.add('open');
+  els.rulesTitle.textContent = '.cursorrules';
   els.rulesOutput.textContent = 'Generating .cursorrules from package.json...';
   els.rulesSubtitle.textContent = 'Scanning dependencies';
 
@@ -249,6 +266,7 @@ window.copyAgentPrompt = async (event) => {
     if (!res.ok) throw new Error(payload?.error?.message || 'Unable to generate prompt');
     await copyText(payload.content);
     els.rulesModal.classList.add('open');
+    els.rulesTitle.textContent = 'Agent Prompt';
     els.rulesSubtitle.textContent = 'Copied to clipboard';
     els.rulesOutput.textContent = payload.content;
   } catch (e) {
@@ -265,6 +283,7 @@ window.openSafetyReport = async (event) => {
   const original = label.textContent;
   label.textContent = 'Scanning...';
   els.rulesModal.classList.add('open');
+  els.rulesTitle.textContent = 'Safety Report';
   els.rulesSubtitle.textContent = 'Scanning repo';
   els.rulesOutput.textContent = 'Generating GhostAPI safety report...';
   try {
@@ -285,8 +304,9 @@ function closeRulesModal() {
   els.rulesModal.classList.remove('open');
 }
 
-function copyRules() {
-  copyText(els.rulesOutput.textContent);
+async function copyRules() {
+  const copied = await copyText(els.rulesOutput.textContent);
+  flashButton(els.rulesCopyButton, copied ? 'Copied' : 'Copy failed');
 }
 
 window.generateRepoSetup = async (event) => {
@@ -344,8 +364,9 @@ function closeSetupModal() {
   els.setupModal.classList.remove('open');
 }
 
-function copySetupOutput() {
-  copyText(selectedSetupText || els.setupOutput.textContent);
+async function copySetupOutput() {
+  const copied = await copyText(selectedSetupText || els.setupOutput.textContent);
+  flashButton(els.setupCopyButton, copied ? 'Copied' : 'Copy failed');
 }
 
 window.openScenarios = async (event) => {
@@ -373,13 +394,13 @@ window.openScenarios = async (event) => {
 
 function renderScenarios() {
   els.scenarioList.innerHTML = '';
-  els.scenariosSubtitle.textContent = `${scenarios.length} presets ready`;
+  els.scenariosSubtitle.textContent = `${scenarios.length} scenarios ready`;
   const saveCard = document.createElement('div');
   saveCard.className = 'scenario-card scenario-save-card';
   const saveTitle = document.createElement('strong');
   saveTitle.textContent = 'Save current traffic';
   const saveDescription = document.createElement('p');
-  saveDescription.textContent = 'Turn the latest dashboard traffic into a replayable custom scenario.';
+  saveDescription.textContent = 'Turn the latest dashboard traffic into a reusable custom scenario.';
   const saveActions = document.createElement('div');
   saveActions.className = 'scenario-actions';
   saveActions.append(scenarioButton('Save', saveTrafficScenario));
@@ -403,9 +424,9 @@ function renderScenarios() {
     const actions = document.createElement('div');
     actions.className = 'scenario-actions';
     actions.append(
-      scenarioButton('Replay', () => replayScenario(scenario.id)),
-      scenarioButton('Export', () => exportScenario(scenario.id)),
-      scenarioButton('Share', () => shareScenario(scenario.id))
+      scenarioButton('Arm', () => armScenario(scenario.id), 'Armed'),
+      scenarioButton('Export', () => exportScenario(scenario.id), 'Copied'),
+      scenarioButton('Share', () => shareScenario(scenario.id), 'Copied')
     );
 
     card.append(top, description, actions);
@@ -414,7 +435,7 @@ function renderScenarios() {
   els.scenarioOutput.textContent = JSON.stringify(scenarios[0] ?? {}, null, 2);
 }
 
-window.replayScenario = async (id) => {
+window.armScenario = async (id) => {
   const payload = await fetchScenarioAction(`/api/scenarios/${encodeURIComponent(id)}/replay`, { method: 'POST' });
   const text = JSON.stringify(payload, null, 2);
   els.scenarioOutput.textContent = text;
@@ -441,19 +462,31 @@ async function saveTrafficScenario() {
     body: JSON.stringify({ title: `Saved traffic ${new Date().toLocaleString()}` })
   });
   const text = JSON.stringify(payload, null, 2);
-  els.scenarioOutput.textContent = text;
-  await copyText(text);
+  const copied = await copyText(text);
   const res = await fetch('/api/scenarios');
+  if (!res.ok) throw new Error('Saved scenario, but could not refresh the scenario list.');
   scenarios = await res.json();
+  renderScenarios();
+  els.scenarioOutput.textContent = text;
+  els.scenariosSubtitle.textContent = `Saved ${payload.title} · ${scenarios.length} scenarios ready${copied ? ' · copied' : ''}`;
 }
 
-function scenarioButton(label, handler) {
+function scenarioButton(label, handler, successLabel = label) {
   const button = document.createElement('button');
   button.type = 'button';
   button.textContent = label;
-  button.onclick = () => handler().catch((error) => {
-    els.scenarioOutput.textContent = `Scenario action failed: ${error.message}`;
-  });
+  button.onclick = async () => {
+    button.disabled = true;
+    try {
+      await handler();
+      flashButton(button, successLabel);
+    } catch (error) {
+      els.scenarioOutput.textContent = `Scenario action failed: ${error.message}`;
+      flashButton(button, 'Failed');
+    } finally {
+      button.disabled = false;
+    }
+  };
   return button;
 }
 
@@ -482,7 +515,7 @@ function renderList() {
     return matchesSearch && matchesFilter;
   });
 
-  els.eventCount.textContent = events.length;
+  els.eventCount.textContent = list.length;
   els.eventList.innerHTML = '';
 
   const frag = document.createDocumentFragment();
@@ -557,11 +590,13 @@ window.generateSelectedTest = async () => {
     const payload = await res.json();
     if (!res.ok) throw new Error(payload?.error?.message || 'Unable to generate test');
     els.rulesModal.classList.add('open');
-    els.rulesSubtitle.textContent = payload.filename;
+    els.rulesTitle.textContent = 'Generated Vitest Test';
     els.rulesOutput.textContent = payload.content;
-    await copyText(payload.content);
+    const copied = await copyText(payload.content);
+    els.rulesSubtitle.textContent = `${payload.filename} · ${copied ? 'Copied to clipboard' : 'Copy failed'}`;
   } catch (e) {
     els.rulesModal.classList.add('open');
+    els.rulesTitle.textContent = 'Generated Vitest Test';
     els.rulesSubtitle.textContent = 'Test generation failed';
     els.rulesOutput.textContent = `Test generation failed: ${e.message}`;
   }
@@ -629,11 +664,21 @@ function safeStringify(value) {
   }
 }
 
+function flashButton(button, message) {
+  if (!button) return;
+  const original = button.dataset.originalLabel ?? button.textContent;
+  button.dataset.originalLabel = original;
+  button.textContent = message;
+  setTimeout(() => { button.textContent = original; }, 1400);
+}
+
 async function copyText(text) {
   try {
     await navigator.clipboard.writeText(text ?? '');
+    return true;
   } catch (error) {
     console.warn('Clipboard copy failed', error);
+    return false;
   }
 }
 

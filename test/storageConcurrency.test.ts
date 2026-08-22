@@ -3,6 +3,9 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { clearState, getStateStore } from "../src/state/stateStore.js";
 import { clearApiBehaviorsForTests, getApiBehaviors } from "../src/behavior/behaviorStore.js";
+import { rm } from "node:fs/promises";
+import { getDataPaths } from "../src/config/dataPaths.js";
+import { listScenarioPresets, MAX_CUSTOM_SCENARIOS } from "../src/scenarios/scenarioStore.js";
 
 const workerPath = fileURLToPath(new URL("./fixtures/concurrentWriter.ts", import.meta.url));
 
@@ -26,17 +29,27 @@ describe("cross-process persisted mutations", () => {
     expect(behaviors["GET /left/19"]?.body).toEqual({ id: "left:19" });
     expect(behaviors["GET /right/19"]?.body).toEqual({ id: "right:19" });
   });
+
+  it("enforces the scenario count boundary across separate processes", async () => {
+    await rm(getDataPaths().scenarios, { recursive: true, force: true });
+    const results = await Promise.all([runWriter("scenario", "one", 55), runWriter("scenario", "two", 55), runWriter("scenario", "three", 55), runWriter("scenario", "four", 55)]);
+
+    expect(results.reduce((total, count) => total + count, 0)).toBe(MAX_CUSTOM_SCENARIOS);
+    expect((await listScenarioPresets()).filter((scenario) => /^(?:one|two|three|four)-/.test(scenario.id))).toHaveLength(MAX_CUSTOM_SCENARIOS);
+  }, 60_000);
 });
 
-function runWriter(store: "state" | "behavior", prefix: string, count: number): Promise<void> {
+function runWriter(store: "state" | "behavior" | "scenario", prefix: string, count: number): Promise<number> {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, ["--import", "tsx", workerPath, store, prefix, String(count)], {
       env: process.env,
       stdio: ["ignore", "pipe", "pipe"]
     });
+    let stdout = "";
     let stderr = "";
+    child.stdout.on("data", (chunk) => { stdout += String(chunk); });
     child.stderr.on("data", (chunk) => { stderr += String(chunk); });
     child.once("error", reject);
-    child.once("exit", (code) => code === 0 ? resolve() : reject(new Error(`Writer exited ${code}: ${stderr}`)));
+    child.once("exit", (code) => code === 0 ? resolve(Number(stdout.trim())) : reject(new Error(`Writer exited ${code}: ${stderr}`)));
   });
 }

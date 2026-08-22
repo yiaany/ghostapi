@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { clearCache, getCachedResponse, setCachedResponse } from "../src/cache/index.js";
+import { clearCache, getCachedResponse, MAX_CACHE_ENTRIES, setCachedResponse } from "../src/cache/index.js";
 import { createCacheKey } from "../src/proxy/cacheKey.js";
 import { getDataPaths } from "../src/config/dataPaths.js";
 
@@ -43,9 +43,18 @@ describe("Response Cache", () => {
       expect(existsSync(join(TEST_DIR, "cache", "github", "h1.json"))).toBe(true);
       expect(existsSync(join(TEST_DIR, "cache", "github", "h2.json"))).toBe(true);
     });
+
+    it("evicts oldest entries at the aggregate entry quota", async () => {
+      for (let index = 0; index <= MAX_CACHE_ENTRIES; index += 1) await setCachedResponse("quota", `h${String(index).padStart(4, "0")}`, { status: 200, headers: {}, body: { index } });
+      expect(await getCachedResponse("quota", "h0000")).toBeNull();
+      expect(await getCachedResponse("quota", `h${String(MAX_CACHE_ENTRIES).padStart(4, "0")}`)).not.toBeNull();
+    }, 30_000);
   });
 
   describe("Cache Key", () => {
+    it("uses the full SHA-256 digest", () => {
+      expect(createCacheKey({ method: "GET", path: "/", query: {}, headers: {}, body: null, receivedAt: "" }, "generic")).toMatch(/^[a-f0-9]{64}$/);
+    });
     it("preserves array order because ordered payloads have different semantics", () => {
       const key1 = createCacheKey(
         { method: "GET", path: "/", query: {}, headers: {}, body: { items: [{ id: 1 }, { id: 2 }] }, receivedAt: "" },

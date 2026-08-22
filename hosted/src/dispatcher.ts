@@ -12,7 +12,7 @@ async function tick(): Promise<void> {
   if (stopping || running) return;
   running = true;
   try {
-    await dispatchOutbox(database, queue, config.qstashCallbackUrl);
+    await dispatchOutbox(database, queue, config.qstashCallbackUrl, config.outboxMaxAttempts, config.workerMaxAttempts);
   } catch (error) {
     console.error("outbox_dispatch_failed", error instanceof Error ? error.message : "unknown_error");
   } finally {
@@ -26,6 +26,7 @@ void tick();
 async function shutdown(): Promise<void> {
   stopping = true;
   clearInterval(timer);
+  while (running) await Bun.sleep(25);
   await database.close();
   process.exit(0);
 }

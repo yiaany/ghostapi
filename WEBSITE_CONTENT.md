@@ -339,7 +339,8 @@ ghostapi model set <model>
 Core:
 
 ```http
-GET /health
+GET /health            # liveness, HTTP 200 with { ok, ready }
+GET /health/readiness  # structural readiness, HTTP 503 when degraded
 GET /dashboard
 GET /api/events
 GET /events

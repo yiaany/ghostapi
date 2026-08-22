@@ -2,6 +2,11 @@ import type { NormalizedRequest } from "../proxy/requestNormalizer.js";
 import { getDataPaths } from "../config/dataPaths.js";
 import { atomicWriteJson, mutateJsonFile, readJsonFile, withFileLock } from "../storage/fileStore.js";
 import { sanitizeSecrets } from "../security/secrets.js";
+import { sanitizeResponseHeaders } from "../security/headerSanitizer.js";
+
+export const MAX_API_BEHAVIORS = 500;
+const MAX_BEHAVIOR_BYTES = 256 * 1024;
+const MAX_BEHAVIOR_STORE_BYTES = 4 * 1024 * 1024;
 
 export type ApiBehavior = {
   path: string;
@@ -18,7 +23,10 @@ export async function setApiBehavior(behavior: ApiBehavior): Promise<ApiBehavior
     const normalized = normalizeBehavior(behavior);
     normalizedResult = normalized;
     const key = behaviorKey(normalized.method, normalized.path);
-    return { ...behaviors, [key]: normalized };
+    const next = { ...behaviors, [key]: normalized };
+    if (Object.keys(next).length > MAX_API_BEHAVIORS) throw new Error(`Behavior store is limited to ${MAX_API_BEHAVIORS} entries.`);
+    if (Buffer.byteLength(JSON.stringify(next), "utf8") > MAX_BEHAVIOR_STORE_BYTES) throw new Error("Behavior store exceeds its aggregate size limit.");
+    return next;
   });
   return normalizedResult;
 }
@@ -46,7 +54,13 @@ function normalizeBehavior(behavior: ApiBehavior): ApiBehavior {
   if (behavior.delayMs !== undefined && (!Number.isInteger(behavior.delayMs) || behavior.delayMs < 0 || behavior.delayMs > 10_000)) {
     throw new Error("Behavior delayMs must be an integer between 0 and 10000.");
   }
-  return sanitizeSecrets({ ...behavior, path, method }) as ApiBehavior;
+  if (path.length > 2048 || /[\r\n\0]/.test(path)) throw new Error("Behavior path is invalid.");
+  if (!/^(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/.test(method)) throw new Error("Behavior method is invalid.");
+  const headers = behavior.headers === undefined ? undefined : sanitizeResponseHeaders(behavior.headers);
+  if (behavior.headers !== undefined && (headers === undefined || Object.keys(headers).length !== Object.keys(behavior.headers).length)) throw new Error("Behavior response headers contain an unsafe or unsupported header.");
+  const normalized = sanitizeSecrets({ ...behavior, path, method, ...(headers === undefined ? {} : { headers }) }) as ApiBehavior;
+  if (Buffer.byteLength(JSON.stringify(normalized), "utf8") > MAX_BEHAVIOR_BYTES) throw new Error("Behavior exceeds its size limit.");
+  return normalized;
 }
 
 function behaviorKey(method: string, path: string): string {

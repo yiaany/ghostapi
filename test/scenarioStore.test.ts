@@ -31,4 +31,22 @@ describe("scenario presets", () => {
 
     expect(saved).toMatchObject({ id: "orders-flow", steps: [{ method: "POST", path: "/orders", status: 201 }] });
   });
+
+  it("rejects oversized scenario persistence", async () => {
+    await expect(importScenario({ title: "Too large", steps: [{ method: "GET", path: "/large", status: 200, body: { payload: "x".repeat(513 * 1024) } }] })).rejects.toThrow("size limit");
+  });
+
+  it("enforces the aggregate count quota under concurrent writes", async () => {
+    const results = await Promise.allSettled(Array.from({ length: 220 }, (_, index) => importScenario({ id: `count-${index}`, title: `Count ${index}`, steps: [{ method: "GET", path: `/count/${index}`, status: 200, body: {} }] })));
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(200);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(20);
+  }, 60_000);
+
+  it("enforces the aggregate byte quota under concurrent writes", async () => {
+    const payload = "x".repeat(500 * 1024);
+    const results = await Promise.allSettled(Array.from({ length: 48 }, (_, index) => importScenario({ id: `bytes-${index}`, title: `Bytes ${index}`, steps: [{ method: "GET", path: `/bytes/${index}`, status: 200, body: { payload } }] })));
+    expect(results.some((result) => result.status === "rejected")).toBe(true);
+    const stored = (await listScenarioPresets()).filter((scenario) => scenario.id.startsWith("bytes-"));
+    expect(stored.length).toBe(results.filter((result) => result.status === "fulfilled").length);
+  }, 60_000);
 });

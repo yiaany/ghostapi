@@ -4,13 +4,13 @@ const features = [
   ["MCP For Agents", "Let agents inspect state, read logs, force responses, and toggle failure modes instead of guessing what happened.", "ghostapi mcp"],
   ["Scenarios", "Turn common integration flows into repeatable fixtures: payment failure, email send, issue creation, and custom traffic saved from your own app."],
   ["Chaos Mode", "Break the happy path on purpose with rate limits, upstream failures, and latency so retry logic actually gets tested."],
-  ["Live Dashboard", "See the agent's API world in real time: every call, every response, every replay, every override."]
+  ["Live Dashboard", "See the agent's API world in real time: every call, every response, every armed scenario, every override."]
 ] as const;
 
 const steps = [
-  ["Start GhostAPI", "npx ghostapi start --open", "GhostAPI runs locally and opens the dashboard."],
+  ["Start GhostAPI", "npx @yiaany/ghostapi start --open", "GhostAPI runs locally and opens the dashboard."],
   ["Point Your App At Localhost", "http://127.0.0.1:8080", "GhostAPI detects providers like Stripe, Twilio, Resend, GitHub, Discord, OpenAI, and generic REST APIs."],
-  ["Inspect, Replay, And Let Agents Control It", "request -> failure -> dashboard -> MCP/control -> replay -> generated test", "Use the dashboard and MCP tools to turn local traffic into repeatable agent workflows."]
+  ["Inspect And Control Behavior", "request -> failure -> dashboard -> MCP/control -> generated test", "Use the dashboard and MCP tools to inspect traffic, arm deterministic responses, and generate regression tests."]
 ] as const;
 
 const audiences = [
@@ -20,8 +20,8 @@ const audiences = [
 ] as const;
 
 const installs = [
-  ["Start Instantly", "npx ghostapi start --open"],
-  ["Install Globally", "npm install -g ghostapi\nghostapi start --open"],
+  ["Start Instantly", "npx @yiaany/ghostapi start --open"],
+  ["Install Globally", "npm install -g @yiaany/ghostapi\nghostapi start --open"],
   ["Start MCP", "ghostapi mcp"],
   ["Generate Agent Setup", "ghostapi setup --write"]
 ] as const;
@@ -68,7 +68,7 @@ function ProductVisual() {
           <div className="request"><span>POST</span><strong>/messages</strong><em>twilio</em></div>
         </div>
         <div className="failure-panel panel">
-          <span className="panel-label">Replayed Stripe Failure</span>
+          <span className="panel-label">Armed Stripe Failure</span>
           <Code>{`{
   "error": {
     "type": "card_error",
@@ -83,7 +83,7 @@ function ProductVisual() {
           <div className="control-row"><span>toggle_chaos_mode</span><b>off</b></div>
         </div>
       </div>
-      <p>Run GhostAPI locally. Watch every API call. Replay scenarios. Let agents control behavior through MCP.</p>
+      <p>Run GhostAPI locally. Watch every API call. Arm deterministic scenarios. Let agents control behavior through MCP.</p>
     </div>
   );
 }
@@ -101,22 +101,22 @@ export function App() {
           <a href="#faq">FAQ</a>
         </nav>
         <div className="nav-actions">
-          <a className="stars-pill" href="https://github.com/ghostapi/ghostapi">GitHub</a>
-          <Button href="https://github.com/ghostapi/ghostapi" variant="ghost">View on GitHub</Button>
+          <a className="stars-pill" href="https://github.com/yiaany/ghostapi">GitHub</a>
+          <Button href="https://github.com/yiaany/ghostapi" variant="ghost">View on GitHub</Button>
           <Button href="#install">Get Started</Button>
         </div>
       </header>
 
       <main id="top">
         <section className="hero section">
-          <a className="announcement" href="#proof">From one unsafe API call to a replayable local scenario in under a minute <span>›</span></a>
+          <a className="announcement" href="#proof">Test provider failures locally before they reach production <span>›</span></a>
           <h1>The local internet for <span>AI coding agents.</span></h1>
           <p className="hero-subline">Build, test, and replay third-party API integrations locally without touching production services, leaking real keys, sending real messages, or charging real cards.</p>
           <div className="hero-actions">
             <Button href="#install">Get Started</Button>
-            <Button href="https://github.com/ghostapi/ghostapi" variant="ghost">View on GitHub</Button>
+            <Button href="https://github.com/yiaany/ghostapi" variant="ghost">View on GitHub</Button>
           </div>
-          <div className="hero-command"><Code>npx ghostapi start --open</Code></div>
+          <div className="hero-command"><Code>npx @yiaany/ghostapi start --open</Code></div>
           <ProductVisual />
           <p className="killer-use-case">Cursor writes a Stripe integration. GhostAPI catches the request, returns a realistic payment failure, and the agent fixes the code without ever touching production.</p>
         </section>
@@ -136,7 +136,7 @@ export function App() {
         <section className="section" id="how">
           <div className="section-copy centered">
             <span className="eyebrow">How It Works</span>
-            <h2>Start local, route to localhost, then inspect, replay, and control.</h2>
+            <h2>Start local, route to localhost, then inspect and control responses.</h2>
           </div>
           <div className="steps-grid">
             {steps.map(([title, command, body], index) => (
@@ -153,7 +153,7 @@ export function App() {
         <section className="section" id="features">
           <div className="section-copy centered">
             <span className="eyebrow">Core Features</span>
-            <h2>Everything on the homepage stays focused on the local API control loop.</h2>
+            <h2>A complete local control loop for third-party API development.</h2>
           </div>
           <div className="feature-grid">
             {features.map(([title, body, command]) => (
@@ -192,20 +192,20 @@ export function App() {
         <section className="section proof-section" id="proof">
           <div className="proof-card">
             <div className="section-copy">
-              <span className="eyebrow">Proof / Screenshot / GIF</span>
-              <h2>request → failure → dashboard → MCP/control → replay → generated test</h2>
-              <p>The homepage should not only claim the product works; it should show the full control loop.</p>
+              <span className="eyebrow">Deterministic Failure Testing</span>
+              <h2>Turn a provider failure into a visible, repeatable regression test.</h2>
+              <p>Arm a provider-shaped response, run your application, inspect the captured exchange, and generate a Vitest test from the result.</p>
             </div>
             <div className="storyboard">
               {[
-                "npx ghostapi start --open",
+                "npx @yiaany/ghostapi start --open",
                 "dashboard opens",
                 "Cursor or another agent writes/calls a Stripe integration",
                 "a request appears in live traffic",
                 "GhostAPI returns a realistic payment failure",
                 "the failure is visible in the dashboard",
-                "MCP/control action or scenario replay is triggered",
-                "the same failure is replayed deterministically",
+                "a deterministic failure scenario is armed",
+                "the next matching request receives the same failure",
                 "a test is generated from the captured traffic"
               ].map((item) => <span key={item}>{item}</span>)}
             </div>

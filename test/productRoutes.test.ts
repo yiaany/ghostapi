@@ -23,7 +23,7 @@ describe("product routes", () => {
     await resetFaultLabForTests();
   });
 
-  it("serves one-click setup and scenario actions", async () => {
+  it("serves generated setup and scenario actions", async () => {
     await withServer(async (baseUrl) => {
       const setupResponse = await fetch(`${baseUrl}/api/setup`, { method: "POST" });
       const setup = await setupResponse.json();

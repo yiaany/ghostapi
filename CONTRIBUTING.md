@@ -31,6 +31,7 @@ http://localhost:8080/dashboard
 
 ```bash
 npm run typecheck
+npm run lint
 npm test
 npm run build
 npm run dev
@@ -40,6 +41,7 @@ Use these before opening a pull request:
 
 ```bash
 npm run typecheck
+npm run lint
 npm test
 npm run build
 ```

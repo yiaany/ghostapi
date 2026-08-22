@@ -2,12 +2,13 @@ import { readFile, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { actionHash, createLocalActionGateway, createSyntheticActionAdapter } from "../src/actions/index.js";
+import { actionHash, createLocalActionGateway, createSyntheticActionAdapter, createTestActionApprovalVerifier } from "../src/actions/index.js";
 import { createLocalActionLedger, createTestLedgerAccessAuthorizer } from "../src/ledger/index.js";
 import { createWorld } from "../src/worlds/index.js";
 
 const POLICY_HASH = "a".repeat(64);
 const EVIDENCE_HASH = "b".repeat(64);
+const approvalAuthority = createTestActionApprovalVerifier();
 
 describe("local action ledger and incident replay", () => {
   it("chains action intent, approval, outcome, and verification while exporting only the tenant scope", async () => {
@@ -155,7 +156,7 @@ function createLedger(authorizer: ReturnType<typeof createTestLedgerAccessAuthor
 
 function createGateway(adapter = createSyntheticActionAdapter()) {
   const root = process.env.GHOSTAPI_DATA_DIR!;
-  return createLocalActionGateway({ now: () => new Date("2029-01-01T00:00:00.000Z"), adapter, pathForAction: (actionId) => join(root, "actions", `${actionId}.action.json`) });
+  return createLocalActionGateway({ now: () => new Date("2029-01-01T00:00:00.000Z"), adapter, approvalVerifier: approvalAuthority.verifier, pathForAction: (actionId) => join(root, "actions", `${actionId}.action.json`) });
 }
 
 function actionEnvelope(actionId: string, worldId: string) {
@@ -181,7 +182,7 @@ function actionEnvelope(actionId: string, worldId: string) {
 }
 
 function approvalFor(action: ReturnType<typeof actionEnvelope>) {
-  return { schemaVersion: 1, kind: "ghostapi.action-approval", approvalId: `approval-${action.actionId}`, actionHash: actionHash(action), approvedBy: "reviewer-one", approvedAt: "2028-12-31T00:00:00.000Z", expiresAt: "2030-01-01T00:00:00.000Z", nonce: `approval-nonce-${action.actionId}` } as const;
+  return approvalAuthority.issue({ schemaVersion: 1, kind: "ghostapi.action-approval", approvalId: `approval-${action.actionId}`, actionHash: actionHash(action), approvedBy: "reviewer-one", approvedAt: "2028-12-31T00:00:00.000Z", expiresAt: "2030-01-01T00:00:00.000Z", nonce: `approval-nonce-${action.actionId}` } as const);
 }
 
 function policy() {

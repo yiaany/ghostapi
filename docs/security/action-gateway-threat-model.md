@@ -9,7 +9,7 @@ It is not a production gateway. Real provider accounts, credentials, sandbox acc
 ## Trust Boundaries
 
 - Agent input: `ActionEnvelope` is untrusted data and is strictly schema-validated.
-- Approval input: `ActionApproval` is structured data bound to the canonical SHA-256 action hash. A boolean approval is not accepted.
+- Approval input: `ActionApproval` is structured data bound to the canonical SHA-256 action hash and carries Ed25519 provenance from an injected trusted key. A boolean approval, unsigned JSON, unknown key ID, or invalid signature is not accepted.
 - Policy input: the current local policy is loaded again at submit and execute; its version and SHA-256 source hash must match the approved envelope.
 - Identity input: the execution actor/workload pair must match the approved envelope immediately before side effect.
 - Persistence: action records use a private local directory, per-action lock, atomic replacement, regular-file checks, byte bounds, and receipt-chain validation. This coordinates cooperating local processes only; it is not protection from a malicious same-user actor who can alter both state and runtime.
@@ -19,7 +19,9 @@ It is not a production gateway. Real provider accounts, credentials, sandbox acc
 
 - Canonical serialization sorts object keys and preserves array order. Any argument change changes the action hash and invalidates approval.
 - An approver cannot equal the action actor or workload identity.
+- Approval provenance is verified at submission and re-authenticated from the persisted approval immediately before execution. A missing or unavailable verifier fails closed.
 - Action expiry, approval expiry, policy reference, actor identity, adapter support, and idempotency state are checked immediately before execution.
+- Inbox-issued approvals additionally require verifier-backed durable inbox consumption state; possession of artifact JSON or a trusted public key alone does not authorize gateway execution.
 - Receipts distinguish `requested`, `attempted`, `committed`, `verified`, and `failed`. Each receipt hashes the prior receipt hash plus its canonical content.
 - An `attempted` action is reconciled with `verify` before any subsequent execution. A failed reconciliation is an unknown outcome and is never automatically retried.
 - Duplicate action IDs with a changed envelope or approval are rejected. A verified or committed action returns its existing receipt without another synthetic side effect.
