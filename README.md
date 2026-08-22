@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="docs/assets/ghostapi-avatar.png" alt="GhostAPI" width="104" height="104">
-</p>
-
 <h1 align="center">GhostAPI</h1>
 
 <p align="center">
@@ -10,14 +6,6 @@
 
 <p align="center">
   Build and test third-party API integrations locally, without charging cards, sending messages, leaking production keys, or mutating real services.
-</p>
-
-<p align="center">
-  <a href="https://www.npmjs.com/package/@yiaany/ghostapi"><img alt="npm" src="https://img.shields.io/npm/v/@yiaany/ghostapi?color=0f172a&label=npm"></a>
-  <a href="https://github.com/yiaany/ghostapi/blob/main/LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-0f172a"></a>
-  <a href="https://github.com/yiaany/ghostapi/actions/workflows/ci.yml"><img alt="ci" src="https://github.com/yiaany/ghostapi/actions/workflows/ci.yml/badge.svg"></a>
-  <img alt="node" src="https://img.shields.io/badge/node-%3E%3D20-0f172a">
-  <img alt="MCP" src="https://img.shields.io/badge/MCP-enabled-0f172a">
 </p>
 
 <p align="center">

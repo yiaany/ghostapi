@@ -12,23 +12,28 @@ permissions: {}
 
 env:
   GHOSTAPI_VERSION: "0.1.8"
-  EVIDENCE_DIR: ${{ runner.temp }}/ghostapi-evidence
-  GHOSTAPI_DATA_DIR: ${{ runner.temp }}/ghostapi-data
 
 jobs:
   safety:
     name: Enforced safety check
     runs-on: ubuntu-latest
+    container:
+      image: node:22-bookworm
+      options: --privileged
     permissions:
       contents: read
+    env:
+      EVIDENCE_DIR: /tmp/ghostapi-evidence
+      GHOSTAPI_DATA_DIR: /tmp/ghostapi-data
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: 20
-          cache: npm
+      - name: Install namespace prerequisites
+        run: |
+          apt-get update
+          apt-get install --yes util-linux iproute2 curl
+          unshare --user --map-root-user --net --mount --pid --fork --kill-child=SIGTERM --mount-proc --propagation private -- true
       - name: Install package dependencies
         run: npm ci
       - name: Build GhostAPI from this commit
@@ -36,9 +41,9 @@ jobs:
       - name: Install the pinned GhostAPI package under test
         run: |
           test "$(node -p \"require('./package.json').version\")" = "$GHOSTAPI_VERSION"
-          mkdir -p "$RUNNER_TEMP/ghostapi-package"
-          npm pack --pack-destination "$RUNNER_TEMP/ghostapi-package"
-          npm install --global "$RUNNER_TEMP/ghostapi-package/yiaany-ghostapi-$GHOSTAPI_VERSION.tgz"
+          mkdir -p /tmp/ghostapi-package
+          npm pack --pack-destination /tmp/ghostapi-package
+          npm install --global "/tmp/ghostapi-package/yiaany-ghostapi-$GHOSTAPI_VERSION.tgz"
       - name: Run the safe fixture through enforced mode
         id: run
         continue-on-error: true
