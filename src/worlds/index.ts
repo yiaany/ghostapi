@@ -8,7 +8,7 @@ export {
   inspectWorld,
   resetWorld,
   runSubscriptionFailureWorkflow,
-  validateSyntheticWorld
+  validateSyntheticWorld,
 } from "./worlds.js";
 export type {
   CreateWorldOptions,
@@ -16,5 +16,5 @@ export type {
   SyntheticWorldManifest,
   SyntheticWorldState,
   WorldScenarioReference,
-  WorldWorkflowReceipt
+  WorldWorkflowReceipt,
 } from "./worlds.js";

@@ -1,6 +1,11 @@
 import type { NormalizedRequest } from "../proxy/requestNormalizer.js";
 import { getDataPaths } from "../config/dataPaths.js";
-import { atomicWriteJson, mutateJsonFile, readJsonFile, withFileLock } from "../storage/fileStore.js";
+import {
+  atomicWriteJson,
+  mutateJsonFile,
+  readJsonFile,
+  withFileLock,
+} from "../storage/fileStore.js";
 import { sanitizeSecrets } from "../security/secrets.js";
 import { sanitizeResponseHeaders } from "../security/headerSanitizer.js";
 
@@ -17,21 +22,37 @@ export type ApiBehavior = {
   delayMs?: number;
 };
 
-export async function setApiBehavior(behavior: ApiBehavior): Promise<ApiBehavior> {
+export async function setApiBehavior(
+  behavior: ApiBehavior,
+): Promise<ApiBehavior> {
   let normalizedResult!: ApiBehavior;
-  await mutateJsonFile(getDataPaths().behaviors, {}, sanitizeBehaviors, (behaviors) => {
-    const normalized = normalizeBehavior(behavior);
-    normalizedResult = normalized;
-    const key = behaviorKey(normalized.method, normalized.path);
-    const next = { ...behaviors, [key]: normalized };
-    if (Object.keys(next).length > MAX_API_BEHAVIORS) throw new Error(`Behavior store is limited to ${MAX_API_BEHAVIORS} entries.`);
-    if (Buffer.byteLength(JSON.stringify(next), "utf8") > MAX_BEHAVIOR_STORE_BYTES) throw new Error("Behavior store exceeds its aggregate size limit.");
-    return next;
-  });
+  await mutateJsonFile(
+    getDataPaths().behaviors,
+    {},
+    sanitizeBehaviors,
+    (behaviors) => {
+      const normalized = normalizeBehavior(behavior);
+      normalizedResult = normalized;
+      const key = behaviorKey(normalized.method, normalized.path);
+      const next = { ...behaviors, [key]: normalized };
+      if (Object.keys(next).length > MAX_API_BEHAVIORS)
+        throw new Error(
+          `Behavior store is limited to ${MAX_API_BEHAVIORS} entries.`,
+        );
+      if (
+        Buffer.byteLength(JSON.stringify(next), "utf8") >
+        MAX_BEHAVIOR_STORE_BYTES
+      )
+        throw new Error("Behavior store exceeds its aggregate size limit.");
+      return next;
+    },
+  );
   return normalizedResult;
 }
 
-export async function findApiBehavior(request: NormalizedRequest): Promise<ApiBehavior | null> {
+export async function findApiBehavior(
+  request: NormalizedRequest,
+): Promise<ApiBehavior | null> {
   const behaviors = await getApiBehaviors();
   return behaviors[behaviorKey(request.method, request.path)] ?? null;
 }
@@ -46,20 +67,51 @@ export async function clearApiBehaviorsForTests(): Promise<void> {
 }
 
 function normalizeBehavior(behavior: ApiBehavior): ApiBehavior {
-  const path = behavior.path.startsWith("/") ? behavior.path : `/${behavior.path}`;
+  const path = behavior.path.startsWith("/")
+    ? behavior.path
+    : `/${behavior.path}`;
   const method = behavior.method.toUpperCase();
-  if (!Number.isInteger(behavior.status) || behavior.status < 100 || behavior.status > 599) {
+  if (
+    !Number.isInteger(behavior.status) ||
+    behavior.status < 100 ||
+    behavior.status > 599
+  ) {
     throw new Error("Behavior status must be an integer between 100 and 599.");
   }
-  if (behavior.delayMs !== undefined && (!Number.isInteger(behavior.delayMs) || behavior.delayMs < 0 || behavior.delayMs > 10_000)) {
+  if (
+    behavior.delayMs !== undefined &&
+    (!Number.isInteger(behavior.delayMs) ||
+      behavior.delayMs < 0 ||
+      behavior.delayMs > 10_000)
+  ) {
     throw new Error("Behavior delayMs must be an integer between 0 and 10000.");
   }
-  if (path.length > 2048 || /[\r\n\0]/.test(path)) throw new Error("Behavior path is invalid.");
-  if (!/^(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/.test(method)) throw new Error("Behavior method is invalid.");
-  const headers = behavior.headers === undefined ? undefined : sanitizeResponseHeaders(behavior.headers);
-  if (behavior.headers !== undefined && (headers === undefined || Object.keys(headers).length !== Object.keys(behavior.headers).length)) throw new Error("Behavior response headers contain an unsafe or unsupported header.");
-  const normalized = sanitizeSecrets({ ...behavior, path, method, ...(headers === undefined ? {} : { headers }) }) as ApiBehavior;
-  if (Buffer.byteLength(JSON.stringify(normalized), "utf8") > MAX_BEHAVIOR_BYTES) throw new Error("Behavior exceeds its size limit.");
+  if (path.length > 2048 || /[\r\n\0]/.test(path))
+    throw new Error("Behavior path is invalid.");
+  if (!/^(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/.test(method))
+    throw new Error("Behavior method is invalid.");
+  const headers =
+    behavior.headers === undefined
+      ? undefined
+      : sanitizeResponseHeaders(behavior.headers);
+  if (
+    behavior.headers !== undefined &&
+    (headers === undefined ||
+      Object.keys(headers).length !== Object.keys(behavior.headers).length)
+  )
+    throw new Error(
+      "Behavior response headers contain an unsafe or unsupported header.",
+    );
+  const normalized = sanitizeSecrets({
+    ...behavior,
+    path,
+    method,
+    ...(headers === undefined ? {} : { headers }),
+  }) as ApiBehavior;
+  if (
+    Buffer.byteLength(JSON.stringify(normalized), "utf8") > MAX_BEHAVIOR_BYTES
+  )
+    throw new Error("Behavior exceeds its size limit.");
   return normalized;
 }
 
@@ -68,21 +120,30 @@ function behaviorKey(method: string, path: string): string {
 }
 
 function isApiBehavior(value: unknown): value is ApiBehavior {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  if (value === null || typeof value !== "object" || Array.isArray(value))
+    return false;
   const behavior = value as ApiBehavior;
-  return typeof behavior.path === "string"
-    && typeof behavior.method === "string"
-    && Number.isInteger(behavior.status)
-    && behavior.status >= 100
-    && behavior.status <= 599
-    && (behavior.delayMs === undefined || (Number.isInteger(behavior.delayMs) && behavior.delayMs >= 0 && behavior.delayMs <= 10_000));
+  return (
+    typeof behavior.path === "string" &&
+    typeof behavior.method === "string" &&
+    Number.isInteger(behavior.status) &&
+    behavior.status >= 100 &&
+    behavior.status <= 599 &&
+    (behavior.delayMs === undefined ||
+      (Number.isInteger(behavior.delayMs) &&
+        behavior.delayMs >= 0 &&
+        behavior.delayMs <= 10_000))
+  );
 }
 
 function sanitizeBehaviors(value: unknown): Record<string, ApiBehavior> {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) return {};
+  if (value === null || typeof value !== "object" || Array.isArray(value))
+    return {};
   return Object.fromEntries(
     Object.entries(value as Record<string, unknown>)
       .map(([key, entryValue]) => [key, sanitizeSecrets(entryValue)] as const)
-      .filter((entry): entry is [string, ApiBehavior] => isApiBehavior(entry[1]))
+      .filter((entry): entry is [string, ApiBehavior] =>
+        isApiBehavior(entry[1]),
+      ),
   );
 }

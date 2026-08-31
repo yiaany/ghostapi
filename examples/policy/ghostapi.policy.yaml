@@ -8,8 +8,8 @@ network:
     - host: api.stripe.com
     - host: api.openai.com
   productionHosts:
-    - '*.stripe.com'
-    - '*.openai.com'
+    - "*.stripe.com"
+    - "*.openai.com"
 credentials:
   forbid:
     - sk_live_*

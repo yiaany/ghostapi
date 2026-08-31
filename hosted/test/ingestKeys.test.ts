@@ -8,28 +8,44 @@ test("provisions an ingest key without persisting its plaintext secret", async (
   const client = {
     async query(text: string, values?: unknown[]) {
       calls.push({ text, values });
-      if (text.includes("select organization_id from app.projects")) return { rows: [{ organization_id: "org_123" }] };
-      if (text.includes("select id from app.organizations")) return { rows: [{ id: "org_123" }] };
-      if (text.includes("organization_quotas")) return { rows: [{ count: 0, quota: 20 }] };
+      if (text.includes("select organization_id from app.projects"))
+        return { rows: [{ organization_id: "org_123" }] };
+      if (text.includes("select id from app.organizations"))
+        return { rows: [{ id: "org_123" }] };
+      if (text.includes("organization_quotas"))
+        return { rows: [{ count: 0, quota: 20 }] };
       if (text.includes("insert into app.ci_ingest_keys")) {
-        return { rows: [{ id: values![0], name: values![2], key_prefix: values![3], expires_at: "2026-09-07T00:00:00.000Z" }] };
+        return {
+          rows: [
+            {
+              id: values![0],
+              name: values![2],
+              key_prefix: values![3],
+              expires_at: "2026-09-07T00:00:00.000Z",
+            },
+          ],
+        };
       }
       return { rows: [] };
-    }
+    },
   };
 
   const key = await createIngestKey(client as never, {
     projectId: "7b28ddf6-6e66-4d3e-94c3-f1736fa04bfc",
     actorId: "user_123",
     name: "production-ci",
-    expiresInDays: 30
+    expiresInDays: 30,
   });
 
   assert.match(key.id, /^[0-9a-f-]{36}$/);
   assert.match(key.keyPrefix, /^[a-z0-9]{12}$/);
   assert.match(key.secret, /^[A-Za-z0-9_-]{43}$/);
-  const insert = calls.find((call) => call.text.includes("insert into app.ci_ingest_keys"))!;
-  const audit = calls.find((call) => call.text.includes("insert into app.audit_events"))!;
+  const insert = calls.find((call) =>
+    call.text.includes("insert into app.ci_ingest_keys"),
+  )!;
+  const audit = calls.find((call) =>
+    call.text.includes("insert into app.audit_events"),
+  )!;
   assert.equal(insert.values!.includes(key.secret), false);
   assert.equal(key.name, "production-ci");
   assert.equal(insert.values![4], await sha256(key.secret));
@@ -42,15 +58,16 @@ test("revokes only a project-owned active ingest key and records the action", as
   const client = {
     async query(text: string, values?: unknown[]) {
       calls.push({ text, values });
-      if (text.includes("update app.ci_ingest_keys")) return { rows: [{ id: values![0] }] };
+      if (text.includes("update app.ci_ingest_keys"))
+        return { rows: [{ id: values![0] }] };
       return { rows: [] };
-    }
+    },
   };
 
   const revoked = await revokeIngestKey(client as never, {
     projectId: "7b28ddf6-6e66-4d3e-94c3-f1736fa04bfc",
     keyId: "a5d6e7f8-8b9c-4d3e-94c3-f1736fa04bfc",
-    actorId: "user_123"
+    actorId: "user_123",
   });
 
   assert.equal(revoked, true);
@@ -65,13 +82,13 @@ test("does not audit an already unavailable ingest key", async () => {
     async query(text: string, values?: unknown[]) {
       calls.push({ text, values });
       return { rows: [] };
-    }
+    },
   };
 
   const revoked = await revokeIngestKey(client as never, {
     projectId: "7b28ddf6-6e66-4d3e-94c3-f1736fa04bfc",
     keyId: "a5d6e7f8-8b9c-4d3e-94c3-f1736fa04bfc",
-    actorId: "user_123"
+    actorId: "user_123",
   });
 
   assert.equal(revoked, false);

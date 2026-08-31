@@ -62,16 +62,16 @@ The dispatcher can publish the same event more than once after an ambiguous netw
 
 `hosted/migrations/001_core.sql` creates:
 
-| Table | Purpose |
-| --- | --- |
-| `app.organizations`, `app.organization_memberships`, `app.projects` | Tenant hierarchy and membership. |
-| `app.scenario_versions` | Immutable shared scenario definitions with checksum. |
-| `app.ci_ingest_keys` | Public id plus SHA-256-only CI secret digest and scope. |
-| `app.reports` | Bounded sanitized CI report payload and processing state. |
-| `app.idempotency_ledger` | Durable `(project_id, key)` replay contract. |
-| `app.outbox_events` | Transactional event publication source. |
-| `app.job_receipts`, `app.scenario_run_results` | At-least-once worker deduplication and results. |
-| `app.audit_events` | Hosted control-plane audit metadata. |
+| Table                                                               | Purpose                                                   |
+| ------------------------------------------------------------------- | --------------------------------------------------------- |
+| `app.organizations`, `app.organization_memberships`, `app.projects` | Tenant hierarchy and membership.                          |
+| `app.scenario_versions`                                             | Immutable shared scenario definitions with checksum.      |
+| `app.ci_ingest_keys`                                                | Public id plus SHA-256-only CI secret digest and scope.   |
+| `app.reports`                                                       | Bounded sanitized CI report payload and processing state. |
+| `app.idempotency_ledger`                                            | Durable `(project_id, key)` replay contract.              |
+| `app.outbox_events`                                                 | Transactional event publication source.                   |
+| `app.job_receipts`, `app.scenario_run_results`                      | At-least-once worker deduplication and results.           |
+| `app.audit_events`                                                  | Hosted control-plane audit metadata.                      |
 
 Better Auth manages its own `auth` schema/tables through its migration CLI. Configure `AUTH_DATABASE_URL` with `search_path=auth`; application `DATABASE_URL` should use `search_path=app`. Keep application memberships separate from Better Auth accounts so a later SAML/OIDC identity mapping does not rewrite tenant authorization.
 

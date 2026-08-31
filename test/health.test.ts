@@ -18,7 +18,11 @@ describe("health route", () => {
   });
 
   it("reports ready with ok:true on a healthy local data directory", async () => {
-    const app = await createServer({ host: "127.0.0.1", port: 8080, model: "gpt-4o-mini" });
+    const app = await createServer({
+      host: "127.0.0.1",
+      port: 8080,
+      model: "gpt-4o-mini",
+    });
     const server = app.listen(0);
     const address = server.address();
 
@@ -41,7 +45,11 @@ describe("health route", () => {
     await mkdir(join(paths.root, "reliability"), { recursive: true });
     await writeFile(paths.sloStore, "{ not json", "utf8");
 
-    const app = await createServer({ host: "127.0.0.1", port: 8080, model: "gpt-4o-mini" });
+    const app = await createServer({
+      host: "127.0.0.1",
+      port: 8080,
+      model: "gpt-4o-mini",
+    });
     const server = app.listen(0);
     const address = server.address();
 
@@ -55,11 +63,18 @@ describe("health route", () => {
       expect(health.status).toBe(200);
       await expect(health.json()).resolves.toEqual({ ok: false, ready: false });
 
-      const readiness = await fetch(`http://127.0.0.1:${address.port}/health/readiness`);
+      const readiness = await fetch(
+        `http://127.0.0.1:${address.port}/health/readiness`,
+      );
       expect(readiness.status).toBe(503);
       const report = await readiness.json();
       expect(report.ready).toBe(false);
-      expect(report.stores.some((store: { id: string; status: string }) => store.id === "slo" && store.status === "degraded")).toBe(true);
+      expect(
+        report.stores.some(
+          (store: { id: string; status: string }) =>
+            store.id === "slo" && store.status === "degraded",
+        ),
+      ).toBe(true);
     } finally {
       await closeServer(server);
     }

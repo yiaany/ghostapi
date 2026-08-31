@@ -38,21 +38,21 @@ The local Node.js version satisfies the declared engine range but is newer than 
 
 ## Verification Results
 
-| Command | Result | Details |
-| --- | --- | --- |
-| `npm ci` | PASS | Installed 263 packages from the lockfile. npm reported 11 audit findings and two esbuild install scripts pending allow-scripts review. |
-| `npm run typecheck` | PASS | Strict TypeScript check completed without diagnostics. |
-| `npm test` | PASS | 21 test files and 102 tests passed. |
-| `npm run build` | PASS | TypeScript, landing page, and dashboard static assets built successfully. |
-| `node dist/cli/index.js --help` | PASS | Built CLI printed its command reference. |
-| `node dist/cli/index.js providers list` | PASS | Printed seven registered providers. |
-| `node dist/cli/index.js model get` | PASS | Printed `gpt-4o-mini`. |
-| `npm pack --dry-run` | PASS | 188 files, 235.5 kB packed, 659.6 kB unpacked. No ignored local state or dependency directory was included. |
-| Isolated packed-package install | PASS | Installed the generated tarball into a temporary project. The installed CLI, offline `/health`, and `/dashboard` smoke checks passed. |
-| Formatter check | NOT RUN | No formatter script or repository formatter configuration exists. |
-| Lint | NOT RUN | No lint script or repository lint configuration exists. |
-| `npm audit` | FAIL | 11 findings: 7 moderate, 3 high, and 1 critical. |
-| `npm audit --omit=dev` | FAIL | 5 runtime findings: 3 moderate and 2 high. |
+| Command                                 | Result  | Details                                                                                                                                |
+| --------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm ci`                                | PASS    | Installed 263 packages from the lockfile. npm reported 11 audit findings and two esbuild install scripts pending allow-scripts review. |
+| `npm run typecheck`                     | PASS    | Strict TypeScript check completed without diagnostics.                                                                                 |
+| `npm test`                              | PASS    | 21 test files and 102 tests passed.                                                                                                    |
+| `npm run build`                         | PASS    | TypeScript, landing page, and dashboard static assets built successfully.                                                              |
+| `node dist/cli/index.js --help`         | PASS    | Built CLI printed its command reference.                                                                                               |
+| `node dist/cli/index.js providers list` | PASS    | Printed seven registered providers.                                                                                                    |
+| `node dist/cli/index.js model get`      | PASS    | Printed `gpt-4o-mini`.                                                                                                                 |
+| `npm pack --dry-run`                    | PASS    | 188 files, 235.5 kB packed, 659.6 kB unpacked. No ignored local state or dependency directory was included.                            |
+| Isolated packed-package install         | PASS    | Installed the generated tarball into a temporary project. The installed CLI, offline `/health`, and `/dashboard` smoke checks passed.  |
+| Formatter check                         | NOT RUN | No formatter script or repository formatter configuration exists.                                                                      |
+| Lint                                    | NOT RUN | No lint script or repository lint configuration exists.                                                                                |
+| `npm audit`                             | FAIL    | 11 findings: 7 moderate, 3 high, and 1 critical.                                                                                       |
+| `npm audit --omit=dev`                  | FAIL    | 5 runtime findings: 3 moderate and 2 high.                                                                                             |
 
 The dependency tree was not updated during this baseline session. Audit remediation needs a controlled dependency session because one suggested full remediation upgrades Vite across a breaking major version.
 

@@ -1,0 +1,7 @@
+dist/
+coverage/
+node_modules/
+hosted/dist/
+.ghostapi/
+*.tgz
+docs/assets/*.png

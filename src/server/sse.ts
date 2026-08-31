@@ -14,14 +14,19 @@ export function addSseClient(response: Response): boolean {
   if (clients.size >= MAX_SSE_CLIENTS) return false;
   const client: SseClient = {
     id: randomUUID(),
-    response
+    response,
   };
 
   clients.add(client);
 
   requestAnimationFrameMock(() => {
     if (!client.response.writableEnded && !client.response.destroyed) {
-      if (!client.response.write(`data: ${JSON.stringify({ type: "connected", id: client.id })}\n\n`)) removeSlowClient(client);
+      if (
+        !client.response.write(
+          `data: ${JSON.stringify({ type: "connected", id: client.id })}\n\n`,
+        )
+      )
+        removeSlowClient(client);
     }
   });
 
@@ -51,5 +56,6 @@ function requestAnimationFrameMock(fn: () => void) {
 
 function removeSlowClient(client: SseClient): void {
   clients.delete(client);
-  if (!client.response.writableEnded && !client.response.destroyed) client.response.end();
+  if (!client.response.writableEnded && !client.response.destroyed)
+    client.response.end();
 }

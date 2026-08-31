@@ -6,7 +6,7 @@ export const discordAdapter: ProviderAdapter = {
   formatError(details: ProviderErrorDetails) {
     return {
       code: typeof details.code === "number" ? details.code : 50035,
-      message: details.message
+      message: details.message,
     };
-  }
+  },
 };

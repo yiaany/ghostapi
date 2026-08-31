@@ -15,19 +15,33 @@ export class ScenarioDefinitionError extends Error {
   }
 }
 
-export function validateScenarioDefinition(value: unknown): asserts value is ScenarioDefinition {
-  if (!isObject(value) || Object.keys(value).some((key) => key !== "when" && key !== "assertions")) throw new ScenarioDefinitionError();
+export function validateScenarioDefinition(
+  value: unknown,
+): asserts value is ScenarioDefinition {
+  if (
+    !isObject(value) ||
+    Object.keys(value).some((key) => key !== "when" && key !== "assertions")
+  )
+    throw new ScenarioDefinitionError();
   const when = value.when ?? {};
-  if (!isObject(when) || Object.keys(when).length > MAX_PATHS) throw new ScenarioDefinitionError();
+  if (!isObject(when) || Object.keys(when).length > MAX_PATHS)
+    throw new ScenarioDefinitionError();
   for (const [path, expected] of Object.entries(when)) {
     validatePath(path);
     validateJson(expected, 0);
   }
 
   const assertions = value.assertions ?? [];
-  if (!Array.isArray(assertions) || assertions.length > MAX_PATHS) throw new ScenarioDefinitionError();
+  if (!Array.isArray(assertions) || assertions.length > MAX_PATHS)
+    throw new ScenarioDefinitionError();
   for (const assertion of assertions) {
-    if (!isObject(assertion) || Object.keys(assertion).some((key) => !["path", "equals", "exists"].includes(key))) throw new ScenarioDefinitionError();
+    if (
+      !isObject(assertion) ||
+      Object.keys(assertion).some(
+        (key) => !["path", "equals", "exists"].includes(key),
+      )
+    )
+      throw new ScenarioDefinitionError();
     if (typeof assertion.path !== "string") throw new ScenarioDefinitionError();
     validatePath(assertion.path);
     const hasEquals = Object.hasOwn(assertion, "equals");
@@ -36,16 +50,23 @@ export function validateScenarioDefinition(value: unknown): asserts value is Sce
     if (hasEquals) validateJson(assertion.equals, 0);
   }
 
-  if (Buffer.byteLength(stableJson(value), "utf8") > MAX_DEFINITION_BYTES) throw new ScenarioDefinitionError();
+  if (Buffer.byteLength(stableJson(value), "utf8") > MAX_DEFINITION_BYTES)
+    throw new ScenarioDefinitionError();
 }
 
 export function validatePath(path: string): void {
-  if (path.length < 1 || path.length > 256 || !PATH_PATTERN.test(path)) throw new ScenarioDefinitionError();
+  if (path.length < 1 || path.length > 256 || !PATH_PATTERN.test(path))
+    throw new ScenarioDefinitionError();
 }
 
 function validateJson(value: unknown, depth: number): void {
   if (depth > 8) throw new ScenarioDefinitionError();
-  if (value === null || typeof value === "boolean" || (typeof value === "number" && Number.isFinite(value))) return;
+  if (
+    value === null ||
+    typeof value === "boolean" ||
+    (typeof value === "number" && Number.isFinite(value))
+  )
+    return;
   if (typeof value === "string") {
     if (value.length > 64 * 1024) throw new ScenarioDefinitionError();
     return;
@@ -55,7 +76,8 @@ function validateJson(value: unknown, depth: number): void {
     for (const entry of value) validateJson(entry, depth + 1);
     return;
   }
-  if (!isObject(value) || Object.keys(value).length > 1_000) throw new ScenarioDefinitionError();
+  if (!isObject(value) || Object.keys(value).length > 1_000)
+    throw new ScenarioDefinitionError();
   for (const entry of Object.values(value)) validateJson(entry, depth + 1);
 }
 

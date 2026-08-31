@@ -1,5 +1,12 @@
 import { spawn } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
 
@@ -84,6 +91,17 @@ try {
     join(installDir, "node_modules", "@yiaany", "ghostapi"),
   );
 
+  if (process.env.GHOSTAPI_PACK_OUTPUT) {
+    const outputDirectory = isAbsolute(process.env.GHOSTAPI_PACK_OUTPUT)
+      ? process.env.GHOSTAPI_PACK_OUTPUT
+      : join(root, process.env.GHOSTAPI_PACK_OUTPUT);
+    await mkdir(outputDirectory, { recursive: true });
+    await copyFile(
+      tarball,
+      join(outputDirectory, tarball.split(/[\\/]/).at(-1)),
+    );
+  }
+
   console.log(`PASS package smoke installed ${tarball} into ${installDir}`);
 } finally {
   await rm(tempRoot, { recursive: true, force: true });
@@ -133,6 +151,13 @@ function assertPackageList(files) {
     "sessions/",
     "hosted/",
     ".ghostapi/",
+    "FEATURES_AND_YC_PITCH.md",
+    "DISCORD_SERVER_SETUP.md",
+    "docs/fundraising/",
+    "docs/commercial/",
+    "docs/design-partners/",
+    "docs/enterprise-product-roadmap-ru.md",
+    "dist/landing/",
   ];
   for (const file of files) {
     if (

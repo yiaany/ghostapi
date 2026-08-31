@@ -17,12 +17,12 @@ The reliability layer adds no provider, credential, network egress, or hosted co
 
 ## Trust Boundaries
 
-| Boundary | In scope | Out of scope |
-| --- | --- | --- |
-| Operator identity | SLO, reconciliation, and cost operators authenticate through injectable authorizers; the test authorizer binds issued identities by reference | Real authn/authz infrastructure |
-| Ledger access | Reconciliation uses a verified ledger capability (reference-bound, tenant-scoped, permission-checked) | Key management for live providers |
-| Provider state | Reconciliation inspects synthetic worlds through `createWorldStateReconciliationProvider` | Live provider APIs |
-| HTTP surface | `/health`, `/health/readiness` are public but return only structural readiness | Authenticated control APIs |
+| Boundary          | In scope                                                                                                                                      | Out of scope                      |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Operator identity | SLO, reconciliation, and cost operators authenticate through injectable authorizers; the test authorizer binds issued identities by reference | Real authn/authz infrastructure   |
+| Ledger access     | Reconciliation uses a verified ledger capability (reference-bound, tenant-scoped, permission-checked)                                         | Key management for live providers |
+| Provider state    | Reconciliation inspects synthetic worlds through `createWorldStateReconciliationProvider`                                                     | Live provider APIs                |
+| HTTP surface      | `/health`, `/health/readiness` are public but return only structural readiness                                                                | Authenticated control APIs        |
 
 ## Assets
 
@@ -80,29 +80,29 @@ Backup only reads the source; restore refuses a target that is the source or ins
 
 ## Permissions And Capabilities Summary
 
-| Action | Check |
-| --- | --- |
-| SLO record | record capability in `sloRecordCapabilities` |
-| SLO configure/inspect/evaluate | operator authorizer + `slo.configure`/`slo.inspect` |
-| Reconciliation run | operator authorizer + `reconciliation.manage` + ledger capability (tenant-scoped, `export`) |
-| Reconciliation findings/resolve | operator authorizer + `reconciliation.inspect`/`reconciliation.manage` |
-| Cost record/configure/report/alerts | operator authorizer + `cost.*` permissions |
-| Health/backup/restore | local-only; backup/restore are not exposed over HTTP |
+| Action                              | Check                                                                                       |
+| ----------------------------------- | ------------------------------------------------------------------------------------------- |
+| SLO record                          | record capability in `sloRecordCapabilities`                                                |
+| SLO configure/inspect/evaluate      | operator authorizer + `slo.configure`/`slo.inspect`                                         |
+| Reconciliation run                  | operator authorizer + `reconciliation.manage` + ledger capability (tenant-scoped, `export`) |
+| Reconciliation findings/resolve     | operator authorizer + `reconciliation.inspect`/`reconciliation.manage`                      |
+| Cost record/configure/report/alerts | operator authorizer + `cost.*` permissions                                                  |
+| Health/backup/restore               | local-only; backup/restore are not exposed over HTTP                                        |
 
 ## Limits
 
-| Resource | Limit |
-| --- | --- |
-| SLO samples per metric | 5,000 |
-| SLO samples total | 10,000 |
-| SLO targets | 32 |
-| SLO window | 1 hour .. 30 days |
-| Reconciliation findings | 1,000 |
+| Resource                        | Limit             |
+| ------------------------------- | ----------------- |
+| SLO samples per metric          | 5,000             |
+| SLO samples total               | 10,000            |
+| SLO targets                     | 32                |
+| SLO window                      | 1 hour .. 30 days |
+| Reconciliation findings         | 1,000             |
 | Cost records / budgets / alerts | 10,000 / 32 / 100 |
-| Cost window | up to 90 days |
-| Store bytes | 4 MiB each |
-| Backup total bytes | 64 MiB |
-| Health check file bytes | 4 MiB |
+| Cost window                     | up to 90 days     |
+| Store bytes                     | 4 MiB each        |
+| Backup total bytes              | 64 MiB            |
+| Health check file bytes         | 4 MiB             |
 
 ## Out Of Scope
 

@@ -4,8 +4,14 @@ import { clearState } from "../src/state/stateStore.js";
 import { clearCache } from "../src/cache/index.js";
 import { closeServer } from "./serverTestUtils.js";
 
-async function withServer<T>(test: (baseUrl: string) => Promise<T>): Promise<T> {
-  const app = await createServer({ host: "127.0.0.1", port: 8080, model: "gpt-4o-mini" });
+async function withServer<T>(
+  test: (baseUrl: string) => Promise<T>,
+): Promise<T> {
+  const app = await createServer({
+    host: "127.0.0.1",
+    port: 8080,
+    model: "gpt-4o-mini",
+  });
   const server = app.listen(0);
   const address = server.address();
 
@@ -30,7 +36,10 @@ describe("proxy handler", () => {
   it("synchronizes state between POST, GET by id, and GET list", async () => {
     await withServer(async (baseUrl) => {
       // 1. Create
-      const postResp = await fetch(`${baseUrl}/v1/customers`, { method: "POST", body: '{"email":"a@b.com"}' });
+      const postResp = await fetch(`${baseUrl}/v1/customers`, {
+        method: "POST",
+        body: '{"email":"a@b.com"}',
+      });
       const createdObj = await postResp.json();
       expect(createdObj.id).toMatch(/^cus_/);
       expect(createdObj.object).toBe("customer");
@@ -52,14 +61,20 @@ describe("proxy handler", () => {
 
   it("returns cached response on repeated identical requests", async () => {
     await withServer(async (baseUrl) => {
-      const resp1 = await fetch(`${baseUrl}/cache-test`, { method: "POST", body: '{"key":"value"}' });
+      const resp1 = await fetch(`${baseUrl}/cache-test`, {
+        method: "POST",
+        body: '{"key":"value"}',
+      });
       const body1 = await resp1.json();
       expect(resp1.headers.get("x-ghostapi-cache")).toBe("MISS");
 
-      const resp2 = await fetch(`${baseUrl}/cache-test`, { method: "POST", body: '{"key":"value"}' });
+      const resp2 = await fetch(`${baseUrl}/cache-test`, {
+        method: "POST",
+        body: '{"key":"value"}',
+      });
       const body2 = await resp2.json();
       expect(resp2.headers.get("x-ghostapi-cache")).toBe("HIT");
-      
+
       expect(body2.id).toBe(body1.id);
     });
   });
@@ -68,23 +83,37 @@ describe("proxy handler", () => {
     await withServer(async (baseUrl) => {
       const response = await fetch(`${baseUrl}/anything?limit=10`, {
         method: "POST",
-        headers: { "content-type": "application/json", authorization: "Bearer secret" },
-        body: JSON.stringify({ name: "Ada" })
+        headers: {
+          "content-type": "application/json",
+          authorization: "Bearer secret",
+        },
+        body: JSON.stringify({ name: "Ada" }),
       });
       const body = await response.json();
 
       expect(response.status).toBe(200);
-      expect(body).toMatchObject({ object: "anything", provider: "generic", method: "POST", path: "/anything", status: "ok", name: "Ada" });
+      expect(body).toMatchObject({
+        object: "anything",
+        provider: "generic",
+        method: "POST",
+        path: "/anything",
+        status: "ok",
+        name: "Ada",
+      });
       expect(body.id).toMatch(/^anything_mock_/);
     });
   });
 
   it("runs Stripe customer creation through the versioned pack", async () => {
     await withServer(async (baseUrl) => {
-      const response = await fetch(`${baseUrl}/v1/customers`, { method: "POST" });
+      const response = await fetch(`${baseUrl}/v1/customers`, {
+        method: "POST",
+      });
       const body = await response.json();
 
-      expect(response.headers.get("x-ghostapi-provider-pack")).toBe("stripe@1.1.0");
+      expect(response.headers.get("x-ghostapi-provider-pack")).toBe(
+        "stripe@1.1.0",
+      );
       expect(body).toMatchObject({ object: "customer", livemode: false });
     });
   });
@@ -93,13 +122,22 @@ describe("proxy handler", () => {
     await withServer(async (baseUrl) => {
       const response = await fetch(`${baseUrl}/v1/payment_intents`, {
         method: "POST",
-        headers: { "content-type": "application/json", authorization: "Bearer stripe_test_ghostapi" },
-        body: JSON.stringify({ amount: 2400, currency: "usd", confirm: true })
+        headers: {
+          "content-type": "application/json",
+          authorization: "Bearer stripe_test_ghostapi",
+        },
+        body: JSON.stringify({ amount: 2400, currency: "usd", confirm: true }),
       });
       const body = await response.json();
 
       expect(response.status).toBe(200);
-      expect(body).toMatchObject({ object: "payment_intent", amount: 2400, currency: "usd", status: "succeeded", livemode: false });
+      expect(body).toMatchObject({
+        object: "payment_intent",
+        amount: 2400,
+        currency: "usd",
+        status: "succeeded",
+        livemode: false,
+      });
       expect(body.id).toMatch(/^pi_/);
       expect(body.client_secret).toMatch(/^pi_.*_secret_ghostapi$/);
     });
@@ -109,15 +147,28 @@ describe("proxy handler", () => {
     await withServer(async (baseUrl) => {
       const createResponse = await fetch(`${baseUrl}/emails`, {
         method: "POST",
-        headers: { "content-type": "application/json", "x-ghostapi-api-version": "v1" },
-        body: JSON.stringify({ from: "sender@example.com", to: "reader@example.com", subject: "Hello" })
+        headers: {
+          "content-type": "application/json",
+          "x-ghostapi-api-version": "v1",
+        },
+        body: JSON.stringify({
+          from: "sender@example.com",
+          to: "reader@example.com",
+          subject: "Hello",
+        }),
       });
       const created = await createResponse.json();
 
       expect(createResponse.status).toBe(200);
-      expect(createResponse.headers.get("x-ghostapi-provider-pack")).toBe("resend@1.0.0");
+      expect(createResponse.headers.get("x-ghostapi-provider-pack")).toBe(
+        "resend@1.0.0",
+      );
       expect(createResponse.headers.get("x-ghostapi-api-version")).toBe("v1");
-      expect(created).toMatchObject({ provider: "resend", method: "POST", path: "/emails" });
+      expect(created).toMatchObject({
+        provider: "resend",
+        method: "POST",
+        path: "/emails",
+      });
       expect(created.id).toMatch(/^email_mock_/);
 
       const readResponse = await fetch(`${baseUrl}/emails/${created.id}`);
@@ -130,26 +181,34 @@ describe("proxy handler", () => {
     await withServer(async (baseUrl) => {
       const response = await fetch(`${baseUrl}/emails`, {
         method: "POST",
-        headers: { "content-type": "application/json", "x-ghostapi-api-version": "v2" },
-        body: JSON.stringify({ from: "sender@example.com", to: "reader@example.com", subject: "Hello" })
+        headers: {
+          "content-type": "application/json",
+          "x-ghostapi-api-version": "v2",
+        },
+        body: JSON.stringify({
+          from: "sender@example.com",
+          to: "reader@example.com",
+          subject: "Hello",
+        }),
       });
 
       expect(response.status).toBe(400);
       await expect(response.json()).resolves.toEqual({
         statusCode: 400,
         name: "invalid_api_version",
-        message: "Unsupported Resend API version: v2. Supported versions: v1."
+        message: "Unsupported Resend API version: v2. Supported versions: v1.",
       });
     });
   });
 
   it("bypasses response caching for stateful Stripe pack mutations", async () => {
     await withServer(async (baseUrl) => {
-      const request = () => fetch(`${baseUrl}/v1/payment_intents`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ amount: 2400, currency: "usd" })
-      });
+      const request = () =>
+        fetch(`${baseUrl}/v1/payment_intents`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ amount: 2400, currency: "usd" }),
+        });
       const first = await request();
       const firstBody = await first.json();
       const second = await request();
@@ -165,7 +224,10 @@ describe("proxy handler", () => {
   it("returns diagnostic errors without exposing detected Stripe authorization", async () => {
     await withServer(async (baseUrl) => {
       const stripeTestKey = ["sk", "test", "abc123"].join("_");
-      const response = await fetch(`${baseUrl}/anything`, { method: "POST", headers: { authorization: `Bearer ${stripeTestKey}` } });
+      const response = await fetch(`${baseUrl}/anything`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${stripeTestKey}` },
+      });
       const body = await response.json();
 
       expect(response.status).toBe(404);
@@ -179,7 +241,10 @@ describe("proxy handler", () => {
       const health = await fetch(`${baseUrl}/health`);
       const dashboard = await fetch(`${baseUrl}/dashboard`);
       const controller = new AbortController();
-      const events = await fetch(`${baseUrl}/events`, { headers: { accept: "text/event-stream" }, signal: controller.signal });
+      const events = await fetch(`${baseUrl}/events`, {
+        headers: { accept: "text/event-stream" },
+        signal: controller.signal,
+      });
 
       expect(await health.json()).toEqual({ ok: true, ready: true });
       expect(dashboard.headers.get("content-type")).toContain("text/html");
@@ -190,8 +255,17 @@ describe("proxy handler", () => {
 
   it("accepts supported proxy methods", async () => {
     await withServer(async (baseUrl) => {
-      for (const method of ["GET", "PUT", "PATCH", "DELETE", "OPTIONS"] as const) {
-        const response = await fetch(`${baseUrl}/method-${method.toLowerCase()}`, { method });
+      for (const method of [
+        "GET",
+        "PUT",
+        "PATCH",
+        "DELETE",
+        "OPTIONS",
+      ] as const) {
+        const response = await fetch(
+          `${baseUrl}/method-${method.toLowerCase()}`,
+          { method },
+        );
 
         if (method === "OPTIONS") {
           expect(response.status).toBe(204);
@@ -208,8 +282,14 @@ describe("proxy handler", () => {
 
   it("handles event streams directly", async () => {
     await withServer(async (baseUrl) => {
-      const response = await fetch(`${baseUrl}/stream`, { method: "POST", body: '{"stream":true}', headers: { "content-type": "application/json" } });
-      expect(response.headers.get("content-type")).toContain("text/event-stream");
+      const response = await fetch(`${baseUrl}/stream`, {
+        method: "POST",
+        body: '{"stream":true}',
+        headers: { "content-type": "application/json" },
+      });
+      expect(response.headers.get("content-type")).toContain(
+        "text/event-stream",
+      );
       const text = await response.text();
       expect(text).toContain("[DONE]");
     });
@@ -217,7 +297,10 @@ describe("proxy handler", () => {
 
   it("handles binary data safely", async () => {
     await withServer(async (baseUrl) => {
-      const response = await fetch(`${baseUrl}/upload`, { method: "POST", body: Buffer.from("test upload") });
+      const response = await fetch(`${baseUrl}/upload`, {
+        method: "POST",
+        body: Buffer.from("test upload"),
+      });
       expect(response.status).toBe(200);
     });
   });

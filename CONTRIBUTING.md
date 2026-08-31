@@ -9,10 +9,10 @@ Requirements:
 - Node.js 20 or newer
 - npm
 
-Install dependencies:
+Install dependencies from the lockfile:
 
 ```bash
-npm install
+npm ci
 ```
 
 Run the local development server:
@@ -33,6 +33,7 @@ http://localhost:8080/dashboard
 npm run typecheck
 npm run lint
 npm test
+npm run test:coverage
 npm run build
 npm run dev
 ```
@@ -43,6 +44,7 @@ Use these before opening a pull request:
 npm run typecheck
 npm run lint
 npm test
+npm run test:coverage
 npm run build
 ```
 
@@ -117,3 +119,14 @@ Most services should use generic fallback. To improve generic behavior:
 - No real external API calls were added by default.
 - Secrets are not logged, cached, sent to LLM prompts, or exposed in dashboard payloads.
 - README or examples are updated when user-facing behavior changes.
+
+## Authorship And Commits
+
+- Use a human Git author for commits. Do not commit as `OpenCode <opencode@localhost>`.
+- Add `Assisted-by: OpenCode` only when AI assistance was substantial and materially affected the change.
+- Use pull requests and squash merge for changes to `main`.
+- Use focused Conventional Commit titles such as `fix(egress): reject unsupported allow hosts` or `docs(readme): clarify provider coverage`.
+- Preferred scopes are `provider`, `policy`, `egress`, `sanitizer`, `dashboard`, `mcp`, `hosted`, `release`, and `docs`.
+- Do not combine unrelated security, feature, and documentation work into one commit.
+
+See [`PROVENANCE.md`](PROVENANCE.md) for the project authorship statement.

@@ -26,27 +26,36 @@ export async function readLocalConfig(): Promise<GhostApiFileConfig> {
     const parsed = JSON.parse(await readFile(configPath, "utf8")) as unknown;
     return sanitizeConfig(parsed);
   } catch (error) {
-    if (error instanceof Error && "code" in error && error.code === "ENOENT") return {};
+    if (error instanceof Error && "code" in error && error.code === "ENOENT")
+      return {};
     throw error;
   }
 }
 
-export async function writeLocalConfig(config: GhostApiFileConfig): Promise<void> {
+export async function writeLocalConfig(
+  config: GhostApiFileConfig,
+): Promise<void> {
   const configPath = getDataPaths().config;
-  await withFileLock(configPath, () => atomicWriteJson(configPath, sanitizeConfig(config)));
+  await withFileLock(configPath, () =>
+    atomicWriteJson(configPath, sanitizeConfig(config)),
+  );
 }
 
-export async function initializeLocalConfig(): Promise<{ created: boolean; config: GhostApiFileConfig }> {
+export async function initializeLocalConfig(): Promise<{
+  created: boolean;
+  config: GhostApiFileConfig;
+}> {
   const configPath = getDataPaths().config;
   return withFileLock(configPath, async () => {
-    if (existsSync(configPath)) return { created: false, config: await readLocalConfig() };
+    if (existsSync(configPath))
+      return { created: false, config: await readLocalConfig() };
     const config: GhostApiFileConfig = {
       host: "127.0.0.1",
       port: 8080,
       model: "gpt-4o-mini",
       offline: false,
       https: false,
-      allowExternalLlm: false
+      allowExternalLlm: false,
     };
     await atomicWriteJson(configPath, config);
     return { created: true, config };
@@ -56,11 +65,20 @@ export async function initializeLocalConfig(): Promise<{ created: boolean; confi
 function sanitizeConfig(value: unknown): GhostApiFileConfig {
   if (!isJsonObject(value)) return {};
   const config: GhostApiFileConfig = {};
-  if (typeof value.host === "string" && value.host.trim() !== "") config.host = value.host;
-  if (typeof value.model === "string" && value.model.trim() !== "") config.model = value.model;
-  if (typeof value.port === "number" && Number.isInteger(value.port) && value.port >= 1 && value.port <= 65535) config.port = value.port;
+  if (typeof value.host === "string" && value.host.trim() !== "")
+    config.host = value.host;
+  if (typeof value.model === "string" && value.model.trim() !== "")
+    config.model = value.model;
+  if (
+    typeof value.port === "number" &&
+    Number.isInteger(value.port) &&
+    value.port >= 1 &&
+    value.port <= 65535
+  )
+    config.port = value.port;
   if (typeof value.offline === "boolean") config.offline = value.offline;
   if (typeof value.https === "boolean") config.https = value.https;
-  if (typeof value.allowExternalLlm === "boolean") config.allowExternalLlm = value.allowExternalLlm;
+  if (typeof value.allowExternalLlm === "boolean")
+    config.allowExternalLlm = value.allowExternalLlm;
   return config;
 }

@@ -15,6 +15,8 @@ ghostapi policy explain report 0 0 0
 
 `ghostapi evidence generate --policy ghostapi.policy.yaml --ci` evaluates required scenarios and report thresholds against the generated evidence artifact. Pass `--contract-baseline` and `--contract-candidate` to include contract drift. CI mode exits non-zero when required scenarios are missing, production-egress, forbidden-credential, or breaking-contract thresholds are exceeded, or other fail findings are present.
 
+Schema-v1 network rules provide policy decisions and report classification; they do not configure a host firewall, intercept DNS, or transparently proxy arbitrary traffic. The current Linux launcher is loopback-only and rejects external allow-host requests.
+
 ## Schema V1
 
 ```yaml
@@ -27,7 +29,7 @@ network:
   deny:
     - host: api.stripe.com
   productionHosts:
-    - '*.stripe.com'
+    - "*.stripe.com"
 credentials:
   forbid:
     - sk_live_*
@@ -35,7 +37,7 @@ requiredScenarios:
   - stripe-payment-intent-card-declined
 enforcement:
   allowedModes:
-  - linux-network-namespace
+    - linux-network-namespace
 reports:
   maxProductionEgressAttempts: 0
   maxForbiddenCredentialMatches: 0

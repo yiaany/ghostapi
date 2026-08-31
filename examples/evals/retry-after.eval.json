@@ -27,7 +27,11 @@
   ],
   "expectations": [
     { "id": "retry-observed", "type": "retry-observed", "points": 40 },
-    { "id": "no-production-egress", "type": "no-production-egress", "points": 30 },
+    {
+      "id": "no-production-egress",
+      "type": "no-production-egress",
+      "points": 30
+    },
     { "id": "run-finished", "type": "run-finished", "points": 30 }
   ],
   "forbidden": [
@@ -41,9 +45,24 @@
   "rubric": {
     "maxScore": 100,
     "components": [
-      { "id": "retry-observed", "expectationId": "retry-observed", "points": 40, "reason": "Retry or Retry-After evidence was observed." },
-      { "id": "no-production-egress", "expectationId": "no-production-egress", "points": 30, "reason": "Evidence reports zero production egress attempts." },
-      { "id": "run-finished", "expectationId": "run-finished", "points": 30, "reason": "The GhostAPI run finished and produced lifecycle evidence." }
+      {
+        "id": "retry-observed",
+        "expectationId": "retry-observed",
+        "points": 40,
+        "reason": "Retry or Retry-After evidence was observed."
+      },
+      {
+        "id": "no-production-egress",
+        "expectationId": "no-production-egress",
+        "points": 30,
+        "reason": "Evidence reports zero production egress attempts."
+      },
+      {
+        "id": "run-finished",
+        "expectationId": "run-finished",
+        "points": 30,
+        "reason": "The GhostAPI run finished and produced lifecycle evidence."
+      }
     ]
   },
   "judge": {

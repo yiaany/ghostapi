@@ -13,10 +13,10 @@ describe("normalizeRequest", () => {
         authorization: "Bearer real-token",
         "content-type": "application/json",
         "x-api-key": "secret-key",
-        cookie: "ghostapi_dashboard_token=random-cookie-secret"
+        cookie: "ghostapi_dashboard_token=random-cookie-secret",
       },
       body: { name: "Ada", token: stripeTestKey },
-      rawBody: '{"name":"Ada"}'
+      rawBody: '{"name":"Ada"}',
     };
 
     const normalized = normalizeRequest(request as never);
@@ -28,7 +28,7 @@ describe("normalizeRequest", () => {
       authorization: "Bearer ***",
       "content-type": "application/json",
       "x-api-key": "***",
-      cookie: "***"
+      cookie: "***",
     });
     expect(normalized.body).toEqual({ name: "Ada", token: "***" });
     expect(normalized).not.toHaveProperty("rawBody");
@@ -37,13 +37,25 @@ describe("normalizeRequest", () => {
 
   it("redacts known secret patterns embedded in URL paths", () => {
     const secret = ["sk", "live", "path-secret"].join("_");
-    const normalized = normalizeRequest({ method: "GET", path: `/files/${secret}`, query: {}, headers: {}, body: undefined } as never);
+    const normalized = normalizeRequest({
+      method: "GET",
+      path: `/files/${secret}`,
+      query: {},
+      headers: {},
+      body: undefined,
+    } as never);
 
     expect(normalized.path).toBe("/files/***");
   });
 
   it("handles binary buffer bodies gracefully", () => {
-    const normalized = normalizeRequest({ method: "POST", path: "/upload", query: {}, headers: {}, body: Buffer.from("hello") } as never);
+    const normalized = normalizeRequest({
+      method: "POST",
+      path: "/upload",
+      query: {},
+      headers: {},
+      body: Buffer.from("hello"),
+    } as never);
     expect(normalized.body).toBe("[Binary Data: 5 bytes]");
   });
 });

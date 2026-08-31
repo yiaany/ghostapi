@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { sanitizeSecretString, sanitizeSecrets } from "../src/security/secrets.js";
+import {
+  sanitizeSecretString,
+  sanitizeSecrets,
+} from "../src/security/secrets.js";
 import { secretFixture } from "./fixtures/requests.js";
 
 describe("sanitizeSecrets", () => {
@@ -23,8 +26,8 @@ describe("sanitizeSecrets", () => {
         secret: "plain-secret",
         token: "token-secret",
         key: "key-secret",
-        email: "test@example.com"
-      })
+        email: "test@example.com",
+      }),
     ).toEqual({
       authorization: "Bearer ***",
       api_key: "***",
@@ -37,7 +40,7 @@ describe("sanitizeSecrets", () => {
       secret: "***",
       token: "***",
       key: "***",
-      email: "test@example.com"
+      email: "test@example.com",
     });
   });
 
@@ -46,14 +49,14 @@ describe("sanitizeSecrets", () => {
       sanitizeSecrets({
         users: [
           { name: "Ada", githubToken: githubClassic },
-          { name: "Grace", metadata: { password: "hidden" } }
-        ]
-      })
+          { name: "Grace", metadata: { password: "hidden" } },
+        ],
+      }),
     ).toEqual({
       users: [
         { name: "Ada", githubToken: "***" },
-        { name: "Grace", metadata: { password: "***" } }
-      ]
+        { name: "Grace", metadata: { password: "***" } },
+      ],
     });
   });
 
@@ -66,11 +69,11 @@ describe("sanitizeSecrets", () => {
       `github ${githubFineGrained}`,
       `slack ${["xoxb", "123", "abc"].join("-")}`,
       `sendgrid ${["SG", "abc", "def"].join(".")}`,
-      "auth Bearer abc123"
+      "auth Bearer abc123",
     ].join(" | ");
 
     expect(sanitizeSecretString(input)).toBe(
-      "stripe *** | stripe *** | restricted *** | github *** | github *** | slack *** | sendgrid *** | auth Bearer ***"
+      "stripe *** | stripe *** | restricted *** | github *** | github *** | slack *** | sendgrid *** | auth Bearer ***",
     );
   });
 
@@ -81,9 +84,11 @@ describe("sanitizeSecrets", () => {
       "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature123456",
       "npm_abcdefghijklmnopqrstuvwxyz123456",
       "postgres://user:password@db.example/app",
-      "-----BEGIN PRIVATE KEY-----\nprivate-material\n-----END PRIVATE KEY-----"
+      "-----BEGIN PRIVATE KEY-----\nprivate-material\n-----END PRIVATE KEY-----",
     ].join(" | ");
-    expect(sanitizeSecretString(input)).not.toMatch(/AKIA|AIza|eyJhbGci|npm_|password@|private-material/);
+    expect(sanitizeSecretString(input)).not.toMatch(
+      /AKIA|AIza|eyJhbGci|npm_|password@|private-material/,
+    );
   });
 
   it("masks fixture secrets without removing safe fields", () => {
@@ -91,8 +96,8 @@ describe("sanitizeSecrets", () => {
       authorization: "Bearer ***",
       nested: {
         githubToken: "***",
-        note: "visible"
-      }
+        note: "visible",
+      },
     });
   });
 });

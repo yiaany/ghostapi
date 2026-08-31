@@ -1,0 +1,59 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - run: node scripts/release-verify.mjs "$GITHUB_REF_NAME"
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run test:coverage
+      - name: Build and smoke-test the exact release tarball
+        env:
+          GHOSTAPI_PACK_OUTPUT: release
+        run: npm run smoke:package
+      - name: Generate release evidence
+        run: |
+          npx --yes @cyclonedx/cyclonedx-npm@6.0.1 --output-file release/sbom.cdx.json
+          cd release
+          sha256sum -- ./*.tgz ./sbom.cdx.json > SHA256SUMS
+      - uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+        with:
+          subject-path: |-
+            release/*.tgz
+            release/sbom.cdx.json
+      - name: Publish to npm with provenance
+        run: |
+          tarball="$(find release -maxdepth 1 -name '*.tgz' -type f -print -quit)"
+          test -n "$tarball"
+          npm publish "$tarball" --access public --provenance
+      - run: node scripts/verify-published.mjs
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tarball="$(find release -maxdepth 1 -name '*.tgz' -type f -print -quit)"
+          test -n "$tarball"
+          gh release create "$GITHUB_REF_NAME" "$tarball" release/SHA256SUMS release/sbom.cdx.json --verify-tag --generate-notes

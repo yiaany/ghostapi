@@ -19,7 +19,7 @@ const SECRET_FIELD_NAMES = [
   "password",
   "secret",
   "token",
-  "key"
+  "key",
 ];
 
 const TOKEN_PATTERNS = [
@@ -36,7 +36,7 @@ const TOKEN_PATTERNS = [
   /(?:eyJ[A-Za-z0-9_-]{8,})\.(?:[A-Za-z0-9_-]{8,})\.(?:[A-Za-z0-9_-]{8,})/g,
   /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g,
   /(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?):\/\/[^\s:@/]+:[^\s@/]+@[^\s]+/gi,
-  /(?:npm_[A-Za-z0-9]{20,}|pypi-[A-Za-z0-9_-]{20,})/g
+  /(?:npm_[A-Za-z0-9]{20,}|pypi-[A-Za-z0-9_-]{20,})/g,
 ];
 
 export const MASK = "***";
@@ -46,12 +46,17 @@ export function sanitizeSecrets(value: unknown): unknown {
 }
 
 export function sanitizeSecretString(value: string): string {
-  return TOKEN_PATTERNS.reduce((result, pattern) => result.replace(pattern, MASK), value.replace(/Bearer\s+\S+/gi, "Bearer ***"));
+  return TOKEN_PATTERNS.reduce(
+    (result, pattern) => result.replace(pattern, MASK),
+    value.replace(/Bearer\s+\S+/gi, "Bearer ***"),
+  );
 }
 
 export function isSecretFieldName(name: string): boolean {
   const normalizedName = name.toLowerCase();
-  return SECRET_FIELD_NAMES.some((secretName) => normalizedName.includes(secretName));
+  return SECRET_FIELD_NAMES.some((secretName) =>
+    normalizedName.includes(secretName),
+  );
 }
 
 function sanitizeValue(value: unknown, parentKey?: string): unknown {
@@ -61,10 +66,14 @@ function sanitizeValue(value: unknown, parentKey?: string): unknown {
 
   if (value !== null && typeof value === "object") {
     return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([key, entryValue]) => [
-        key,
-        isSecretFieldName(key) || isCardNumberField(key, parentKey) ? maskByType(entryValue) : sanitizeValue(entryValue, key)
-      ])
+      Object.entries(value as Record<string, unknown>).map(
+        ([key, entryValue]) => [
+          key,
+          isSecretFieldName(key) || isCardNumberField(key, parentKey)
+            ? maskByType(entryValue)
+            : sanitizeValue(entryValue, key),
+        ],
+      ),
     );
   }
 
@@ -75,8 +84,15 @@ function sanitizeValue(value: unknown, parentKey?: string): unknown {
   return value;
 }
 
-function isCardNumberField(key: string, parentKey: string | undefined): boolean {
-  return key.toLowerCase() === "number" && parentKey !== undefined && /(?:card|payment_method)/i.test(parentKey);
+function isCardNumberField(
+  key: string,
+  parentKey: string | undefined,
+): boolean {
+  return (
+    key.toLowerCase() === "number" &&
+    parentKey !== undefined &&
+    /(?:card|payment_method)/i.test(parentKey)
+  );
 }
 
 function maskByType(value: unknown): unknown {
@@ -85,10 +101,15 @@ function maskByType(value: unknown): unknown {
   }
 
   if (value !== null && typeof value === "object") {
-    return Object.fromEntries(Object.keys(value as Record<string, unknown>).map((key) => [key, MASK]));
+    return Object.fromEntries(
+      Object.keys(value as Record<string, unknown>).map((key) => [key, MASK]),
+    );
   }
 
-  if (typeof value === "string" && value.trim().toLowerCase().startsWith("bearer ")) {
+  if (
+    typeof value === "string" &&
+    value.trim().toLowerCase().startsWith("bearer ")
+  ) {
     return "Bearer ***";
   }
 

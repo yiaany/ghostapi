@@ -12,9 +12,18 @@ async function tick(): Promise<void> {
   if (stopping || running) return;
   running = true;
   try {
-    await dispatchOutbox(database, queue, config.qstashCallbackUrl, config.outboxMaxAttempts, config.workerMaxAttempts);
+    await dispatchOutbox(
+      database,
+      queue,
+      config.qstashCallbackUrl,
+      config.outboxMaxAttempts,
+      config.workerMaxAttempts,
+    );
   } catch (error) {
-    console.error("outbox_dispatch_failed", error instanceof Error ? error.message : "unknown_error");
+    console.error(
+      "outbox_dispatch_failed",
+      error instanceof Error ? error.message : "unknown_error",
+    );
   } finally {
     running = false;
   }

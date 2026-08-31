@@ -2,6 +2,8 @@
 
 The built-in Stripe core pack is a deterministic local simulation for the most common payment workflows. It is not full Stripe compatibility and it never makes outbound network requests.
 
+The locked compatibility lane exercises the official Stripe Node SDK `22.6.0`. Compatibility is version-scoped; it is not a guarantee for every SDK or Stripe API version.
+
 ## Version And Verification
 
 - Verified against Stripe's official API reference and Stripe Node SDK behavior on 2026-08-06.
@@ -13,18 +15,18 @@ The version is an explicit GhostAPI compatibility contract, not a claim that all
 
 ## Supported Operations
 
-| Resource | Operations |
-| --- | --- |
-| Customers | Create, retrieve, update, delete, list |
-| Payment Intents | Create, retrieve, update, confirm, list |
-| Payment Methods | Create minimal `card` method, retrieve, list |
-| Checkout Sessions | Create, retrieve, list |
-| Refunds | Create, retrieve, list |
-| Products | Create, retrieve, update, list |
-| Prices | Create recurring or one-time prices, retrieve, update, list |
-| Subscriptions | Create, retrieve, update, cancel, local `renew` control, list |
-| Invoices | Retrieve, pay, void, list |
-| Events | List, retrieve, and local signed delivery |
+| Resource          | Operations                                                    |
+| ----------------- | ------------------------------------------------------------- |
+| Customers         | Create, retrieve, update, delete, list                        |
+| Payment Intents   | Create, retrieve, update, confirm, list                       |
+| Payment Methods   | Create minimal `card` method, retrieve, list                  |
+| Checkout Sessions | Create, retrieve, list                                        |
+| Refunds           | Create, retrieve, list                                        |
+| Products          | Create, retrieve, update, list                                |
+| Prices            | Create recurring or one-time prices, retrieve, update, list   |
+| Subscriptions     | Create, retrieve, update, cancel, local `renew` control, list |
+| Invoices          | Retrieve, pay, void, list                                     |
+| Events            | List, retrieve, and local signed delivery                     |
 
 List endpoints return Stripe-shaped `{ object: "list", data, has_more, url }` responses and accept `limit`, `starting_after`, and `ending_before` cursors.
 

@@ -7,8 +7,8 @@ export const genericAdapter: ProviderAdapter = {
     return {
       error: {
         status: details.status,
-        message: details.message
-      }
+        message: details.message,
+      },
     };
-  }
+  },
 };

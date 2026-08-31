@@ -1,6 +1,6 @@
 # GitHub Actions PR Safety Check
 
-GhostAPI can make a pull request check fail when its enforced integration run or policy evidence fails. The status check and sanitized JSON artifact are the audit record; a pull request comment is optional convenience output only.
+GhostAPI can make a pull request check fail when its enforced integration run or policy evidence fails. The status check and sanitized JSON artifact are review evidence; a pull request comment is optional convenience output only. These artifacts are not immutable audit records.
 
 The repository workflow at [`.github/workflows/ghostapi-pr-safety.yml`](../.github/workflows/ghostapi-pr-safety.yml) is a working reference. It packs the checked-out GhostAPI source, verifies that its package version exactly matches `GHOSTAPI_VERSION`, then installs that exact version before running the smoke fixture. For a consuming repository, install the published package at an exact version instead:
 

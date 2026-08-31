@@ -61,7 +61,12 @@ export type PolicyExplainInput =
   | { type: "credential"; value: string }
   | { type: "scenario"; scenarioId: string; completedScenarioIds: string[] }
   | { type: "enforcement"; mode: "linux-network-namespace" | "proxy-guidance" }
-  | { type: "report"; productionEgressAttempts: number; forbiddenCredentialMatches: number; breakingContractChanges?: number };
+  | {
+      type: "report";
+      productionEgressAttempts: number;
+      forbiddenCredentialMatches: number;
+      breakingContractChanges?: number;
+    };
 
 export type EvidenceGenerateOptions = {
   policyPath?: string;
@@ -105,7 +110,9 @@ export type ContractImportOpenApiOptions = {
   title?: string;
 };
 
-export type ContractImportHarOptions = RecordOptions & { contractOutPath?: string };
+export type ContractImportHarOptions = RecordOptions & {
+  contractOutPath?: string;
+};
 
 export type ContractDiffOptions = {
   baselinePath: string;
@@ -117,7 +124,13 @@ export type ContractDiffOptions = {
 
 export type EvalOptions = {
   specPath?: string;
-  template?: "retry-after" | "duplicate-payment" | "webhook-signature" | "no-secret-logs" | "timeout-recovery" | "no-production-bypass";
+  template?:
+    | "retry-after"
+    | "duplicate-payment"
+    | "webhook-signature"
+    | "no-secret-logs"
+    | "timeout-recovery"
+    | "no-production-bypass";
   evidencePath?: string;
   outPath?: string;
   ci?: boolean;
@@ -163,10 +176,16 @@ export function parseCliArgs(args: string[]): CliCommand {
 
   if (command === "clear") {
     if (!isClearTarget(subcommand)) {
-      throw new CliError(`Unknown clear target: ${subcommand ?? "<missing>"}`, "Use one of: ghostapi clear cache | state | events | all");
+      throw new CliError(
+        `Unknown clear target: ${subcommand ?? "<missing>"}`,
+        "Use one of: ghostapi clear cache | state | events | all",
+      );
     }
     if (rest.length > 0) {
-      throw new CliError(`Unexpected argument: ${rest[0]}`, `Use: ghostapi clear ${subcommand}`);
+      throw new CliError(
+        `Unexpected argument: ${rest[0]}`,
+        `Use: ghostapi clear ${subcommand}`,
+      );
     }
     return { name: "clear", target: subcommand };
   }
@@ -175,22 +194,44 @@ export function parseCliArgs(args: string[]): CliCommand {
     if (subcommand === "get") return { name: "model-get" };
     if (subcommand === "set") {
       const model = rest[0];
-      if (!model) throw new CliError("Missing model name.", "Use: ghostapi model set gemini-flash");
-      if (rest.length > 1) throw new CliError(`Unexpected argument: ${rest[1]}`, "Model names cannot contain spaces.");
+      if (!model)
+        throw new CliError(
+          "Missing model name.",
+          "Use: ghostapi model set gemini-flash",
+        );
+      if (rest.length > 1)
+        throw new CliError(
+          `Unexpected argument: ${rest[1]}`,
+          "Model names cannot contain spaces.",
+        );
       return { name: "model-set", model };
     }
-    throw new CliError(`Unknown model command: ${subcommand ?? "<missing>"}`, "Use: ghostapi model get | ghostapi model set <model>");
+    throw new CliError(
+      `Unknown model command: ${subcommand ?? "<missing>"}`,
+      "Use: ghostapi model get | ghostapi model set <model>",
+    );
   }
 
   if (command === "providers") {
     if (subcommand === "list") return { name: "providers-list" };
     if (subcommand === "inspect") {
       const provider = rest[0];
-      if (!provider) throw new CliError("Missing provider name.", "Use: ghostapi providers inspect stripe");
-      if (rest.length > 1) throw new CliError(`Unexpected argument: ${rest[1]}`, `Use: ghostapi providers inspect ${provider}`);
+      if (!provider)
+        throw new CliError(
+          "Missing provider name.",
+          "Use: ghostapi providers inspect stripe",
+        );
+      if (rest.length > 1)
+        throw new CliError(
+          `Unexpected argument: ${rest[1]}`,
+          `Use: ghostapi providers inspect ${provider}`,
+        );
       return { name: "providers-inspect", provider };
     }
-    throw new CliError(`Unknown providers command: ${subcommand ?? "<missing>"}`, "Use: ghostapi providers list | ghostapi providers inspect <name>");
+    throw new CliError(
+      `Unknown providers command: ${subcommand ?? "<missing>"}`,
+      "Use: ghostapi providers list | ghostapi providers inspect <name>",
+    );
   }
 
   if (command === "doctor") {
@@ -238,7 +279,11 @@ export function parseCliArgs(args: string[]): CliCommand {
   }
 
   if (command === "init") {
-    if (args.length > 1) throw new CliError(`Unexpected argument: ${args[1]}`, "Use: ghostapi init");
+    if (args.length > 1)
+      throw new CliError(
+        `Unexpected argument: ${args[1]}`,
+        "Use: ghostapi init",
+      );
     return { name: "init" };
   }
 
@@ -251,16 +296,27 @@ export function parseCliArgs(args: string[]): CliCommand {
   }
 
   if (command === "report") {
-    if (args.length > 1) throw new CliError(`Unexpected argument: ${args[1]}`, "Use: ghostapi report");
+    if (args.length > 1)
+      throw new CliError(
+        `Unexpected argument: ${args[1]}`,
+        "Use: ghostapi report",
+      );
     return { name: "report" };
   }
 
   if (command === "mcp") {
-    if (args.length > 1) throw new CliError(`Unexpected argument: ${args[1]}`, "Use: ghostapi mcp");
+    if (args.length > 1)
+      throw new CliError(
+        `Unexpected argument: ${args[1]}`,
+        "Use: ghostapi mcp",
+      );
     return { name: "mcp" };
   }
 
-  throw new CliError(`Unknown command: ${args.join(" ")}`, "Run ghostapi --help to see available commands.");
+  throw new CliError(
+    `Unknown command: ${args.join(" ")}`,
+    "Run ghostapi --help to see available commands.",
+  );
 }
 
 function parseStartOptions(args: string[]): StartOptions {
@@ -298,7 +354,10 @@ function parseStartOptions(args: string[]): StartOptions {
       index += 1;
       continue;
     }
-    throw new CliError(`Unknown start option: ${arg}`, "Supported options: --host, --port, --model, --offline, --https, --allow-external-llm, --open");
+    throw new CliError(
+      `Unknown start option: ${arg}`,
+      "Supported options: --host, --port, --model, --offline, --https, --allow-external-llm, --open",
+    );
   }
   return options;
 }
@@ -310,7 +369,10 @@ function parseSetupOptions(args: string[]): SetupOptions {
       options.write = true;
       continue;
     }
-    throw new CliError(`Unknown setup option: ${arg}`, "Supported option: --write");
+    throw new CliError(
+      `Unknown setup option: ${arg}`,
+      "Supported option: --write",
+    );
   }
   return options;
 }
@@ -333,7 +395,10 @@ function parseOpenOptions(args: string[]): OpenOptions {
       index += 1;
       continue;
     }
-    throw new CliError(`Unknown open option: ${arg}`, "Supported options: --host, --port, --https");
+    throw new CliError(
+      `Unknown open option: ${arg}`,
+      "Supported options: --host, --port, --https",
+    );
   }
   return options;
 }
@@ -355,7 +420,10 @@ function parseDoctorOptions(args: string[]): DoctorOptions {
       index += 1;
       continue;
     }
-    throw new CliError(`Unknown doctor option: ${arg}`, "Supported options: --port 8080, --egress, --json");
+    throw new CliError(
+      `Unknown doctor option: ${arg}`,
+      "Supported options: --port 8080, --egress, --json",
+    );
   }
   return options;
 }
@@ -363,12 +431,18 @@ function parseDoctorOptions(args: string[]): DoctorOptions {
 function parseRunOptions(args: string[]): RunOptions {
   const separatorIndex = args.indexOf("--");
   if (separatorIndex === -1) {
-    throw new CliError("Missing command separator for ghostapi run.", "Use: ghostapi run [--port 8080] [--allow-host localhost] -- <command> [args...]");
+    throw new CliError(
+      "Missing command separator for ghostapi run.",
+      "Use: ghostapi run [--port 8080] [--allow-host localhost] -- <command> [args...]",
+    );
   }
 
   const command = args.slice(separatorIndex + 1);
   if (command.length === 0) {
-    throw new CliError("Missing command for ghostapi run.", "Use: ghostapi run -- <command> [args...]");
+    throw new CliError(
+      "Missing command for ghostapi run.",
+      "Use: ghostapi run -- <command> [args...]",
+    );
   }
 
   const options: RunOptions = { allowHosts: [], command };
@@ -390,7 +464,10 @@ function parseRunOptions(args: string[]): RunOptions {
       index += 1;
       continue;
     }
-    throw new CliError(`Unknown run option: ${arg}`, "Supported options: --port 8080, --allow-host localhost, --policy ghostapi.policy.yaml");
+    throw new CliError(
+      `Unknown run option: ${arg}`,
+      "Supported options: --port 8080, --allow-host localhost, --policy ghostapi.policy.yaml",
+    );
   }
 
   return options;
@@ -398,9 +475,13 @@ function parseRunOptions(args: string[]): RunOptions {
 
 function parsePolicyCommand(args: string[]): CliCommand {
   const [subcommand, ...rest] = args;
-  if (subcommand === "validate") return { name: "policy-validate", file: parsePolicyFileOption(rest) };
+  if (subcommand === "validate")
+    return { name: "policy-validate", file: parsePolicyFileOption(rest) };
   if (subcommand !== "explain") {
-    throw new CliError(`Unknown policy command: ${subcommand ?? "<missing>"}`, "Use: ghostapi policy validate [--file ghostapi.policy.yaml] | ghostapi policy explain <scenario-id>|network <host>|credential <value>|enforcement <mode>|report <production-attempts> <credential-matches>");
+    throw new CliError(
+      `Unknown policy command: ${subcommand ?? "<missing>"}`,
+      "Use: ghostapi policy validate [--file ghostapi.policy.yaml] | ghostapi policy explain <scenario-id>|network <host>|credential <value>|enforcement <mode>|report <production-attempts> <credential-matches>",
+    );
   }
 
   const fileIndex = rest.indexOf("--file");
@@ -410,23 +491,51 @@ function parsePolicyCommand(args: string[]): CliCommand {
     file = readValue(rest, fileIndex, "--file");
     eventArgs.splice(fileIndex, 2);
   }
-  if (eventArgs.includes("--file")) throw new CliError("Missing value for --file.", "Use --file ghostapi.policy.yaml.");
-  if (eventArgs.length === 0) throw new CliError("Missing policy event.", "Use: ghostapi policy explain <scenario-id>|network <host>|credential <value>|enforcement <mode>|report <production-attempts> <credential-matches>");
-  return { name: "policy-explain", file, event: parsePolicyExplainInput(eventArgs) };
+  if (eventArgs.includes("--file"))
+    throw new CliError(
+      "Missing value for --file.",
+      "Use --file ghostapi.policy.yaml.",
+    );
+  if (eventArgs.length === 0)
+    throw new CliError(
+      "Missing policy event.",
+      "Use: ghostapi policy explain <scenario-id>|network <host>|credential <value>|enforcement <mode>|report <production-attempts> <credential-matches>",
+    );
+  return {
+    name: "policy-explain",
+    file,
+    event: parsePolicyExplainInput(eventArgs),
+  };
 }
 
 function parsePolicyFileOption(args: string[]): string | undefined {
   if (args.length === 0) return undefined;
-  if (args.length === 2 && args[0] === "--file") return readValue(args, 0, "--file");
-  throw new CliError(`Unexpected policy argument: ${args[0]}`, "Use: ghostapi policy validate [--file ghostapi.policy.yaml]");
+  if (args.length === 2 && args[0] === "--file")
+    return readValue(args, 0, "--file");
+  throw new CliError(
+    `Unexpected policy argument: ${args[0]}`,
+    "Use: ghostapi policy validate [--file ghostapi.policy.yaml]",
+  );
 }
 
 function parseEvidenceCommand(args: string[]): CliCommand {
   const [subcommand, ...rest] = args;
-  if (subcommand === "generate") return { name: "evidence-generate", options: parseEvidenceGenerateOptions(rest) };
-  if (subcommand === "view") return { name: "evidence-view", options: parseEvidenceViewOptions(rest) };
-  if (subcommand === "compare") return { name: "evidence-compare", options: parseEvidenceCompareOptions(rest) };
-  throw new CliError(`Unknown evidence command: ${subcommand ?? "<missing>"}`, "Use: ghostapi evidence generate|view|compare");
+  if (subcommand === "generate")
+    return {
+      name: "evidence-generate",
+      options: parseEvidenceGenerateOptions(rest),
+    };
+  if (subcommand === "view")
+    return { name: "evidence-view", options: parseEvidenceViewOptions(rest) };
+  if (subcommand === "compare")
+    return {
+      name: "evidence-compare",
+      options: parseEvidenceCompareOptions(rest),
+    };
+  throw new CliError(
+    `Unknown evidence command: ${subcommand ?? "<missing>"}`,
+    "Use: ghostapi evidence generate|view|compare",
+  );
 }
 
 function parseEvidenceGenerateOptions(args: string[]): EvidenceGenerateOptions {
@@ -466,33 +575,60 @@ function parseEvidenceGenerateOptions(args: string[]): EvidenceGenerateOptions {
       options.json = true;
       continue;
     }
-    throw new CliError(`Unknown evidence generate option: ${arg}`, "Supported options: --policy ghostapi.policy.yaml, --run .ghostapi/runs/<id>/run.json, --out .ghostapi/reports/report.json, --contract-baseline base.contract.json, --contract-candidate head.contract.json, --ci, --json");
+    throw new CliError(
+      `Unknown evidence generate option: ${arg}`,
+      "Supported options: --policy ghostapi.policy.yaml, --run .ghostapi/runs/<id>/run.json, --out .ghostapi/reports/report.json, --contract-baseline base.contract.json, --contract-candidate head.contract.json, --ci, --json",
+    );
   }
-  if ((options.contractBaselinePath === undefined) !== (options.contractCandidatePath === undefined)) throw new CliError("Contract drift evidence requires both contract paths.", "Use --contract-baseline base.contract.json --contract-candidate head.contract.json.");
+  if (
+    (options.contractBaselinePath === undefined) !==
+    (options.contractCandidatePath === undefined)
+  )
+    throw new CliError(
+      "Contract drift evidence requires both contract paths.",
+      "Use --contract-baseline base.contract.json --contract-candidate head.contract.json.",
+    );
   return options;
 }
 
 function parseEvidenceViewOptions(args: string[]): EvidenceViewOptions {
   const path = args[0];
-  if (!path) throw new CliError("Missing evidence report path.", "Use: ghostapi evidence view <report.json> [--json]");
+  if (!path)
+    throw new CliError(
+      "Missing evidence report path.",
+      "Use: ghostapi evidence view <report.json> [--json]",
+    );
   const rest = args.slice(1);
   if (rest.length === 0) return { path };
   if (rest.length === 1 && rest[0] === "--json") return { path, json: true };
-  throw new CliError(`Unexpected evidence view argument: ${rest[0]}`, "Use: ghostapi evidence view <report.json> [--json]");
+  throw new CliError(
+    `Unexpected evidence view argument: ${rest[0]}`,
+    "Use: ghostapi evidence view <report.json> [--json]",
+  );
 }
 
 function parseEvidenceCompareOptions(args: string[]): EvidenceCompareOptions {
   const leftPath = args[0];
   const rightPath = args[1];
-  if (!leftPath || !rightPath) throw new CliError("Missing evidence report paths.", "Use: ghostapi evidence compare <left.json> <right.json> [--json]");
+  if (!leftPath || !rightPath)
+    throw new CliError(
+      "Missing evidence report paths.",
+      "Use: ghostapi evidence compare <left.json> <right.json> [--json]",
+    );
   const rest = args.slice(2);
   if (rest.length === 0) return { leftPath, rightPath };
-  if (rest.length === 1 && rest[0] === "--json") return { leftPath, rightPath, json: true };
-  throw new CliError(`Unexpected evidence compare argument: ${rest[0]}`, "Use: ghostapi evidence compare <left.json> <right.json> [--json]");
+  if (rest.length === 1 && rest[0] === "--json")
+    return { leftPath, rightPath, json: true };
+  throw new CliError(
+    `Unexpected evidence compare argument: ${rest[0]}`,
+    "Use: ghostapi evidence compare <left.json> <right.json> [--json]",
+  );
 }
 
 function parseRecordOptions(args: string[]): RecordOptions {
-  const options: Partial<RecordOptions> & { allowedSandboxHosts: string[] } = { allowedSandboxHosts: [] };
+  const options: Partial<RecordOptions> & { allowedSandboxHosts: string[] } = {
+    allowedSandboxHosts: [],
+  };
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]!;
     if (arg === "--input") {
@@ -517,7 +653,11 @@ function parseRecordOptions(args: string[]): RecordOptions {
     }
     if (arg === "--pii") {
       const value = readValue(args, index, arg);
-      if (!isPiiRuleSet(value)) throw new CliError(`Invalid --pii value: ${value}`, "Use: --pii emails,phones,addresses | emails | phones | addresses | none");
+      if (!isPiiRuleSet(value))
+        throw new CliError(
+          `Invalid --pii value: ${value}`,
+          "Use: --pii emails,phones,addresses | emails | phones | addresses | none",
+        );
       options.pii = value;
       index += 1;
       continue;
@@ -526,16 +666,31 @@ function parseRecordOptions(args: string[]): RecordOptions {
       options.approve = true;
       continue;
     }
-    throw new CliError(`Unknown record option: ${arg}`, "Supported options: --input capture.json, --allow-sandbox-host api.sandbox.example, --out bundle.json, --title title, --pii emails,phones,addresses, --approve");
+    throw new CliError(
+      `Unknown record option: ${arg}`,
+      "Supported options: --input capture.json, --allow-sandbox-host api.sandbox.example, --out bundle.json, --title title, --pii emails,phones,addresses, --approve",
+    );
   }
-  if (!options.inputPath) throw new CliError("Missing recording input.", "Use: ghostapi record --input capture.json --allow-sandbox-host api.sandbox.example");
-  if (options.allowedSandboxHosts.length === 0) throw new CliError("Recording requires an explicit sandbox host allowlist.", "Use: --allow-sandbox-host api.sandbox.example");
+  if (!options.inputPath)
+    throw new CliError(
+      "Missing recording input.",
+      "Use: ghostapi record --input capture.json --allow-sandbox-host api.sandbox.example",
+    );
+  if (options.allowedSandboxHosts.length === 0)
+    throw new CliError(
+      "Recording requires an explicit sandbox host allowlist.",
+      "Use: --allow-sandbox-host api.sandbox.example",
+    );
   return options as RecordOptions;
 }
 
 function parseReplayOptions(args: string[]): ReplayOptions {
   const bundlePath = args[0];
-  if (!bundlePath) throw new CliError("Missing scenario bundle path.", "Use: ghostapi replay <bundle.json> --requests requests.json [--json]");
+  if (!bundlePath)
+    throw new CliError(
+      "Missing scenario bundle path.",
+      "Use: ghostapi replay <bundle.json> --requests requests.json [--json]",
+    );
   const options: Partial<ReplayOptions> = { bundlePath };
   for (let index = 1; index < args.length; index += 1) {
     const arg = args[index]!;
@@ -548,52 +703,127 @@ function parseReplayOptions(args: string[]): ReplayOptions {
       options.json = true;
       continue;
     }
-    throw new CliError(`Unknown replay option: ${arg}`, "Supported options: --requests requests.json, --json");
+    throw new CliError(
+      `Unknown replay option: ${arg}`,
+      "Supported options: --requests requests.json, --json",
+    );
   }
-  if (!options.requestsPath) throw new CliError("Missing replay requests input.", "Use: ghostapi replay <bundle.json> --requests requests.json [--json]");
+  if (!options.requestsPath)
+    throw new CliError(
+      "Missing replay requests input.",
+      "Use: ghostapi replay <bundle.json> --requests requests.json [--json]",
+    );
   return options as ReplayOptions;
 }
 
 function parseContractCommand(args: string[]): CliCommand {
   const [subcommand, ...rest] = args;
-  if (subcommand === "import-openapi") return { name: "contract-import-openapi", options: parseContractImportOpenApiOptions(rest) };
-  if (subcommand === "import-har") return { name: "contract-import-har", options: parseContractImportHarOptions(rest) };
-  if (subcommand === "diff") return { name: "contract-diff", options: parseContractDiffOptions(rest) };
-  throw new CliError(`Unknown contract command: ${subcommand ?? "<missing>"}`, "Use: ghostapi contract import-openapi|import-har|diff");
+  if (subcommand === "import-openapi")
+    return {
+      name: "contract-import-openapi",
+      options: parseContractImportOpenApiOptions(rest),
+    };
+  if (subcommand === "import-har")
+    return {
+      name: "contract-import-har",
+      options: parseContractImportHarOptions(rest),
+    };
+  if (subcommand === "diff")
+    return { name: "contract-diff", options: parseContractDiffOptions(rest) };
+  throw new CliError(
+    `Unknown contract command: ${subcommand ?? "<missing>"}`,
+    "Use: ghostapi contract import-openapi|import-har|diff",
+  );
 }
 
-function parseContractImportOpenApiOptions(args: string[]): ContractImportOpenApiOptions {
+function parseContractImportOpenApiOptions(
+  args: string[],
+): ContractImportOpenApiOptions {
   const options: Partial<ContractImportOpenApiOptions> = {};
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]!;
-    if (arg === "--input") { options.inputPath = readValue(args, index, arg); index += 1; continue; }
-    if (arg === "--out") { options.outPath = readValue(args, index, arg); index += 1; continue; }
-    if (arg === "--title") { options.title = readValue(args, index, arg); index += 1; continue; }
-    throw new CliError(`Unknown contract import-openapi option: ${arg}`, "Supported options: --input openapi.json, --out contract.json, --title title");
+    if (arg === "--input") {
+      options.inputPath = readValue(args, index, arg);
+      index += 1;
+      continue;
+    }
+    if (arg === "--out") {
+      options.outPath = readValue(args, index, arg);
+      index += 1;
+      continue;
+    }
+    if (arg === "--title") {
+      options.title = readValue(args, index, arg);
+      index += 1;
+      continue;
+    }
+    throw new CliError(
+      `Unknown contract import-openapi option: ${arg}`,
+      "Supported options: --input openapi.json, --out contract.json, --title title",
+    );
   }
-  if (!options.inputPath) throw new CliError("Missing OpenAPI input.", "Use: ghostapi contract import-openapi --input openapi.json");
+  if (!options.inputPath)
+    throw new CliError(
+      "Missing OpenAPI input.",
+      "Use: ghostapi contract import-openapi --input openapi.json",
+    );
   return options as ContractImportOpenApiOptions;
 }
 
-function parseContractImportHarOptions(args: string[]): ContractImportHarOptions {
-  const base = parseRecordOptions(args.filter((arg, index) => arg !== "--contract-out" && args[index - 1] !== "--contract-out"));
+function parseContractImportHarOptions(
+  args: string[],
+): ContractImportHarOptions {
+  const base = parseRecordOptions(
+    args.filter(
+      (arg, index) =>
+        arg !== "--contract-out" && args[index - 1] !== "--contract-out",
+    ),
+  );
   const contractOutIndex = args.indexOf("--contract-out");
   if (contractOutIndex === -1) return base;
-  return { ...base, contractOutPath: readValue(args, contractOutIndex, "--contract-out") };
+  return {
+    ...base,
+    contractOutPath: readValue(args, contractOutIndex, "--contract-out"),
+  };
 }
 
 function parseContractDiffOptions(args: string[]): ContractDiffOptions {
   const options: Partial<ContractDiffOptions> = {};
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]!;
-    if (arg === "--baseline") { options.baselinePath = readValue(args, index, arg); index += 1; continue; }
-    if (arg === "--candidate") { options.candidatePath = readValue(args, index, arg); index += 1; continue; }
-    if (arg === "--policy") { options.policyPath = readValue(args, index, arg); index += 1; continue; }
-    if (arg === "--ci") { options.ci = true; continue; }
-    if (arg === "--json") { options.json = true; continue; }
-    throw new CliError(`Unknown contract diff option: ${arg}`, "Supported options: --baseline base.contract.json, --candidate head.contract.json, --policy ghostapi.policy.yaml, --ci, --json");
+    if (arg === "--baseline") {
+      options.baselinePath = readValue(args, index, arg);
+      index += 1;
+      continue;
+    }
+    if (arg === "--candidate") {
+      options.candidatePath = readValue(args, index, arg);
+      index += 1;
+      continue;
+    }
+    if (arg === "--policy") {
+      options.policyPath = readValue(args, index, arg);
+      index += 1;
+      continue;
+    }
+    if (arg === "--ci") {
+      options.ci = true;
+      continue;
+    }
+    if (arg === "--json") {
+      options.json = true;
+      continue;
+    }
+    throw new CliError(
+      `Unknown contract diff option: ${arg}`,
+      "Supported options: --baseline base.contract.json, --candidate head.contract.json, --policy ghostapi.policy.yaml, --ci, --json",
+    );
   }
-  if (!options.baselinePath || !options.candidatePath) throw new CliError("Contract diff requires baseline and candidate paths.", "Use: ghostapi contract diff --baseline base.contract.json --candidate head.contract.json");
+  if (!options.baselinePath || !options.candidatePath)
+    throw new CliError(
+      "Contract diff requires baseline and candidate paths.",
+      "Use: ghostapi contract diff --baseline base.contract.json --candidate head.contract.json",
+    );
   return options as ContractDiffOptions;
 }
 
@@ -601,75 +831,177 @@ function parseEvalOptions(args: string[]): EvalOptions {
   const options: EvalOptions = {};
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]!;
-    if (arg === "--spec") { options.specPath = readValue(args, index, arg); index += 1; continue; }
+    if (arg === "--spec") {
+      options.specPath = readValue(args, index, arg);
+      index += 1;
+      continue;
+    }
     if (arg === "--template") {
       const value = readValue(args, index, arg);
-      if (!isEvalTemplate(value)) throw new CliError(`Unknown eval template: ${value}`, "Use one of: retry-after, duplicate-payment, webhook-signature, no-secret-logs, timeout-recovery, no-production-bypass");
+      if (!isEvalTemplate(value))
+        throw new CliError(
+          `Unknown eval template: ${value}`,
+          "Use one of: retry-after, duplicate-payment, webhook-signature, no-secret-logs, timeout-recovery, no-production-bypass",
+        );
       options.template = value;
       index += 1;
       continue;
     }
-    if (arg === "--evidence") { options.evidencePath = readValue(args, index, arg); index += 1; continue; }
-    if (arg === "--out") { options.outPath = readValue(args, index, arg); index += 1; continue; }
-    if (arg === "--ci") { options.ci = true; continue; }
-    if (arg === "--json") { options.json = true; continue; }
-    throw new CliError(`Unknown eval option: ${arg}`, "Supported options: --spec eval.json | --template retry-after, --evidence report.json, --out report.eval.json, --ci, --json");
+    if (arg === "--evidence") {
+      options.evidencePath = readValue(args, index, arg);
+      index += 1;
+      continue;
+    }
+    if (arg === "--out") {
+      options.outPath = readValue(args, index, arg);
+      index += 1;
+      continue;
+    }
+    if (arg === "--ci") {
+      options.ci = true;
+      continue;
+    }
+    if (arg === "--json") {
+      options.json = true;
+      continue;
+    }
+    throw new CliError(
+      `Unknown eval option: ${arg}`,
+      "Supported options: --spec eval.json | --template retry-after, --evidence report.json, --out report.eval.json, --ci, --json",
+    );
   }
-  if ((options.specPath === undefined) === (options.template === undefined)) throw new CliError("Eval requires exactly one of --spec or --template.", "Use: ghostapi eval --spec eval.json or ghostapi eval --template retry-after");
+  if ((options.specPath === undefined) === (options.template === undefined))
+    throw new CliError(
+      "Eval requires exactly one of --spec or --template.",
+      "Use: ghostapi eval --spec eval.json or ghostapi eval --template retry-after",
+    );
   return options;
 }
 
 function parseWorldCommand(args: string[]): CliCommand {
   const [subcommand, ...rest] = args;
-  if (subcommand === "create") return { name: "world-create", options: parseWorldCreateOptions(rest) };
+  if (subcommand === "create")
+    return { name: "world-create", options: parseWorldCreateOptions(rest) };
   if (subcommand === "inspect" || subcommand === "reset") {
     const id = rest[0];
-    if (!id) throw new CliError(`Missing world id for ${subcommand}.`, `Use: ghostapi world ${subcommand} <world-id> [--json]`);
-    if (rest.length === 1) return { name: subcommand === "inspect" ? "world-inspect" : "world-reset", id };
-    if (rest.length === 2 && rest[1] === "--json") return { name: subcommand === "inspect" ? "world-inspect" : "world-reset", id, json: true };
-    throw new CliError(`Unexpected world ${subcommand} argument: ${rest[1]}`, `Use: ghostapi world ${subcommand} <world-id> [--json]`);
+    if (!id)
+      throw new CliError(
+        `Missing world id for ${subcommand}.`,
+        `Use: ghostapi world ${subcommand} <world-id> [--json]`,
+      );
+    if (rest.length === 1)
+      return {
+        name: subcommand === "inspect" ? "world-inspect" : "world-reset",
+        id,
+      };
+    if (rest.length === 2 && rest[1] === "--json")
+      return {
+        name: subcommand === "inspect" ? "world-inspect" : "world-reset",
+        id,
+        json: true,
+      };
+    throw new CliError(
+      `Unexpected world ${subcommand} argument: ${rest[1]}`,
+      `Use: ghostapi world ${subcommand} <world-id> [--json]`,
+    );
   }
   if (subcommand === "fork") {
     const sourceId = rest[0];
-    if (!sourceId) throw new CliError("Missing source world id.", "Use: ghostapi world fork <source-world-id> --id <fork-world-id> [--title title] [--json]");
-    return { name: "world-fork", sourceId, options: parseWorldForkOptions(rest.slice(1)) };
+    if (!sourceId)
+      throw new CliError(
+        "Missing source world id.",
+        "Use: ghostapi world fork <source-world-id> --id <fork-world-id> [--title title] [--json]",
+      );
+    return {
+      name: "world-fork",
+      sourceId,
+      options: parseWorldForkOptions(rest.slice(1)),
+    };
   }
-  throw new CliError(`Unknown world command: ${subcommand ?? "<missing>"}`, "Use: ghostapi world create|inspect|reset|fork");
+  throw new CliError(
+    `Unknown world command: ${subcommand ?? "<missing>"}`,
+    "Use: ghostapi world create|inspect|reset|fork",
+  );
 }
 
 function parseActionCommand(args: string[]): CliCommand {
   const [subcommand, ...rest] = args;
   if (subcommand === "inspect") {
     const actionId = rest[0];
-    if (!actionId) throw new CliError("Missing action id.", "Use: ghostapi action inspect <action-id> [--json]");
+    if (!actionId)
+      throw new CliError(
+        "Missing action id.",
+        "Use: ghostapi action inspect <action-id> [--json]",
+      );
     if (rest.length === 1) return { name: "action-inspect", actionId };
-    if (rest.length === 2 && rest[1] === "--json") return { name: "action-inspect", actionId, json: true };
-    throw new CliError(`Unexpected action inspect argument: ${rest[1]}`, "Use: ghostapi action inspect <action-id> [--json]");
+    if (rest.length === 2 && rest[1] === "--json")
+      return { name: "action-inspect", actionId, json: true };
+    throw new CliError(
+      `Unexpected action inspect argument: ${rest[1]}`,
+      "Use: ghostapi action inspect <action-id> [--json]",
+    );
   }
-  throw new CliError(`Unknown action command: ${subcommand ?? "<missing>"}`, "Use: ghostapi action inspect <action-id> [--json]. Submit and execute through the verifier-backed approval inbox API.");
+  throw new CliError(
+    `Unknown action command: ${subcommand ?? "<missing>"}`,
+    "Use: ghostapi action inspect <action-id> [--json]. Submit and execute through the verifier-backed approval inbox API.",
+  );
 }
 
 function parseTelemetryCommand(args: string[]): CliCommand {
   const [action, ...rest] = args;
-  if (action !== "status" && action !== "enable" && action !== "disable" && action !== "export") {
-    throw new CliError(`Unknown telemetry command: ${action ?? "<missing>"}`, "Use: ghostapi telemetry status|enable|disable|export [--json]");
+  if (
+    action !== "status" &&
+    action !== "enable" &&
+    action !== "disable" &&
+    action !== "export"
+  ) {
+    throw new CliError(
+      `Unknown telemetry command: ${action ?? "<missing>"}`,
+      "Use: ghostapi telemetry status|enable|disable|export [--json]",
+    );
   }
   if (rest.length === 0) return { name: "telemetry", action };
-  if (rest.length === 1 && rest[0] === "--json") return { name: "telemetry", action, json: true };
-  throw new CliError(`Unexpected telemetry argument: ${rest[0]}`, "Use: ghostapi telemetry status|enable|disable|export [--json]");
+  if (rest.length === 1 && rest[0] === "--json")
+    return { name: "telemetry", action, json: true };
+  throw new CliError(
+    `Unexpected telemetry argument: ${rest[0]}`,
+    "Use: ghostapi telemetry status|enable|disable|export [--json]",
+  );
 }
 
 function parseWorldCreateOptions(args: string[]): WorldCreateOptions {
   const options: Partial<WorldCreateOptions> = {};
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]!;
-    if (arg === "--id") { options.id = readValue(args, index, arg); index += 1; continue; }
-    if (arg === "--seed") { options.seed = readValue(args, index, arg); index += 1; continue; }
-    if (arg === "--title") { options.title = readValue(args, index, arg); index += 1; continue; }
-    if (arg === "--json") { options.json = true; continue; }
-    throw new CliError(`Unknown world create option: ${arg}`, "Supported options: --id <world-id>, --seed <seed>, --title <title>, --json");
+    if (arg === "--id") {
+      options.id = readValue(args, index, arg);
+      index += 1;
+      continue;
+    }
+    if (arg === "--seed") {
+      options.seed = readValue(args, index, arg);
+      index += 1;
+      continue;
+    }
+    if (arg === "--title") {
+      options.title = readValue(args, index, arg);
+      index += 1;
+      continue;
+    }
+    if (arg === "--json") {
+      options.json = true;
+      continue;
+    }
+    throw new CliError(
+      `Unknown world create option: ${arg}`,
+      "Supported options: --id <world-id>, --seed <seed>, --title <title>, --json",
+    );
   }
-  if (!options.id || !options.seed) throw new CliError("World create requires --id and --seed.", "Use: ghostapi world create --id demo --seed stable-seed [--title title]");
+  if (!options.id || !options.seed)
+    throw new CliError(
+      "World create requires --id and --seed.",
+      "Use: ghostapi world create --id demo --seed stable-seed [--title title]",
+    );
   return options as WorldCreateOptions;
 }
 
@@ -677,45 +1009,115 @@ function parseWorldForkOptions(args: string[]): WorldForkOptions {
   const options: Partial<WorldForkOptions> = {};
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]!;
-    if (arg === "--id") { options.id = readValue(args, index, arg); index += 1; continue; }
-    if (arg === "--title") { options.title = readValue(args, index, arg); index += 1; continue; }
-    if (arg === "--json") { options.json = true; continue; }
-    throw new CliError(`Unknown world fork option: ${arg}`, "Supported options: --id <fork-world-id>, --title <title>, --json");
+    if (arg === "--id") {
+      options.id = readValue(args, index, arg);
+      index += 1;
+      continue;
+    }
+    if (arg === "--title") {
+      options.title = readValue(args, index, arg);
+      index += 1;
+      continue;
+    }
+    if (arg === "--json") {
+      options.json = true;
+      continue;
+    }
+    throw new CliError(
+      `Unknown world fork option: ${arg}`,
+      "Supported options: --id <fork-world-id>, --title <title>, --json",
+    );
   }
-  if (!options.id) throw new CliError("World fork requires --id.", "Use: ghostapi world fork <source-world-id> --id <fork-world-id>");
+  if (!options.id)
+    throw new CliError(
+      "World fork requires --id.",
+      "Use: ghostapi world fork <source-world-id> --id <fork-world-id>",
+    );
   return options as WorldForkOptions;
 }
 
-function isEvalTemplate(value: string): value is NonNullable<EvalOptions["template"]> {
-  return value === "retry-after" || value === "duplicate-payment" || value === "webhook-signature" || value === "no-secret-logs" || value === "timeout-recovery" || value === "no-production-bypass";
+function isEvalTemplate(
+  value: string,
+): value is NonNullable<EvalOptions["template"]> {
+  return (
+    value === "retry-after" ||
+    value === "duplicate-payment" ||
+    value === "webhook-signature" ||
+    value === "no-secret-logs" ||
+    value === "timeout-recovery" ||
+    value === "no-production-bypass"
+  );
 }
 
 function parsePolicyExplainInput(args: string[]): PolicyExplainInput {
   const [kind, value, ...rest] = args;
   if (kind === "network") {
-    if (!value) throw new CliError("Missing network host.", "Use: ghostapi policy explain network api.stripe.com [--provider stripe]");
+    if (!value)
+      throw new CliError(
+        "Missing network host.",
+        "Use: ghostapi policy explain network api.stripe.com [--provider stripe]",
+      );
     if (rest.length === 0) return { type: "network", host: value };
-    if (rest.length === 2 && rest[0] === "--provider" && rest[1]) return { type: "network", host: value, provider: rest[1] };
-    throw new CliError("Invalid network explain options.", "Use: ghostapi policy explain network api.stripe.com [--provider stripe]");
+    if (rest.length === 2 && rest[0] === "--provider" && rest[1])
+      return { type: "network", host: value, provider: rest[1] };
+    throw new CliError(
+      "Invalid network explain options.",
+      "Use: ghostapi policy explain network api.stripe.com [--provider stripe]",
+    );
   }
   if (kind === "credential") {
-    if (!value || rest.length > 0) throw new CliError("Credential explain requires exactly one value.", "Use: ghostapi policy explain credential sk_live_example");
+    if (!value || rest.length > 0)
+      throw new CliError(
+        "Credential explain requires exactly one value.",
+        "Use: ghostapi policy explain credential sk_live_example",
+      );
     return { type: "credential", value };
   }
   if (kind === "enforcement") {
-    if ((value !== "linux-network-namespace" && value !== "proxy-guidance") || rest.length > 0) throw new CliError("Invalid enforcement mode.", "Use: ghostapi policy explain enforcement linux-network-namespace|proxy-guidance");
+    if (
+      (value !== "linux-network-namespace" && value !== "proxy-guidance") ||
+      rest.length > 0
+    )
+      throw new CliError(
+        "Invalid enforcement mode.",
+        "Use: ghostapi policy explain enforcement linux-network-namespace|proxy-guidance",
+      );
     return { type: "enforcement", mode: value };
   }
   if (kind === "report") {
     const forbiddenCredentialMatches = Number(rest[0]);
     const productionEgressAttempts = Number(value);
-    const breakingContractChanges = rest.length === 2 ? Number(rest[1]) : undefined;
-    if ((rest.length !== 1 && rest.length !== 2) || !Number.isInteger(productionEgressAttempts) || productionEgressAttempts < 0 || !Number.isInteger(forbiddenCredentialMatches) || forbiddenCredentialMatches < 0 || (breakingContractChanges !== undefined && (!Number.isInteger(breakingContractChanges) || breakingContractChanges < 0))) {
-      throw new CliError("Report explain requires two or three non-negative integer counts.", "Use: ghostapi policy explain report 0 0 [0]");
+    const breakingContractChanges =
+      rest.length === 2 ? Number(rest[1]) : undefined;
+    if (
+      (rest.length !== 1 && rest.length !== 2) ||
+      !Number.isInteger(productionEgressAttempts) ||
+      productionEgressAttempts < 0 ||
+      !Number.isInteger(forbiddenCredentialMatches) ||
+      forbiddenCredentialMatches < 0 ||
+      (breakingContractChanges !== undefined &&
+        (!Number.isInteger(breakingContractChanges) ||
+          breakingContractChanges < 0))
+    ) {
+      throw new CliError(
+        "Report explain requires two or three non-negative integer counts.",
+        "Use: ghostapi policy explain report 0 0 [0]",
+      );
     }
-    return { type: "report", productionEgressAttempts, forbiddenCredentialMatches, ...(breakingContractChanges === undefined ? {} : { breakingContractChanges }) };
+    return {
+      type: "report",
+      productionEgressAttempts,
+      forbiddenCredentialMatches,
+      ...(breakingContractChanges === undefined
+        ? {}
+        : { breakingContractChanges }),
+    };
   }
-  if (args.length !== 1) throw new CliError("Scenario explain accepts one scenario id.", "Use: ghostapi policy explain stripe.card_declined");
+  if (args.length !== 1)
+    throw new CliError(
+      "Scenario explain accepts one scenario id.",
+      "Use: ghostapi policy explain stripe.card_declined",
+    );
   return { type: "scenario", scenarioId: kind!, completedScenarioIds: [] };
 }
 
@@ -730,17 +1132,32 @@ function readValue(args: string[], index: number, flag: string): string {
 function isPiiRuleSet(value: string): boolean {
   if (value === "none") return true;
   const selected = value.split(",");
-  return selected.length > 0 && selected.length === new Set(selected).size && selected.every((entry) => entry === "emails" || entry === "phones" || entry === "addresses");
+  return (
+    selected.length > 0 &&
+    selected.length === new Set(selected).size &&
+    selected.every(
+      (entry) =>
+        entry === "emails" || entry === "phones" || entry === "addresses",
+    )
+  );
 }
 
 export function parsePort(value: string, label: string): number {
   const port = Number(value);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new CliError(`Invalid ${label}: ${value}`, "Port must be an integer between 1 and 65535.");
+    throw new CliError(
+      `Invalid ${label}: ${value}`,
+      "Port must be an integer between 1 and 65535.",
+    );
   }
   return port;
 }
 
 function isClearTarget(value: string | undefined): value is ClearTarget {
-  return value === "cache" || value === "state" || value === "events" || value === "all";
+  return (
+    value === "cache" ||
+    value === "state" ||
+    value === "events" ||
+    value === "all"
+  );
 }

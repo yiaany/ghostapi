@@ -20,16 +20,16 @@ No design in this document claims protection from an administrator/root-equivale
 
 ## Threat Actors
 
-| Actor or path | Proxy guidance | Process/container enforcement target |
-| --- | --- | --- |
-| Incorrect application code | Usually caught only when it uses the configured local base URL. | Deny all non-explicit network paths. |
-| AI agent creates another HTTP client | Bypasses guidance. | Same child process remains constrained. |
-| `curl`, shell command, or subprocess | Bypasses guidance. | Descendants must remain in the containment boundary. |
-| Direct IP address | Bypasses hostname-based proxy/DNS policy. | No route/socket path unless explicitly allowed. |
-| Custom DNS resolver or DoH | Bypasses configured resolver assumptions. | Resolver traffic is denied with all other network traffic. |
-| UDP or QUIC | Often bypasses HTTP-only controls. | All socket families and protocols are denied by the boundary. |
-| Local-network target | Often omitted from production-focused allowlists. | Deny by default; allow only deliberate loopback transport. |
-| Malicious same-user process | Out of scope for guidance. | Cannot be contained by a boundary it does not enter; same-user hostile code is not a guarantee from Node permission flags. |
+| Actor or path                        | Proxy guidance                                                  | Process/container enforcement target                                                                                       |
+| ------------------------------------ | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Incorrect application code           | Usually caught only when it uses the configured local base URL. | Deny all non-explicit network paths.                                                                                       |
+| AI agent creates another HTTP client | Bypasses guidance.                                              | Same child process remains constrained.                                                                                    |
+| `curl`, shell command, or subprocess | Bypasses guidance.                                              | Descendants must remain in the containment boundary.                                                                       |
+| Direct IP address                    | Bypasses hostname-based proxy/DNS policy.                       | No route/socket path unless explicitly allowed.                                                                            |
+| Custom DNS resolver or DoH           | Bypasses configured resolver assumptions.                       | Resolver traffic is denied with all other network traffic.                                                                 |
+| UDP or QUIC                          | Often bypasses HTTP-only controls.                              | All socket families and protocols are denied by the boundary.                                                              |
+| Local-network target                 | Often omitted from production-focused allowlists.               | Deny by default; allow only deliberate loopback transport.                                                                 |
+| Malicious same-user process          | Out of scope for guidance.                                      | Cannot be contained by a boundary it does not enter; same-user hostile code is not a guarantee from Node permission flags. |
 
 ## Guarantee Levels
 

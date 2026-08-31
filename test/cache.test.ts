@@ -2,7 +2,12 @@ import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { clearCache, getCachedResponse, MAX_CACHE_ENTRIES, setCachedResponse } from "../src/cache/index.js";
+import {
+  clearCache,
+  getCachedResponse,
+  MAX_CACHE_ENTRIES,
+  setCachedResponse,
+} from "../src/cache/index.js";
 import { createCacheKey } from "../src/proxy/cacheKey.js";
 import { getDataPaths } from "../src/config/dataPaths.js";
 
@@ -27,7 +32,7 @@ describe("Response Cache", () => {
       const entry = {
         status: 200,
         headers: { "content-type": "application/json" },
-        body: { id: "test_123" }
+        body: { id: "test_123" },
       };
 
       await setCachedResponse("stripe", "hash123", entry);
@@ -37,69 +42,164 @@ describe("Response Cache", () => {
     });
 
     it("creates file per entry in provider subdirectory", async () => {
-      await setCachedResponse("github", "h1", { status: 200, headers: {}, body: {} });
-      await setCachedResponse("github", "h2", { status: 200, headers: {}, body: {} });
+      await setCachedResponse("github", "h1", {
+        status: 200,
+        headers: {},
+        body: {},
+      });
+      await setCachedResponse("github", "h2", {
+        status: 200,
+        headers: {},
+        body: {},
+      });
 
-      expect(existsSync(join(TEST_DIR, "cache", "github", "h1.json"))).toBe(true);
-      expect(existsSync(join(TEST_DIR, "cache", "github", "h2.json"))).toBe(true);
+      expect(existsSync(join(TEST_DIR, "cache", "github", "h1.json"))).toBe(
+        true,
+      );
+      expect(existsSync(join(TEST_DIR, "cache", "github", "h2.json"))).toBe(
+        true,
+      );
     });
 
     it("evicts oldest entries at the aggregate entry quota", async () => {
-      for (let index = 0; index <= MAX_CACHE_ENTRIES; index += 1) await setCachedResponse("quota", `h${String(index).padStart(4, "0")}`, { status: 200, headers: {}, body: { index } });
+      for (let index = 0; index <= MAX_CACHE_ENTRIES; index += 1)
+        await setCachedResponse("quota", `h${String(index).padStart(4, "0")}`, {
+          status: 200,
+          headers: {},
+          body: { index },
+        });
       expect(await getCachedResponse("quota", "h0000")).toBeNull();
-      expect(await getCachedResponse("quota", `h${String(MAX_CACHE_ENTRIES).padStart(4, "0")}`)).not.toBeNull();
+      expect(
+        await getCachedResponse(
+          "quota",
+          `h${String(MAX_CACHE_ENTRIES).padStart(4, "0")}`,
+        ),
+      ).not.toBeNull();
     }, 30_000);
   });
 
   describe("Cache Key", () => {
     it("uses the full SHA-256 digest", () => {
-      expect(createCacheKey({ method: "GET", path: "/", query: {}, headers: {}, body: null, receivedAt: "" }, "generic")).toMatch(/^[a-f0-9]{64}$/);
+      expect(
+        createCacheKey(
+          {
+            method: "GET",
+            path: "/",
+            query: {},
+            headers: {},
+            body: null,
+            receivedAt: "",
+          },
+          "generic",
+        ),
+      ).toMatch(/^[a-f0-9]{64}$/);
     });
     it("preserves array order because ordered payloads have different semantics", () => {
       const key1 = createCacheKey(
-        { method: "GET", path: "/", query: {}, headers: {}, body: { items: [{ id: 1 }, { id: 2 }] }, receivedAt: "" },
-        "generic"
+        {
+          method: "GET",
+          path: "/",
+          query: {},
+          headers: {},
+          body: { items: [{ id: 1 }, { id: 2 }] },
+          receivedAt: "",
+        },
+        "generic",
       );
 
       const key2 = createCacheKey(
-        { method: "GET", path: "/", query: {}, headers: {}, body: { items: [{ id: 2 }, { id: 1 }] }, receivedAt: "" },
-        "generic"
+        {
+          method: "GET",
+          path: "/",
+          query: {},
+          headers: {},
+          body: { items: [{ id: 2 }, { id: 1 }] },
+          receivedAt: "",
+        },
+        "generic",
       );
 
       expect(key1).not.toBe(key2);
     });
 
     it("distinguishes reordered OpenAI messages", () => {
-      const request = (messages: unknown[]) => ({ method: "POST", path: "/v1/chat/completions", query: {}, headers: {}, body: { messages }, receivedAt: "" });
-      const userFirst = createCacheKey(request([{ role: "user", content: "Question" }, { role: "assistant", content: "Answer" }]), "openai");
-      const assistantFirst = createCacheKey(request([{ role: "assistant", content: "Answer" }, { role: "user", content: "Question" }]), "openai");
+      const request = (messages: unknown[]) => ({
+        method: "POST",
+        path: "/v1/chat/completions",
+        query: {},
+        headers: {},
+        body: { messages },
+        receivedAt: "",
+      });
+      const userFirst = createCacheKey(
+        request([
+          { role: "user", content: "Question" },
+          { role: "assistant", content: "Answer" },
+        ]),
+        "openai",
+      );
+      const assistantFirst = createCacheKey(
+        request([
+          { role: "assistant", content: "Answer" },
+          { role: "user", content: "Question" },
+        ]),
+        "openai",
+      );
 
       expect(userFirst).not.toBe(assistantFirst);
     });
 
     it("includes specific headers in the key", () => {
       const key1 = createCacheKey(
-        { method: "GET", path: "/", query: {}, headers: { "stripe-version": "2024" }, body: null, receivedAt: "" },
-        "stripe"
+        {
+          method: "GET",
+          path: "/",
+          query: {},
+          headers: { "stripe-version": "2024" },
+          body: null,
+          receivedAt: "",
+        },
+        "stripe",
       );
 
       const key2 = createCacheKey(
-        { method: "GET", path: "/", query: {}, headers: { "stripe-version": "2023" }, body: null, receivedAt: "" },
-        "stripe"
+        {
+          method: "GET",
+          path: "/",
+          query: {},
+          headers: { "stripe-version": "2023" },
+          body: null,
+          receivedAt: "",
+        },
+        "stripe",
       );
 
       expect(key1).not.toBe(key2);
     });
-    
+
     it("sorts query parameters for stability", () => {
       const key1 = createCacheKey(
-        { method: "GET", path: "/", query: { z: "1", a: "2" }, headers: {}, body: null, receivedAt: "" },
-        "generic"
+        {
+          method: "GET",
+          path: "/",
+          query: { z: "1", a: "2" },
+          headers: {},
+          body: null,
+          receivedAt: "",
+        },
+        "generic",
       );
 
       const key2 = createCacheKey(
-        { method: "GET", path: "/", query: { a: "2", z: "1" }, headers: {}, body: null, receivedAt: "" },
-        "generic"
+        {
+          method: "GET",
+          path: "/",
+          query: { a: "2", z: "1" },
+          headers: {},
+          body: null,
+          receivedAt: "",
+        },
+        "generic",
       );
 
       expect(key1).toBe(key2);
@@ -107,13 +207,27 @@ describe("Response Cache", () => {
 
     it("ignores receivedAt and non-important headers for stable repeatability", () => {
       const key1 = createCacheKey(
-        { method: "POST", path: "/tasks", query: {}, headers: { authorization: "Bearer ***", "x-request-id": "one" }, body: { title: "A" }, receivedAt: "2026-01-01" },
-        "generic"
+        {
+          method: "POST",
+          path: "/tasks",
+          query: {},
+          headers: { authorization: "Bearer ***", "x-request-id": "one" },
+          body: { title: "A" },
+          receivedAt: "2026-01-01",
+        },
+        "generic",
       );
 
       const key2 = createCacheKey(
-        { method: "POST", path: "/tasks", query: {}, headers: { authorization: "Bearer ***", "x-request-id": "two" }, body: { title: "A" }, receivedAt: "2026-02-02" },
-        "generic"
+        {
+          method: "POST",
+          path: "/tasks",
+          query: {},
+          headers: { authorization: "Bearer ***", "x-request-id": "two" },
+          body: { title: "A" },
+          receivedAt: "2026-02-02",
+        },
+        "generic",
       );
 
       expect(key1).toBe(key2);
