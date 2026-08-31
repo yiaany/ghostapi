@@ -5,3 +5,4 @@ hosted/dist/
 .ghostapi/
 *.tgz
 docs/assets/*.png
+.claude/homunculus/instincts/inherited/ghostapi-instincts.yaml
