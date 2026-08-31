@@ -81,7 +81,7 @@
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "express": "^4.19.2",
+    "express": "^5.2.1",
     "selfsigned": "^5.5.0",
     "yaml": "2.9.0",
     "zod": "^4.4.3"
@@ -93,7 +93,7 @@
     "ip-address": "10.4.0"
   },
   "devDependencies": {
-    "@types/express": "^4.17.21",
+    "@types/express": "^5.0.6",
     "@types/node": "^20.14.10",
     "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^10.9.1",
