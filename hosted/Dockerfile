@@ -1,6 +1,6 @@
 FROM oven/bun:1.3.14-alpine AS bun
 
-FROM node:24.6.0-alpine3.22 AS build
+FROM node:26.3.0-alpine3.22 AS build
 WORKDIR /app
 COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
 COPY package.json package-lock.json ./
