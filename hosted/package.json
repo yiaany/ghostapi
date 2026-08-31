@@ -21,7 +21,7 @@
     "@elysiajs/cors": "1.4.2",
     "@upstash/qstash": "2.11.3",
     "@upstash/redis": "1.38.2",
-    "better-auth": "1.6.26",
+    "better-auth": "1.7.2",
     "elysia": "1.4.29",
     "pg": "8.22.0"
   },
