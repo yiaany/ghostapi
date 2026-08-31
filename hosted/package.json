@@ -22,7 +22,7 @@
     "@upstash/qstash": "2.11.3",
     "@upstash/redis": "1.38.2",
     "better-auth": "1.6.26",
-    "elysia": "1.4.29",
+    "elysia": "1.4.30",
     "pg": "8.22.0"
   },
   "devDependencies": {
