@@ -400,12 +400,25 @@
         </div>
       </aside>
 
+      <button
+        class="sidebar-backdrop"
+        id="sidebar-backdrop"
+        type="button"
+        aria-label="Close navigation"
+      ></button>
+
       <!-- Main Content Structure -->
       <main class="main">
         <!-- Topbar -->
         <header class="topbar">
           <div class="topbar-left">
-            <button class="toggle-btn" id="sidebar-toggle">
+            <button
+              class="toggle-btn"
+              id="sidebar-toggle"
+              type="button"
+              aria-label="Toggle navigation"
+              title="Toggle navigation"
+            >
               <svg
                 viewBox="0 0 24 24"
                 width="18"
@@ -420,11 +433,18 @@
                 <line x1="9" y1="3" x2="9" y2="21"></line>
               </svg>
             </button>
-            <div class="breadcrumb">
-              <span>GhostAPI</span>
-              <span>/</span>
-              <span class="breadcrumb-active">Live Traffic</span>
-            </div>
+          </div>
+          <div class="breadcrumb topbar-center" aria-label="Current view">
+            <span class="brand-lockup">
+              <img
+                class="topbar-brand-icon"
+                src="/docs/assets/ghostapi-avatar.png"
+                alt=""
+              />
+              <strong>GhostAPI</strong>
+            </span>
+            <span class="breadcrumb-divider">/</span>
+            <span class="breadcrumb-active">Live Traffic</span>
           </div>
           <div class="topbar-right">
             <div class="status-indicator connected" id="status-indicator">

@@ -19,6 +19,7 @@ describe("dashboard assets", () => {
     expect(app).toContain("els.eventCount.textContent = list.length");
     expect(app).toContain('scenarioButton("Arm"');
     expect(app).not.toContain('scenarioButton("Replay"');
+    expect(app).toContain("closeMobileSidebar");
   });
 
   it("does not load dashboard assets from external origins", async () => {
@@ -33,5 +34,24 @@ describe("dashboard assets", () => {
       expect(content).not.toMatch(/url\(\s*["']?https?:\/\//i);
       expect(content).not.toContain("@import url(");
     }
+  });
+
+  it("keeps the product identity centered and provides a mobile layout", async () => {
+    const [html, styles, readme] = await Promise.all([
+      readFile("src/dashboard/index.html", "utf8"),
+      readFile("src/dashboard/styles.css", "utf8"),
+      readFile("README.md", "utf8"),
+    ]);
+
+    expect(html).toContain('class="breadcrumb topbar-center"');
+    expect(html).toContain('id="sidebar-backdrop"');
+    expect(styles).toContain("grid-template-columns: minmax(44px, 1fr) auto");
+    expect(styles).toContain("grid-column: 3");
+    expect(styles).toContain("transform: translateX(-50%)");
+    expect(styles).toContain("@media (max-width: 760px)");
+    expect(styles).toContain(".sidebar.mobile-open");
+    expect(styles).toContain("flex-direction: column");
+    expect(readme).toContain('<div align="center">');
+    expect(readme).toContain('<a href="#quickstart">Quickstart</a>');
   });
 });
