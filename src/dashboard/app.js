@@ -1,6 +1,7 @@
 // DOM References
 const els = {
   sidebar: document.getElementById("sidebar"),
+  sidebarBackdrop: document.getElementById("sidebar-backdrop"),
   toggleBtn: document.getElementById("sidebar-toggle"),
   statusIndicator: document.getElementById("status-indicator"),
   statusText: document.getElementById("status-text"),
@@ -82,7 +83,25 @@ async function fetchProviderManifests() {
 
 // Side-effects & Listeners
 function setupInteractions() {
-  els.toggleBtn.onclick = () => els.sidebar.classList.toggle("closed");
+  els.toggleBtn.onclick = () => {
+    if (window.matchMedia("(max-width: 760px)").matches) {
+      const open = els.sidebar.classList.toggle("mobile-open");
+      els.sidebarBackdrop.classList.toggle("open", open);
+      return;
+    }
+    els.sidebar.classList.toggle("closed");
+  };
+  els.sidebarBackdrop.onclick = closeMobileSidebar;
+  els.sidebar.addEventListener("click", (event) => {
+    if (event.target.closest(".nav-item")) closeMobileSidebar();
+  });
+  window.addEventListener("resize", () => {
+    if (window.matchMedia("(max-width: 760px)").matches) {
+      els.sidebar.classList.remove("closed");
+      return;
+    }
+    closeMobileSidebar();
+  });
 
   // Command + K
   document.addEventListener("keydown", (e) => {
@@ -183,7 +202,13 @@ window.setFilter = (filter) => {
   }
 
   renderList();
+  closeMobileSidebar();
 };
+
+function closeMobileSidebar() {
+  els.sidebar.classList.remove("mobile-open");
+  els.sidebarBackdrop.classList.remove("open");
+}
 
 window.clearStorage = async (target, event) => {
   try {
