@@ -1,4 +1,4 @@
-FROM oven/bun:1.3.14-alpine AS bun
+FROM oven/bun:1.4.0-alpine AS bun
 
 FROM node:24.6.0-alpine3.22 AS build
 WORKDIR /app
@@ -11,7 +11,7 @@ COPY test ./test
 COPY migrations ./migrations
 RUN bun --version && npm run typecheck && npm test && npm run build && npm prune --omit=dev --ignore-scripts
 
-FROM oven/bun:1.3.14-alpine AS runtime
+FROM oven/bun:1.4.0-alpine AS runtime
 RUN apk upgrade --no-cache libcrypto3 libssl3
 WORKDIR /app
 ENV NODE_ENV=production
