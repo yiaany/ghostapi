@@ -1,24 +1,24 @@
-# GhostAPI
-
-**Local API simulation and test evidence for AI-assisted development.**
-
-GhostAPI gives applications and coding agents a local target for selected Stripe, Resend, OpenAI, Twilio, GitHub, Discord, and generic REST workflows. It records heuristically sanitized traffic, injects deterministic failures, exposes MCP controls, and turns captured behavior into repeatable tests.
-
-On supported Linux hosts, `ghostapi run` can execute a test command inside a loopback-only network namespace. It is not a hostile-code or filesystem sandbox.
-
-<p align="center">
+<div align="center">
+  <img src="docs/assets/ghostapi-avatar.png" alt="GhostAPI logo" width="88" height="88">
+  <h1>GhostAPI</h1>
+  <p><strong>Local API simulation and test evidence for AI-assisted development.</strong></p>
+  <p>GhostAPI gives applications and coding agents a local target for selected Stripe, Resend, OpenAI, Twilio, GitHub, Discord, and generic REST workflows. It records heuristically sanitized traffic, injects deterministic failures, exposes MCP controls, and turns captured behavior into repeatable tests.</p>
+  <p>On supported Linux hosts, <code>ghostapi run</code> can execute a test command inside a loopback-only network namespace. It is not a hostile-code or filesystem sandbox.</p>
+  <p>
   <a href="https://www.npmjs.com/package/@yiaany/ghostapi"><img alt="npm" src="https://img.shields.io/npm/v/@yiaany/ghostapi?color=0f172a&label=npm"></a>
   <a href="https://github.com/yiaany/ghostapi/blob/main/LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-0f172a"></a>
   <a href="https://github.com/yiaany/ghostapi/actions/workflows/ci.yml"><img alt="ci" src="https://github.com/yiaany/ghostapi/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="node" src="https://img.shields.io/badge/node-%3E%3D20-0f172a">
   <img alt="MCP" src="https://img.shields.io/badge/MCP-enabled-0f172a">
-</p>
-
-[Quickstart](#quickstart) · [Security model](SECURITY.md) · [Provider coverage](docs/providers/) · [Release evidence](docs/releases/)
-
-```bash
-npx @yiaany/ghostapi start --open
-```
+  </p>
+  <p>
+    <a href="#quickstart">Quickstart</a> ·
+    <a href="SECURITY.md">Security model</a> ·
+    <a href="docs/providers/">Provider coverage</a> ·
+    <a href="docs/releases/">Release evidence</a>
+  </p>
+  <p><code>npx @yiaany/ghostapi start --open</code></p>
+</div>
 
 <p align="center">
   <img src="docs/assets/dashboard.png" alt="GhostAPI dashboard with live local Stripe, OpenAI, and REST traffic">

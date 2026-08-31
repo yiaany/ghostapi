@@ -20,6 +20,7 @@ The format follows the spirit of [Keep a Changelog](https://keepachangelog.com/e
 - Added project provenance, contribution authorship guidance, full-tree formatting, and type-aware ESLint parsing.
 - Removed fundraising, commercial, design-partner, community-operations, and enterprise-roadmap material from the public tree and npm package.
 - Added a release workflow for signed annotated tags, exact-tarball smoke testing, checksums, SBOM generation, build attestations, npm provenance, and post-publish `gitHead` verification.
+- Centered the README hero and dashboard product identity, and added responsive navigation and request/detail layouts for mobile screens.
 
 ## 0.1.8 - 2026-08-22
 
