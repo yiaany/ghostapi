@@ -12,6 +12,7 @@ COPY migrations ./migrations
 RUN bun --version && npm run typecheck && npm test && npm run build && npm prune --omit=dev --ignore-scripts
 
 FROM oven/bun:1.3.14-alpine AS runtime
+RUN apk upgrade --no-cache libcrypto3 libssl3
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build --chown=bun:bun /app/node_modules ./node_modules
