@@ -54,17 +54,22 @@ export const examplePack: ProviderPack = {
       providerErrors: true,
       scenarios: false,
       webhooks: false,
-      conformanceFixtures: true
-    }
+      conformanceFixtures: true,
+    },
   },
-  detection: { priority: 100, matches: ({ path }) => path.startsWith("/example") },
+  detection: {
+    priority: 100,
+    matches: ({ path }) => path.startsWith("/example"),
+  },
   parseRequest: (request) => request.body,
   selectApiVersion: () => ({ version: "v1" }),
   validate: () => null,
   handleDeterministic: ({ runtime }) => ({
     status: 200,
     headers: { "content-type": "application/json" },
-    body: { id: runtime.requireCapability("idGenerator").create("example_mock") }
+    body: {
+      id: runtime.requireCapability("idGenerator").create("example_mock"),
+    },
   }),
   createResponseHeaders: () => ({}),
   transitionState: () => null,
@@ -72,7 +77,7 @@ export const examplePack: ProviderPack = {
   formatError: (details) => ({ error: { message: details.message } }),
   promptHints: [],
   scenarios: [],
-  conformanceFixtures: []
+  conformanceFixtures: [],
 };
 ```
 
@@ -131,7 +136,7 @@ Every migrated pack must provide at least one fixture that exercises its main mu
 ```ts
 const runtime = createProviderRuntime({
   clock: { now: () => new Date("2026-08-06T12:00:00.000Z") },
-  idGenerator: { create: (prefix) => `${prefix}_fixture` }
+  idGenerator: { create: (prefix) => `${prefix}_fixture` },
 });
 
 runProviderPackConformance(examplePack, runtime);
@@ -162,13 +167,13 @@ Malformed responses and wrong state keys must fail the harness.
 
 The remaining providers should move one at a time:
 
-| Order | Provider | Migration focus | Deferred risk |
-| --- | --- | --- | --- |
-| 1 | Twilio | Form parsing, validation, SID generation, error shape | Message status transitions and callbacks |
-| 2 | GitHub | Version header, deterministic issue/repository shapes, scenarios | Pagination and conditional requests |
-| 3 | OpenAI | API version policy, typed response families, list state | Streaming and token accounting |
-| 4 | Discord | Route/body detection and message shapes | Webhook and interaction semantics |
-| Done | Stripe | Core pack for customers, payment intents, payment methods, checkout sessions, refunds, pagination, and idempotency | Webhooks, subscriptions, invoices, disputes, and broader state-machine parity |
+| Order | Provider | Migration focus                                                                                                    | Deferred risk                                                                 |
+| ----- | -------- | ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| 1     | Twilio   | Form parsing, validation, SID generation, error shape                                                              | Message status transitions and callbacks                                      |
+| 2     | GitHub   | Version header, deterministic issue/repository shapes, scenarios                                                   | Pagination and conditional requests                                           |
+| 3     | OpenAI   | API version policy, typed response families, list state                                                            | Streaming and token accounting                                                |
+| 4     | Discord  | Route/body detection and message shapes                                                                            | Webhook and interaction semantics                                             |
+| Done  | Stripe   | Core pack for customers, payment intents, payment methods, checkout sessions, refunds, pagination, and idempotency | Webhooks, subscriptions, invoices, disputes, and broader state-machine parity |
 
 Stripe now demonstrates the deeper stateful pack path. See [`stripe-core-pack.md`](stripe-core-pack.md) for the supported contract and limits.
 

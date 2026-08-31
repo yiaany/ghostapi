@@ -6,7 +6,7 @@ export const githubAdapter: ProviderAdapter = {
   formatError(details: ProviderErrorDetails) {
     return {
       message: details.message,
-      documentation_url: "https://docs.github.com/rest"
+      documentation_url: "https://docs.github.com/rest",
     };
-  }
+  },
 };

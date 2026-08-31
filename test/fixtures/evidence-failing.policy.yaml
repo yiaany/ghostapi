@@ -5,7 +5,7 @@ network:
     - host: localhost
   deny: []
   productionHosts:
-    - '*.stripe.com'
+    - "*.stripe.com"
 credentials:
   forbid:
     - sk_live_*

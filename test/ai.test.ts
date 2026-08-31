@@ -12,7 +12,12 @@ describe("AI Text Prompts", () => {
   });
 
   it("builds user prompts with request data", () => {
-    const prompt = getUserPrompt("POST", "/customers", { limit: 10 }, { email: "a@b.com" });
+    const prompt = getUserPrompt(
+      "POST",
+      "/customers",
+      { limit: 10 },
+      { email: "a@b.com" },
+    );
     expect(prompt).toContain("POST");
     expect(prompt).toContain("/customers");
     expect(prompt).toContain('{"limit":10}');
@@ -22,15 +27,33 @@ describe("AI Text Prompts", () => {
 
 describe("external LLM generation", () => {
   it("fails with explicit provenance instead of silently substituting a local fallback", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(new Error("network down"));
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValueOnce(new Error("network down"));
     const generated = await generateAiMock(
-      { method: "POST", path: "/tasks", query: {}, headers: {}, body: { title: "test" }, receivedAt: "" },
+      {
+        method: "POST",
+        path: "/tasks",
+        query: {},
+        headers: {},
+        body: { title: "test" },
+        receivedAt: "",
+      },
       "generic",
       {} as never,
-      { host: "127.0.0.1", port: 8080, model: "gpt-4o-mini", allowExternalLlm: true, apiKey: "test-key" }
+      {
+        host: "127.0.0.1",
+        port: 8080,
+        model: "gpt-4o-mini",
+        allowExternalLlm: true,
+        apiKey: "test-key",
+      },
     );
 
-    expect(generated).toMatchObject({ status: 502, headers: { "x-ghostapi-generation-source": "external-llm-error" } });
+    expect(generated).toMatchObject({
+      status: 502,
+      headers: { "x-ghostapi-generation-source": "external-llm-error" },
+    });
     expect(JSON.stringify(generated)).not.toContain("task_mock_");
     fetchSpy.mockRestore();
   });
@@ -49,7 +72,7 @@ describe("JSON Repair", () => {
 
   it("repairs trailing commas", () => {
     expect(repairJson('{"a": 1,}')).toEqual({ a: 1 });
-    expect(repairJson('[1, 2, ]')).toEqual([1, 2]);
+    expect(repairJson("[1, 2, ]")).toEqual([1, 2]);
   });
 
   it("returns parsed json if completely valid", () => {
@@ -57,6 +80,6 @@ describe("JSON Repair", () => {
   });
 
   it("returns null for completely unrepairable garbage", () => {
-    expect(repairJson('hello world')).toBeNull();
+    expect(repairJson("hello world")).toBeNull();
   });
 });

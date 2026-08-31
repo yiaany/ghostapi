@@ -1,6 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { addEvent, clearEvents, clearEventsHistoryForTests, EVENT_LOG_ARCHIVES, getEventsHistory, MAX_EVENT_LOG_BYTES } from "../src/server/eventsStore.js";
-import { addSseClient, broadcastEvent, getSseClientCount, MAX_SSE_CLIENTS } from "../src/server/sse.js";
+import {
+  addEvent,
+  clearEvents,
+  clearEventsHistoryForTests,
+  EVENT_LOG_ARCHIVES,
+  getEventsHistory,
+  MAX_EVENT_LOG_BYTES,
+} from "../src/server/eventsStore.js";
+import {
+  addSseClient,
+  broadcastEvent,
+  getSseClientCount,
+  MAX_SSE_CLIENTS,
+} from "../src/server/sse.js";
 import EventEmitter from "node:events";
 import { randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
@@ -26,7 +38,7 @@ describe("Events Store", () => {
       source: "fallback",
       durationMs: 42,
       request: {},
-      response: {}
+      response: {},
     } as const;
 
     await addEvent(event);
@@ -36,9 +48,9 @@ describe("Events Store", () => {
   it("respects ring buffer max size of 200", async () => {
     const ids = Array.from({ length: 205 }, () => randomUUID());
     for (let i = 0; i < 205; i++) {
-        await addEvent({ id: ids[i], source: "fallback" } as any);
+      await addEvent({ id: ids[i], source: "fallback" } as any);
     }
-    
+
     const history = getEventsHistory();
     expect(history.length).toBe(200);
     expect(history[0]?.id).toBe(ids[5]);
@@ -57,7 +69,7 @@ describe("Events Store", () => {
       source: "fallback",
       durationMs: 1,
       request: { authorization: `Bearer ${secret}` },
-      response: { client_secret: secret }
+      response: { client_secret: secret },
     });
 
     const history = JSON.stringify(getEventsHistory());
@@ -70,7 +82,8 @@ describe("Events Store", () => {
 
   it("rotates persisted logs at the documented byte limit", async () => {
     const payload = "x".repeat(200 * 1024);
-    const eventCount = Math.ceil(MAX_EVENT_LOG_BYTES / Buffer.byteLength(payload)) + 2;
+    const eventCount =
+      Math.ceil(MAX_EVENT_LOG_BYTES / Buffer.byteLength(payload)) + 2;
     for (let index = 0; index < eventCount; index += 1) {
       await addEvent({
         id: randomUUID(),
@@ -82,13 +95,17 @@ describe("Events Store", () => {
         source: "fallback",
         durationMs: 1,
         request: { payload },
-        response: { index }
+        response: { index },
       });
     }
 
-    expect((await stat(getDataPaths().events)).size).toBeLessThanOrEqual(MAX_EVENT_LOG_BYTES);
+    expect((await stat(getDataPaths().events)).size).toBeLessThanOrEqual(
+      MAX_EVENT_LOG_BYTES,
+    );
     await expect(stat(`${getDataPaths().events}.1`)).resolves.toBeDefined();
-    await expect(stat(`${getDataPaths().events}.${EVENT_LOG_ARCHIVES + 1}`)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(
+      stat(`${getDataPaths().events}.${EVENT_LOG_ARCHIVES + 1}`),
+    ).rejects.toMatchObject({ code: "ENOENT" });
   });
 });
 
@@ -118,7 +135,17 @@ describe("SSE Manager", () => {
     (mockResponse as any).write = (data: string) => written.push(data);
 
     addSseClient(mockResponse as any);
-    broadcastEvent({ id: "evt_dashboard", provider: "generic:rest-like", method: "POST", path: "/tasks", statusCode: 200, source: "ai", durationMs: 12, request: {}, response: {} } as any);
+    broadcastEvent({
+      id: "evt_dashboard",
+      provider: "generic:rest-like",
+      method: "POST",
+      path: "/tasks",
+      statusCode: 200,
+      source: "ai",
+      durationMs: 12,
+      request: {},
+      response: {},
+    } as any);
 
     const payload = written.find((entry) => entry.includes("proxy_event"));
     expect(payload).toBeDefined();
@@ -136,7 +163,8 @@ describe("SSE Manager", () => {
       (response as any).end = vi.fn();
       return response;
     });
-    for (const response of responses) expect(addSseClient(response as any)).toBe(true);
+    for (const response of responses)
+      expect(addSseClient(response as any)).toBe(true);
     const overflow = new EventEmitter();
     expect(addSseClient(overflow as any)).toBe(false);
 

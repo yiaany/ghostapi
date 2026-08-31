@@ -4,7 +4,8 @@ export type EgressGuaranteeLevel =
   | "process-level-enforcement"
   | "container-network-namespace-enforcement";
 
-export type EgressCapabilityStatus = "available" | "degraded" | "not-implemented" | "unsupported";
+export type EgressCapabilityStatus =
+  "available" | "degraded" | "not-implemented" | "unsupported";
 
 export type EgressCapability = {
   id: string;
@@ -40,24 +41,29 @@ export type EgressRuntimeInput = Partial<EgressRuntimeInfo> & {
 
 const PROXY_BYPASSES = [
   "A new HTTP client, direct IP address, custom DNS resolver, UDP, QUIC, local-network target, or subprocess can ignore proxy configuration.",
-  "A malicious process running as the same user can create its own network path."
+  "A malicious process running as the same user can create its own network path.",
 ];
 
 const HOSTILE_BYPASSES = [
   "An administrator/root-equivalent actor and a compromised host are outside this threat model.",
-  "A separate process running outside the launched containment boundary remains able to use the host network."
+  "A separate process running outside the launched containment boundary remains able to use the host network.",
 ];
 
-export function detectEgressCapabilities(input: EgressRuntimeInput = {}): EgressCapabilityReport {
+export function detectEgressCapabilities(
+  input: EgressRuntimeInput = {},
+): EgressCapabilityReport {
   const runtime: EgressRuntimeInfo = {
     platform: input.platform ?? process.platform,
     arch: input.arch ?? process.arch,
-    nodeVersion: input.nodeVersion ?? process.versions.node
+    nodeVersion: input.nodeVersion ?? process.versions.node,
   };
   const capabilities = [
     createProxyGuidanceCapability(),
-    createNodePermissionCapability(input.nodeNetworkPermission ?? process.allowedNodeEnvironmentFlags.has("--allow-net")),
-    ...createPlatformCapabilities(runtime.platform)
+    createNodePermissionCapability(
+      input.nodeNetworkPermission ??
+        process.allowedNodeEnvironmentFlags.has("--allow-net"),
+    ),
+    ...createPlatformCapabilities(runtime.platform),
   ];
 
   return {
@@ -65,35 +71,49 @@ export function detectEgressCapabilities(input: EgressRuntimeInput = {}): Egress
     runtime,
     isolated: false,
     currentGuarantee: "http-proxy-guidance",
-    summary: "This diagnostic has not launched an isolated process. Linux ghostapi run can provide loopback-only namespace enforcement after successful local preflight.",
+    summary:
+      "This diagnostic has not launched an isolated process. Linux ghostapi run can provide loopback-only namespace enforcement after successful local preflight.",
     capabilities,
     globalStateChanged: false,
     remainingBypasses: [...PROXY_BYPASSES, ...HOSTILE_BYPASSES],
-    nextArchitecture: architectureFor(runtime.platform)
+    nextArchitecture: architectureFor(runtime.platform),
   };
 }
 
-export function formatEgressCapabilityReport(report: EgressCapabilityReport): string {
+export function formatEgressCapabilityReport(
+  report: EgressCapabilityReport,
+): string {
   const lines = [
     "GhostAPI egress diagnosis",
     `Runtime: ${report.runtime.platform}/${report.runtime.arch}, Node.js ${report.runtime.nodeVersion}`,
     "Status: NO PROCESS LAUNCHED",
     "Current diagnostic guarantee: HTTP proxy guidance only",
     "",
-    "Capabilities:"
+    "Capabilities:",
   ];
 
   for (const capability of report.capabilities) {
-    lines.push(`  ${capability.status.toUpperCase().padEnd(15)} ${capability.title}: ${capability.detail}`);
-    if (capability.requiredPrivileges.length > 0) lines.push(`                  Privileges/setup: ${capability.requiredPrivileges.join("; ")}`);
-    if (capability.remainingBypasses.length > 0) lines.push(`                  Bypasses: ${capability.remainingBypasses.join(" ")}`);
+    lines.push(
+      `  ${capability.status.toUpperCase().padEnd(15)} ${capability.title}: ${capability.detail}`,
+    );
+    if (capability.requiredPrivileges.length > 0)
+      lines.push(
+        `                  Privileges/setup: ${capability.requiredPrivileges.join("; ")}`,
+      );
+    if (capability.remainingBypasses.length > 0)
+      lines.push(
+        `                  Bypasses: ${capability.remainingBypasses.join(" ")}`,
+      );
   }
 
   lines.push("", "Remaining bypasses:");
   for (const bypass of report.remainingBypasses) lines.push(`  - ${bypass}`);
   lines.push("", "Next architecture:");
   for (const step of report.nextArchitecture) lines.push(`  - ${step}`);
-  lines.push("", "No system-wide proxy or firewall rules were inspected or changed.");
+  lines.push(
+    "",
+    "No system-wide proxy or firewall rules were inspected or changed.",
+  );
 
   return lines.join("\n");
 }
@@ -104,13 +124,16 @@ function createProxyGuidanceCapability(): EgressCapability {
     title: "HTTP proxy guidance",
     status: "available",
     guarantee: "http-proxy-guidance",
-    detail: "GhostAPI can guide supported HTTP clients to a local endpoint, but does not intercept or block other traffic.",
+    detail:
+      "GhostAPI can guide supported HTTP clients to a local endpoint, but does not intercept or block other traffic.",
     requiredPrivileges: [],
-    remainingBypasses: PROXY_BYPASSES
+    remainingBypasses: PROXY_BYPASSES,
   };
 }
 
-function createNodePermissionCapability(supportsNetworkPermission: boolean): EgressCapability {
+function createNodePermissionCapability(
+  supportsNetworkPermission: boolean,
+): EgressCapability {
   return {
     id: "node-permission-model",
     title: "Node.js Permission Model",
@@ -119,14 +142,22 @@ function createNodePermissionCapability(supportsNetworkPermission: boolean): Egr
     detail: supportsNetworkPermission
       ? "A Node process started with --permission and without --allow-net can deny network access, but the model is a seat belt for trusted code, not hostile-code sandboxing."
       : "This Node.js version does not provide a supported network-deny control suitable for GhostAPI egress enforcement.",
-    requiredPrivileges: supportsNetworkPermission ? ["Launch the target with --permission and do not grant --allow-net."] : [],
+    requiredPrivileges: supportsNetworkPermission
+      ? ["Launch the target with --permission and do not grant --allow-net."]
+      : [],
     remainingBypasses: supportsNetworkPermission
-      ? ["It applies only to the launched Node process and does not provide security guarantees against malicious code or other processes."]
-      : ["Any Node program, child process, or native tool can still create network connections."]
+      ? [
+          "It applies only to the launched Node process and does not provide security guarantees against malicious code or other processes.",
+        ]
+      : [
+          "Any Node program, child process, or native tool can still create network connections.",
+        ],
   };
 }
 
-function createPlatformCapabilities(platform: NodeJS.Platform): EgressCapability[] {
+function createPlatformCapabilities(
+  platform: NodeJS.Platform,
+): EgressCapability[] {
   switch (platform) {
     case "linux":
       return [
@@ -135,11 +166,21 @@ function createPlatformCapabilities(platform: NodeJS.Platform): EgressCapability
           title: "Linux network namespace",
           status: "degraded",
           guarantee: "process-level-enforcement",
-          detail: "ghostapi run uses a fresh user, mount, and network namespace with loopback-only GhostAPI. It fails closed unless local unshare and ip preflight succeeds.",
-          requiredPrivileges: ["util-linux unshare, iproute2 ip, and host policy allowing the required unprivileged user, mount, and network namespaces."],
-          remainingBypasses: ["Denied kernel socket attempts are enforced but not individually attributable by this backend.", "The target must use GhostAPI loopback configuration; TLS provider-host interception is not implemented.", "Filesystem UNIX sockets that the same user can access, such as a mounted container-control socket, are outside this network-namespace boundary.", ...HOSTILE_BYPASSES]
+          detail:
+            "ghostapi run uses a fresh user, mount, and network namespace with loopback-only GhostAPI. It fails closed unless local unshare and ip preflight succeeds.",
+          requiredPrivileges: [
+            "util-linux unshare, iproute2 ip, and host policy allowing the required unprivileged user, mount, and network namespaces.",
+          ],
+          remainingBypasses: [
+            "Denied kernel socket attempts are enforced but not individually attributable by this backend.",
+            "The target must use GhostAPI loopback configuration; TLS provider-host interception is not implemented.",
+            "Filesystem UNIX sockets that the same user can access, such as a mounted container-control socket, are outside this network-namespace boundary.",
+            ...HOSTILE_BYPASSES,
+          ],
         },
-        createContainerCapability("An OCI runtime configured with a no-network mode")
+        createContainerCapability(
+          "An OCI runtime configured with a no-network mode",
+        ),
       ];
     case "darwin":
       return [
@@ -148,11 +189,19 @@ function createPlatformCapabilities(platform: NodeJS.Platform): EgressCapability
           title: "macOS App Sandbox",
           status: "degraded",
           guarantee: "unsupported",
-          detail: "App Sandbox network access is entitlement-based for a signed app and is not a generic GhostAPI subprocess launcher.",
-          requiredPrivileges: ["A signed sandboxed application and an entitlement configuration designed for the launched helper."],
-          remainingBypasses: ["An arbitrary command launched outside that app sandbox is not constrained.", ...HOSTILE_BYPASSES]
+          detail:
+            "App Sandbox network access is entitlement-based for a signed app and is not a generic GhostAPI subprocess launcher.",
+          requiredPrivileges: [
+            "A signed sandboxed application and an entitlement configuration designed for the launched helper.",
+          ],
+          remainingBypasses: [
+            "An arbitrary command launched outside that app sandbox is not constrained.",
+            ...HOSTILE_BYPASSES,
+          ],
         },
-        createContainerCapability("A separately configured Linux-container or VM runtime")
+        createContainerCapability(
+          "A separately configured Linux-container or VM runtime",
+        ),
       ];
     case "win32":
       return [
@@ -161,11 +210,19 @@ function createPlatformCapabilities(platform: NodeJS.Platform): EgressCapability
           title: "Windows AppContainer",
           status: "not-implemented",
           guarantee: "process-level-enforcement",
-          detail: "AppContainer can deny network capability to a launched process, but GhostAPI does not create profiles or launch AppContainers yet.",
-          requiredPrivileges: ["An AppContainer/LPAC launcher, a minimal capability profile, and a writable sandbox directory."],
-          remainingBypasses: ["A normal Win32 child process is not in an AppContainer.", ...HOSTILE_BYPASSES]
+          detail:
+            "AppContainer can deny network capability to a launched process, but GhostAPI does not create profiles or launch AppContainers yet.",
+          requiredPrivileges: [
+            "An AppContainer/LPAC launcher, a minimal capability profile, and a writable sandbox directory.",
+          ],
+          remainingBypasses: [
+            "A normal Win32 child process is not in an AppContainer.",
+            ...HOSTILE_BYPASSES,
+          ],
         },
-        createContainerCapability("A separately configured Windows or Linux container/VM runtime")
+        createContainerCapability(
+          "A separately configured Windows or Linux container/VM runtime",
+        ),
       ];
     default:
       return [
@@ -176,9 +233,9 @@ function createPlatformCapabilities(platform: NodeJS.Platform): EgressCapability
           guarantee: "unsupported",
           detail: `GhostAPI has no supported native egress-isolation backend for ${platform}.`,
           requiredPrivileges: [],
-          remainingBypasses: PROXY_BYPASSES
+          remainingBypasses: PROXY_BYPASSES,
         },
-        createContainerCapability("A separately configured OCI runtime")
+        createContainerCapability("A separately configured OCI runtime"),
       ];
   }
 }
@@ -189,25 +246,33 @@ function createContainerCapability(requirement: string): EgressCapability {
     title: "Container or network-namespace enforcement",
     status: "not-implemented",
     guarantee: "container-network-namespace-enforcement",
-    detail: "A no-network container can provide the strongest planned local guarantee, but GhostAPI does not manage containers in this release.",
-    requiredPrivileges: [requirement, "An image and mount policy that excludes host network-control sockets and credentials."],
-    remainingBypasses: ["Mounted Docker/Podman sockets, host networking, privileged mode, or inherited credentials would break the boundary.", ...HOSTILE_BYPASSES]
+    detail:
+      "A no-network container can provide the strongest planned local guarantee, but GhostAPI does not manage containers in this release.",
+    requiredPrivileges: [
+      requirement,
+      "An image and mount policy that excludes host network-control sockets and credentials.",
+    ],
+    remainingBypasses: [
+      "Mounted Docker/Podman sockets, host networking, privileged mode, or inherited credentials would break the boundary.",
+      ...HOSTILE_BYPASSES,
+    ],
   };
 }
 
 function architectureFor(platform: NodeJS.Platform): string[] {
-  const nativeStep = platform === "linux"
-    ? "Linux launcher is available with user, mount, and network namespaces plus loopback-only GhostAPI; add a reviewed policy gateway before supporting external allowlist routes or transparent provider-host TLS interception."
-    : platform === "win32"
-      ? "Implement a Windows AppContainer/LPAC launcher with no network capabilities, a per-run profile, and deterministic profile cleanup."
-      : platform === "darwin"
-        ? "Use an explicit container or VM backend first; do not claim arbitrary-child App Sandbox enforcement."
-        : "Use an explicit container or VM backend; keep this platform unsupported until a reviewed backend exists.";
+  const nativeStep =
+    platform === "linux"
+      ? "Linux launcher is available with user, mount, and network namespaces plus loopback-only GhostAPI; add a reviewed policy gateway before supporting external allowlist routes or transparent provider-host TLS interception."
+      : platform === "win32"
+        ? "Implement a Windows AppContainer/LPAC launcher with no network capabilities, a per-run profile, and deterministic profile cleanup."
+        : platform === "darwin"
+          ? "Use an explicit container or VM backend first; do not claim arbitrary-child App Sandbox enforcement."
+          : "Use an explicit container or VM backend; keep this platform unsupported until a reviewed backend exists.";
 
   return [
     "Keep policy parsing and evidence collection in an unprivileged GhostAPI parent process.",
     nativeStep,
     "Add an OCI no-network backend that exposes GhostAPI only through a deliberate local transport, never host networking.",
-    "Use child-owned namespaces, profiles, and containers so crash cleanup is automatic; do not modify global proxy or firewall state."
+    "Use child-owned namespaces, profiles, and containers so crash cleanup is automatic; do not modify global proxy or firewall state.",
   ];
 }

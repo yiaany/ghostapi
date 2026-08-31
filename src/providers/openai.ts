@@ -9,8 +9,8 @@ export const openaiAdapter: ProviderAdapter = {
         message: details.message,
         type: details.type ?? "invalid_request_error",
         param: details.param ?? null,
-        code: details.code ?? null
-      }
+        code: details.code ?? null,
+      },
     };
-  }
+  },
 };

@@ -7,7 +7,7 @@ network:
   deny:
     - host: api.stripe.com
   productionHosts:
-    - '*.stripe.com'
+    - "*.stripe.com"
 credentials:
   forbid:
     - sk_live_*

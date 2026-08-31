@@ -13,7 +13,7 @@ export {
   getActionPath,
   validateActionApproval,
   validateActionEnvelope,
-  validateStoredAction
+  validateStoredAction,
 } from "./gateway.js";
 export type {
   ActionApproval,
@@ -31,5 +31,5 @@ export type {
   ActionReversibility,
   ActionRiskClass,
   StoredAction,
-  UnsignedActionApproval
+  UnsignedActionApproval,
 } from "./gateway.js";

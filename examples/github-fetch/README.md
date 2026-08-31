@@ -28,8 +28,11 @@ await fetch("http://localhost:8080/repos/octo/hello-world/issues", {
   headers: {
     "content-type": "application/json",
     "x-github-api-version": "2022-11-28",
-    authorization: "Bearer ghp_local_only"
+    authorization: "Bearer ghp_local_only",
   },
-  body: JSON.stringify({ title: "Local integration test", body: "Created through GhostAPI" })
+  body: JSON.stringify({
+    title: "Local integration test",
+    body: "Created through GhostAPI",
+  }),
 });
 ```

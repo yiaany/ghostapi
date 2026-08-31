@@ -27,7 +27,7 @@ This is a Windows local-provider-simulation measurement, not a Linux egress-enfo
 - Host: Ubuntu WSL 2, Node.js `20.20.2`, working copy on the Linux filesystem rather than `/mnt/c`.
 - Command: `ghostapi run -- npm test`.
 - Result: `48.75` seconds; 42 test files passed, 232 tests passed, and 1 optional test skipped.
-- Evidence: the exact run produced a PASS evidence report with a completed `linux-network-namespace` boundary, zero allowed or production egress attempts, no secret categories, and no warnings.
+- Evidence: the exact run produced a report with a completed `linux-network-namespace` boundary and no detected secret categories. Production egress attempts were not measured; the artifact records namespace lifecycle and GhostAPI-local traffic only.
 
 This is an enforced full-suite verification, not a time-to-first-value benchmark: it intentionally runs the entire test suite. The pinned GitHub workflow must still run on the exact release commit before publication.
 

@@ -5,7 +5,14 @@ import { openaiAdapter } from "./openai.js";
 import { resendPack } from "./packs/resendPack.js";
 import { stripePack } from "./packs/stripePack.js";
 import { twilioAdapter } from "./twilio.js";
-import type { ProviderAdapter, ProviderName, ProviderPack, ProviderPackDetectionInput, ProviderPackManifest, ProviderScenario } from "./types.js";
+import type {
+  ProviderAdapter,
+  ProviderName,
+  ProviderPack,
+  ProviderPackDetectionInput,
+  ProviderPackManifest,
+  ProviderScenario,
+} from "./types.js";
 
 export const providerRegistry = {
   stripe: stripePack,
@@ -14,20 +21,25 @@ export const providerRegistry = {
   github: githubAdapter,
   discord: discordAdapter,
   openai: openaiAdapter,
-  generic: genericAdapter
+  generic: genericAdapter,
 } satisfies Record<ProviderName, ProviderAdapter>;
 
 const providerPacks = [stripePack, resendPack] satisfies ProviderPack[];
-const providerPacksByPriority = [...providerPacks].sort((left, right) => right.detection.priority - left.detection.priority);
+const providerPacksByPriority = [...providerPacks].sort(
+  (left, right) => right.detection.priority - left.detection.priority,
+);
 
-const legacyCapabilities: Record<ProviderName, ProviderPackManifest["capabilities"]> = {
+const legacyCapabilities: Record<
+  ProviderName,
+  ProviderPackManifest["capabilities"]
+> = {
   stripe: stripePack.manifest.capabilities,
   twilio: capabilities({ validation: true }),
   resend: resendPack.manifest.capabilities,
   github: capabilities({ scenarios: true }),
   discord: capabilities(),
   openai: capabilities(),
-  generic: capabilities()
+  generic: capabilities(),
 };
 
 export function getProviderAdapter(provider: ProviderName): ProviderAdapter {
@@ -42,8 +54,12 @@ export function getProviderPack(provider: ProviderName): ProviderPack | null {
   return providerPacks.find((pack) => pack.name === provider) ?? null;
 }
 
-export function detectProviderPack(input: ProviderPackDetectionInput): ProviderName | null {
-  const match = providerPacksByPriority.find((pack) => pack.detection.matches(input));
+export function detectProviderPack(
+  input: ProviderPackDetectionInput,
+): ProviderName | null {
+  const match = providerPacksByPriority.find((pack) =>
+    pack.detection.matches(input),
+  );
   return match?.name ?? null;
 }
 
@@ -63,12 +79,14 @@ export function getProviderManifests(): ProviderPackManifest[] {
       implementation: adapter.name === "generic" ? "fallback" : "legacy",
       packVersion: null,
       apiVersions: null,
-      capabilities: structuredClone(legacyCapabilities[adapter.name])
+      capabilities: structuredClone(legacyCapabilities[adapter.name]),
     };
   });
 }
 
-function capabilities(overrides: Partial<ProviderPackManifest["capabilities"]> = {}): ProviderPackManifest["capabilities"] {
+function capabilities(
+  overrides: Partial<ProviderPackManifest["capabilities"]> = {},
+): ProviderPackManifest["capabilities"] {
   return {
     detection: true,
     requestParsing: false,
@@ -79,6 +97,6 @@ function capabilities(overrides: Partial<ProviderPackManifest["capabilities"]> =
     scenarios: false,
     webhooks: false,
     conformanceFixtures: false,
-    ...overrides
+    ...overrides,
   };
 }

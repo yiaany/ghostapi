@@ -1,0 +1,15 @@
+{
+  "name": "ghostapi-sdk-compat",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node compatibility.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "openai": "7.8.0",
+    "stripe": "22.6.0"
+  }
+}

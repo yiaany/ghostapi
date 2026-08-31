@@ -14,7 +14,9 @@ Use this checklist before publishing GhostAPI to GitHub or npm.
 
 ```bash
 npm run typecheck
+npm run lint
 npm test
+npm run test:coverage
 npm run build
 npm run smoke:package
 ```
@@ -57,6 +59,9 @@ Confirm the package includes only intended release files and does not include:
 - `node_modules/`
 - local logs
 - test output
+- fundraising, commercial, design-partner, or enterprise-roadmap documents
+- hosted experiment source
+- stale landing bundles
 
 ## Safety Checks
 
@@ -78,6 +83,8 @@ Confirm the package includes only intended release files and does not include:
 
 ## Publish
 
-- Tag the release.
-- Push to GitHub.
-- Publish to npm only after package dry-run output has been reviewed.
+- Update `package.json`, `package-lock.json`, and `CHANGELOG.md` to the same version.
+- Create a signed annotated tag named exactly `v<package version>`.
+- Push the commit and tag. Do not publish from an uncommitted or locally repacked tree.
+- Let `.github/workflows/release.yml` build and smoke-test one exact tarball, generate `SHA256SUMS` and a CycloneDX SBOM, attest the artifacts, publish with npm provenance, verify registry `gitHead`, and create the GitHub Release.
+- Do not repair historical `0.1.9` provenance by rewriting public Git history.

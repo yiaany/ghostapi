@@ -10,7 +10,7 @@ export {
   importOpenApiContractFromFile,
   loadContract,
   validateContract,
-  writeContract
+  writeContract,
 } from "./contract.js";
 export type {
   ContractDiff,
@@ -21,5 +21,5 @@ export type {
   ContractSchema,
   GhostApiContract,
   HarContractImportOptions,
-  OpenApiImportOptions
+  OpenApiImportOptions,
 } from "./contract.js";

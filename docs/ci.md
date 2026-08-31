@@ -45,5 +45,5 @@ The report writes a canonical JSON artifact with a logical hash. Use `ghostapi e
 - Give the test job the smallest read-only repository permission possible.
 - Keep provider credentials out of the job; the safe fixture and local runtime use fake values only.
 - Upload the sanitized evidence in an always-run collection step, then decide the final job result after upload.
-- Treat a comment, chat notification, or dashboard summary as a pointer only. The check result and retained artifact are the audit record.
+- Treat a comment, chat notification, or dashboard summary as a pointer only. The check result and retained artifact are review evidence, not an immutable audit record.
 - Run any write-capable notification or API mutation in a separate job that does not execute untrusted contribution code.

@@ -1,6 +1,11 @@
 import type { ProviderName } from "../providers/types.js";
 import { getProviderPack } from "../providers/registry.js";
-import { inferGenericService, inferResourceName, isLikelyCollectionPath, isLikelyResourceByIdPath } from "./genericInference.js";
+import {
+  inferGenericService,
+  inferResourceName,
+  isLikelyCollectionPath,
+  isLikelyResourceByIdPath,
+} from "./genericInference.js";
 
 export function getSystemPrompt(provider: ProviderName): string {
   const base = `You are GhostAPI, an autonomous local internet simulator.
@@ -62,8 +67,17 @@ Keep IDs seemingly real, but prefixed with mock identifiers where appropriate (e
   }
 }
 
-export function getUserPrompt(method: string, path: string, query: Record<string, unknown>, body: unknown, provider: ProviderName = "generic"): string {
-  const genericContext = provider === "generic" ? buildGenericPromptContext(method, path, query, body) : "";
+export function getUserPrompt(
+  method: string,
+  path: string,
+  query: Record<string, unknown>,
+  body: unknown,
+  provider: ProviderName = "generic",
+): string {
+  const genericContext =
+    provider === "generic"
+      ? buildGenericPromptContext(method, path, query, body)
+      : "";
 
   return `Generate a realistic JSON response for this request:
 Method: ${method}
@@ -74,10 +88,19 @@ ${genericContext}
 `;
 }
 
-export function buildGenericPromptContext(method: string, path: string, query: Record<string, unknown>, body: unknown): string {
+export function buildGenericPromptContext(
+  method: string,
+  path: string,
+  query: Record<string, unknown>,
+  body: unknown,
+): string {
   const serviceLabel = inferGenericService(path, query, body);
   const resourceName = inferResourceName(path);
-  const endpointShape = isLikelyCollectionPath(method, path) ? "collection" : isLikelyResourceByIdPath(path) ? "resource-by-id" : "mutation-or-action";
+  const endpointShape = isLikelyCollectionPath(method, path)
+    ? "collection"
+    : isLikelyResourceByIdPath(path)
+      ? "resource-by-id"
+      : "mutation-or-action";
 
   return `Generic fallback context:
 Service label: ${serviceLabel}

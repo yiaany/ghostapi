@@ -7,7 +7,7 @@ export {
   formatImportSummary,
   formatRemovalAnalysis,
   formatRoiReport,
-  LocalInventoryController
+  LocalInventoryController,
 } from "./inventoryController.js";
 export type { InventoryControllerOptions } from "./inventoryController.js";
 export {
@@ -35,7 +35,7 @@ export {
   validateFindingsAndRemediations,
   validateImportPayload,
   validateOperator,
-  validateState
+  validateState,
 } from "./types.js";
 export type {
   AgentRecord,
@@ -95,7 +95,7 @@ export type {
   SideEffectKind,
   SideEffectRecord,
   ToolKind,
-  ToolRecord
+  ToolRecord,
 } from "./types.js";
 export {
   computeBlastRadius,
@@ -106,5 +106,5 @@ export {
   findAttackPaths,
   findingKey,
   graphEdges,
-  normalizeFreshnessDays
+  normalizeFreshnessDays,
 } from "./analysis.js";

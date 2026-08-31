@@ -18,7 +18,7 @@ export function normalizeRequest(request: Request): NormalizedRequest {
     query: sanitizeRecord(request.query),
     headers: sanitizeHeaders(request.headers),
     body: sanitizeSecrets(getSafeBody(request)),
-    receivedAt: new Date().toISOString()
+    receivedAt: new Date().toISOString(),
   };
 
   return normalized;
@@ -34,7 +34,11 @@ function getSafeBody(request: Request): unknown {
 function sanitizeRecord(value: unknown): Record<string, unknown> {
   const sanitized = sanitizeSecrets(value);
 
-  if (sanitized === null || typeof sanitized !== "object" || Array.isArray(sanitized)) {
+  if (
+    sanitized === null ||
+    typeof sanitized !== "object" ||
+    Array.isArray(sanitized)
+  ) {
     return {};
   }
 

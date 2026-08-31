@@ -28,13 +28,13 @@ Organizations are tenant boundaries. Projects, environments, scenarios, evidence
 
 All authorization uses the centralized `TEAM_PERMISSION_MATRIX`. The least-privilege matrix is:
 
-| Role | Permissions |
-| --- | --- |
-| `owner` | `member.manage`, `project.manage`, `environment.manage`, `policy.manage`, `token.manage`, `service_account.manage`, `audit.read`, `audit.export`, `data.delete`, `retention.manage`, all scoped reads, `scenario.publish`, `evidence.upload` |
-| `admin` | Everything listed for owner except `member.manage` |
-| `developer` | Scoped reads, `scenario.publish`, `evidence.upload` |
-| `viewer` | Scoped reads only |
-| `service_account` | Token-scoped project/environment reads, `scenario.publish`, and `evidence.upload` only; no organization-wide policy or audit access |
+| Role              | Permissions                                                                                                                                                                                                                                  |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `owner`           | `member.manage`, `project.manage`, `environment.manage`, `policy.manage`, `token.manage`, `service_account.manage`, `audit.read`, `audit.export`, `data.delete`, `retention.manage`, all scoped reads, `scenario.publish`, `evidence.upload` |
+| `admin`           | Everything listed for owner except `member.manage`                                                                                                                                                                                           |
+| `developer`       | Scoped reads, `scenario.publish`, `evidence.upload`                                                                                                                                                                                          |
+| `viewer`          | Scoped reads only                                                                                                                                                                                                                            |
+| `service_account` | Token-scoped project/environment reads, `scenario.publish`, and `evidence.upload` only; no organization-wide policy or audit access                                                                                                          |
 
 `admin` cannot grant members or issue, rotate, or revoke a token for an owner. `owner` can manage every human-member token. Service-account actors have a distinct `service:<id>` audit identity and cannot impersonate a human member.
 

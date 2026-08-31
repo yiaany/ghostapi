@@ -39,7 +39,11 @@ export function resolveDataPath(...segments: string[]): string {
   const target = resolve(root, ...segments);
   const relativePath = relative(root, target);
 
-  if (relativePath === ".." || relativePath.startsWith(`..${sep}`) || isAbsolute(relativePath)) {
+  if (
+    relativePath === ".." ||
+    relativePath.startsWith(`..${sep}`) ||
+    isAbsolute(relativePath)
+  ) {
     throw new Error("GhostAPI data path must stay inside GHOSTAPI_DATA_DIR.");
   }
 
@@ -73,6 +77,6 @@ export function getDataPaths(): DataPaths {
     reconciliationStore: resolveDataPath("reliability", "reconciliation.json"),
     costStore: resolveDataPath("reliability", "costs.json"),
     backups: resolveDataPath("reliability", "backups"),
-    inventoryStore: resolveDataPath("inventory.json")
+    inventoryStore: resolveDataPath("inventory.json"),
   };
 }
