@@ -11,14 +11,19 @@ export type Database = {
 
 export function createDatabase(config: HostedConfig): Database {
   const primary = createPool(config.databaseUrl, "ghostapi-hosted-primary");
-  const reader = config.databaseReadUrl === undefined ? primary : createPool(config.databaseReadUrl, "ghostapi-hosted-reader");
+  const reader =
+    config.databaseReadUrl === undefined
+      ? primary
+      : createPool(config.databaseReadUrl, "ghostapi-hosted-reader");
   const auth = createPool(config.authDatabaseUrl, "ghostapi-hosted-auth");
 
   return {
     primary,
     reader,
     auth,
-    async transaction<T>(operation: (client: PoolClient) => Promise<T>): Promise<T> {
+    async transaction<T>(
+      operation: (client: PoolClient) => Promise<T>,
+    ): Promise<T> {
       const client = await primary.connect();
       try {
         await client.query("begin");
@@ -33,8 +38,12 @@ export function createDatabase(config: HostedConfig): Database {
       }
     },
     async close(): Promise<void> {
-      await Promise.all([primary.end(), reader === primary ? Promise.resolve() : reader.end(), auth.end()]);
-    }
+      await Promise.all([
+        primary.end(),
+        reader === primary ? Promise.resolve() : reader.end(),
+        auth.end(),
+      ]);
+    },
   };
 }
 
@@ -46,6 +55,6 @@ function createPool(connectionString: string, applicationName: string): Pool {
     min: 2,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 2_000,
-    maxLifetimeSeconds: 300
+    maxLifetimeSeconds: 300,
   });
 }

@@ -15,12 +15,12 @@ The inventory layer adds no provider, credential, network egress, or hosted cont
 
 ## Trust Boundaries
 
-| Boundary | In scope | Out of scope |
-| --- | --- | --- |
-| Operator identity | Every inventory action authenticates through an injectable authorizer and requires an explicit permission (`inventory.import` / `inventory.inspect` / `inventory.analyze` / `inventory.remediate` / `inventory.export`); the test authorizer binds issued identities by reference | Real authn/authz infrastructure |
-| Import sources | Imports declare a source (`config` / `ci` / `gateway` / `cloud`) that is recorded as provenance on every record and edge | Live provider or CI credentials; the layer never reaches out to a source |
-| Tenant isolation | All reads and writes are filtered by `tenantId`; graph, findings, export, attack paths, removal, and ROI are tenant-scoped | Multi-tenant federation |
-| Store | Regular non-symlink JSON file, owner-only on POSIX, bounded bytes and record counts | Remote/distributed storage |
+| Boundary          | In scope                                                                                                                                                                                                                                                                          | Out of scope                                                             |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Operator identity | Every inventory action authenticates through an injectable authorizer and requires an explicit permission (`inventory.import` / `inventory.inspect` / `inventory.analyze` / `inventory.remediate` / `inventory.export`); the test authorizer binds issued identities by reference | Real authn/authz infrastructure                                          |
+| Import sources    | Imports declare a source (`config` / `ci` / `gateway` / `cloud`) that is recorded as provenance on every record and edge                                                                                                                                                          | Live provider or CI credentials; the layer never reaches out to a source |
+| Tenant isolation  | All reads and writes are filtered by `tenantId`; graph, findings, export, attack paths, removal, and ROI are tenant-scoped                                                                                                                                                        | Multi-tenant federation                                                  |
+| Store             | Regular non-symlink JSON file, owner-only on POSIX, bounded bytes and record counts                                                                                                                                                                                               | Remote/distributed storage                                               |
 
 ## Assets
 
@@ -76,26 +76,26 @@ Edges are created only from the importing tenant's records, are keyed by a deriv
 
 ## Permissions And Capabilities Summary
 
-| Action | Check |
-| --- | --- |
-| Import | operator authorizer + `inventory.import` |
-| Inspect / graph / attack paths / blast radius / list remediations | operator authorizer + `inventory.inspect` |
-| Analyze / removal analysis / ROI | operator authorizer + `inventory.analyze` |
-| Propose / apply / reject remediations | operator authorizer + `inventory.remediate` |
-| Export | operator authorizer + `inventory.export` |
+| Action                                                            | Check                                       |
+| ----------------------------------------------------------------- | ------------------------------------------- |
+| Import                                                            | operator authorizer + `inventory.import`    |
+| Inspect / graph / attack paths / blast radius / list remediations | operator authorizer + `inventory.inspect`   |
+| Analyze / removal analysis / ROI                                  | operator authorizer + `inventory.analyze`   |
+| Propose / apply / reject remediations                             | operator authorizer + `inventory.remediate` |
+| Export                                                            | operator authorizer + `inventory.export`    |
 
 ## Limits
 
-| Resource | Limit |
-| --- | --- |
-| Store bytes | 8 MiB |
-| Import sources / import runs | 64 / 256 |
-| Agents / tools / identities | 500 / 500 / 500 |
+| Resource                             | Limit               |
+| ------------------------------------ | ------------------- |
+| Store bytes                          | 8 MiB               |
+| Import sources / import runs         | 64 / 256            |
+| Agents / tools / identities          | 500 / 500 / 500     |
 | Providers / resources / side effects | 200 / 1,000 / 2,000 |
-| Credentials / policies | 500 / 100 |
-| Graph edges | 6,000 |
-| Findings / remediations | 3,000 / 1,000 |
-| References / scopes per record | 64 / 32 |
+| Credentials / policies               | 500 / 100           |
+| Graph edges                          | 6,000               |
+| Findings / remediations              | 3,000 / 1,000       |
+| References / scopes per record       | 64 / 32             |
 
 ## Out Of Scope
 

@@ -1,7 +1,8 @@
 import type { IncomingHttpHeaders } from "node:http";
 import type { NormalizedRequest } from "../proxy/requestNormalizer.js";
 
-export type ProviderName = "stripe" | "twilio" | "resend" | "github" | "discord" | "openai" | "generic";
+export type ProviderName =
+  "stripe" | "twilio" | "resend" | "github" | "discord" | "openai" | "generic";
 
 export type ProviderErrorDetails = {
   status: number;
@@ -68,7 +69,9 @@ export type ProviderRuntimeCapabilities = {
 };
 
 export type ProviderRuntime = {
-  requireCapability<Name extends keyof ProviderRuntimeCapabilities>(name: Name): ProviderRuntimeCapabilities[Name];
+  requireCapability<Name extends keyof ProviderRuntimeCapabilities>(
+    name: Name,
+  ): ProviderRuntimeCapabilities[Name];
 };
 
 export type ProviderPackCapabilities = {
@@ -118,25 +121,38 @@ export type ProviderConformanceFixture = {
   name: string;
   request: NormalizedRequest;
   assertResponse: (response: ProviderResponse) => string | null;
-  assertStateTransition: (transition: ProviderStateTransition | null, response: ProviderResponse) => string | null;
+  assertStateTransition: (
+    transition: ProviderStateTransition | null,
+    response: ProviderResponse,
+  ) => string | null;
 };
 
 export type ProviderPack = ProviderAdapter & {
-  manifest: ProviderPackManifest & { implementation: "pack"; packVersion: string; apiVersions: { default: string; supported: string[] } };
+  manifest: ProviderPackManifest & {
+    implementation: "pack";
+    packVersion: string;
+    apiVersions: { default: string; supported: string[] };
+  };
   detection: {
     priority: number;
     matches: (input: ProviderPackDetectionInput) => boolean;
   };
   parseRequest: (request: NormalizedRequest) => unknown;
   selectApiVersion: (request: NormalizedRequest) => ProviderApiVersionResult;
-  validate: (parsedRequest: unknown, request: NormalizedRequest) => ProviderErrorDetails | null;
+  validate: (
+    parsedRequest: unknown,
+    request: NormalizedRequest,
+  ) => ProviderErrorDetails | null;
   handleDeterministic: (input: {
     request: NormalizedRequest;
     parsedRequest: unknown;
     apiVersion: string;
     runtime: ProviderRuntime;
   }) => ProviderResponse;
-  createResponseHeaders: (input: { apiVersion: string; runtime: ProviderRuntime }) => Record<string, string>;
+  createResponseHeaders: (input: {
+    apiVersion: string;
+    runtime: ProviderRuntime;
+  }) => Record<string, string>;
   transitionState: (input: {
     request: NormalizedRequest;
     response: ProviderResponse;

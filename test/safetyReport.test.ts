@@ -17,14 +17,24 @@ describe("safety report", () => {
     await writeFile(join(tempDir, "package.json"), "{}", "utf8");
     await mkdir(join(tempDir, "src"), { recursive: true });
     await mkdir(join(tempDir, "test"), { recursive: true });
-    await writeFile(join(tempDir, "src", "client.ts"), "const host = 'https://api.stripe.com';", "utf8");
-    await writeFile(join(tempDir, "test", "fixture.ts"), "const host = 'https://api.stripe.com'; const key = 'sk_live_abcdefghijklmnop';", "utf8");
+    await writeFile(
+      join(tempDir, "src", "client.ts"),
+      "const host = 'https://api.stripe.com';",
+      "utf8",
+    );
+    await writeFile(
+      join(tempDir, "test", "fixture.ts"),
+      "const host = 'https://api.stripe.com'; const key = 'sk_live_abcdefghijklmnop';",
+      "utf8",
+    );
 
     const report = await generateSafetyReport(tempDir);
 
-    expect(report.findings).toEqual(expect.arrayContaining([
-      expect.objectContaining({ file: "src/client.ts", severity: "high" }),
-      expect.objectContaining({ file: "test/fixture.ts", severity: "low" })
-    ]));
+    expect(report.findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ file: "src/client.ts", severity: "high" }),
+        expect.objectContaining({ file: "test/fixture.ts", severity: "low" }),
+      ]),
+    );
   });
 });

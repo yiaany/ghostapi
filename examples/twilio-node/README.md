@@ -15,7 +15,7 @@ Send a message:
 ```bash
 curl -X POST http://localhost:8080/2010-04-01/Accounts/AC_mock/Messages.json \
   -H "content-type: application/x-www-form-urlencoded" \
-  -d "To=+15551234567&From=+15557654321&Body=Hello%20from%20GhostAPI"
+  -d "To=%2B15551234567&From=%2B15557654321&Body=Hello%20from%20GhostAPI"
 ```
 
 GhostAPI detects Twilio from the `/2010-04-01/Accounts/...` path and returns a local message SID.

@@ -7,7 +7,7 @@ export {
   createTestBreakGlassAuthorizer,
   createTestCredentialExecutor,
   createTestCredentialVault,
-  createTestWorkloadIdentityProvider
+  createTestWorkloadIdentityProvider,
 } from "./credentialBroker.js";
 export type {
   BreakGlassApproval,
@@ -25,5 +25,5 @@ export type {
   WorkloadBinding,
   WorkloadIdentity,
   WorkloadIdentityVerifier,
-  WorkloadKind
+  WorkloadKind,
 } from "./credentialBroker.js";

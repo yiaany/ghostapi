@@ -1,0 +1,26 @@
+name: OSV Scanner
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "41 4 * * 3"
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: google/osv-scanner-action/osv-scanner-action@b77c075a1235514558f0eb88dbd31e22c45e0cd2 # v2.3.0
+        with:
+          scan-args: |-
+            --lockfile=package-lock.json
+            --lockfile=hosted/package-lock.json

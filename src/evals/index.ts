@@ -4,7 +4,7 @@ export {
   formatEvalReport,
   loadEvalSpec,
   runEval,
-  scoreEval
+  scoreEval,
 } from "./evals.js";
 export type {
   EvalExpectation,
@@ -13,5 +13,5 @@ export type {
   EvalRunOptions,
   EvalScoreComponent,
   EvalSpec,
-  EvalTemplateName
+  EvalTemplateName,
 } from "./evals.js";

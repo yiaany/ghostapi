@@ -5,15 +5,28 @@ import { clearCache } from "../src/cache/index.js";
 import { clearEvents, getEventsHistory } from "../src/server/eventsStore.js";
 import { clearState } from "../src/state/stateStore.js";
 import { resetFaultLabForTests } from "../src/fault/faultLab.js";
-import { clearApiBehaviorsForTests, setApiBehavior } from "../src/behavior/behaviorStore.js";
+import {
+  clearApiBehaviorsForTests,
+  setApiBehavior,
+} from "../src/behavior/behaviorStore.js";
 import type { ServerConfig } from "../src/config/serverConfig.js";
-import { genericTaskBody, stripeCustomerCreateBody } from "./fixtures/requests.js";
+import {
+  genericTaskBody,
+  stripeCustomerCreateBody,
+} from "./fixtures/requests.js";
 import { closeServer } from "./serverTestUtils.js";
 import { getDataPaths } from "../src/config/dataPaths.js";
 
-const baseConfig = { host: "127.0.0.1", port: 8080, model: "gpt-4o-mini" } satisfies ServerConfig;
+const baseConfig = {
+  host: "127.0.0.1",
+  port: 8080,
+  model: "gpt-4o-mini",
+} satisfies ServerConfig;
 
-async function withServer<T>(config: ServerConfig, test: (baseUrl: string) => Promise<T>): Promise<T> {
+async function withServer<T>(
+  config: ServerConfig,
+  test: (baseUrl: string) => Promise<T>,
+): Promise<T> {
   const app = await createServer(config);
   const server = app.listen(0);
   const address = server.address();
@@ -44,7 +57,7 @@ describe("proxy flow integration", () => {
       const createResponse = await fetch(`${baseUrl}/v1/customers`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(stripeCustomerCreateBody)
+        body: JSON.stringify(stripeCustomerCreateBody),
       });
       const created = await createResponse.json();
 
@@ -53,46 +66,84 @@ describe("proxy flow integration", () => {
 
       expect(readResponse.headers.get("x-ghostapi-state")).toBe("HIT");
       expect(readBody.id).toBe(created.id);
-      expect(getEventsHistory().at(-1)).toMatchObject({ source: "state", statusCode: 200, path: `/v1/customers/${created.id}` });
+      expect(getEventsHistory().at(-1)).toMatchObject({
+        source: "state",
+        statusCode: 200,
+        path: `/v1/customers/${created.id}`,
+      });
     });
   });
 
   it("serves cache hits for repeated equivalent requests", async () => {
     await withServer(baseConfig, async (baseUrl) => {
-      const first = await fetch(`${baseUrl}/tasks`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(genericTaskBody) });
-      const second = await fetch(`${baseUrl}/tasks`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(genericTaskBody) });
+      const first = await fetch(`${baseUrl}/tasks`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(genericTaskBody),
+      });
+      const second = await fetch(`${baseUrl}/tasks`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(genericTaskBody),
+      });
 
       expect(first.headers.get("x-ghostapi-cache")).toBe("MISS");
       expect(second.headers.get("x-ghostapi-cache")).toBe("HIT");
-      expect(getEventsHistory().at(-1)).toMatchObject({ source: "cache", path: "/tasks" });
+      expect(getEventsHistory().at(-1)).toMatchObject({
+        source: "cache",
+        path: "/tasks",
+      });
     });
   });
 
   it("short-circuits provider validation errors", async () => {
     await withServer(baseConfig, async (baseUrl) => {
-      const response = await fetch(`${baseUrl}/v1/payment_intents`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+      const response = await fetch(`${baseUrl}/v1/payment_intents`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
       const body = await response.json();
 
       expect(response.status).toBe(400);
       expect(body.error.param).toBe("amount");
-      expect(getEventsHistory().at(-1)).toMatchObject({ source: "error", statusCode: 400, path: "/v1/payment_intents" });
+      expect(getEventsHistory().at(-1)).toMatchObject({
+        source: "error",
+        statusCode: 400,
+        path: "/v1/payment_intents",
+      });
     });
   });
 
   it("falls back locally when AI is unavailable without external API calls", async () => {
     await withServer(baseConfig, async (baseUrl) => {
-      const response = await fetch(`${baseUrl}/tasks`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(genericTaskBody) });
+      const response = await fetch(`${baseUrl}/tasks`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(genericTaskBody),
+      });
       const body = await response.json();
 
       expect(response.status).toBe(200);
-      expect(body).toMatchObject({ provider: "generic", object: "task", title: genericTaskBody.title });
-      expect(getEventsHistory().at(-1)).toMatchObject({ source: "fallback", provider: "generic:rest-like" });
+      expect(body).toMatchObject({
+        provider: "generic",
+        object: "task",
+        title: genericTaskBody.title,
+      });
+      expect(getEventsHistory().at(-1)).toMatchObject({
+        source: "fallback",
+        provider: "generic:rest-like",
+      });
     });
   });
 
   it("uses explicit offline fallback without requiring an API key", async () => {
     await withServer({ ...baseConfig, offline: true }, async (baseUrl) => {
-      const response = await fetch(`${baseUrl}/tasks`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(genericTaskBody) });
+      const response = await fetch(`${baseUrl}/tasks`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(genericTaskBody),
+      });
       const body = await response.json();
 
       expect(response.status).toBe(200);
@@ -105,15 +156,25 @@ describe("proxy flow integration", () => {
     await withServer(baseConfig, async (baseUrl) => {
       await fetch(`${baseUrl}/admin/api/products.json`, {
         method: "POST",
-        headers: { "content-type": "application/json", "x-api-key": "secret_header_value" },
-        body: JSON.stringify({ title: "Desk", api_key: "secret" })
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": "secret_header_value",
+        },
+        body: JSON.stringify({ title: "Desk", api_key: "secret" }),
       });
 
       const eventsResponse = await fetch(`${baseUrl}/api/events`);
-      const events = await eventsResponse.json() as Array<Record<string, unknown>>;
+      const events = (await eventsResponse.json()) as Array<
+        Record<string, unknown>
+      >;
       const event = events.at(-1) as Record<string, unknown>;
 
-      expect(event).toMatchObject({ provider: "generic:shopify-like", method: "POST", path: "/admin/api/products.json", statusCode: 200 });
+      expect(event).toMatchObject({
+        provider: "generic:shopify-like",
+        method: "POST",
+        path: "/admin/api/products.json",
+        statusCode: 200,
+      });
       expect(JSON.stringify(event)).not.toContain("secret_header_value");
       expect(JSON.stringify(event)).not.toContain('"api_key":"secret"');
       expect(event).toHaveProperty("durationMs");
@@ -123,20 +184,33 @@ describe("proxy flow integration", () => {
   });
 
   it("injects Fault Lab provider errors before normal proxy flow", async () => {
-    const randomSpy = vi.spyOn(Math, "random").mockReturnValueOnce(0.1).mockReturnValueOnce(0.1);
+    const randomSpy = vi
+      .spyOn(Math, "random")
+      .mockReturnValueOnce(0.1)
+      .mockReturnValueOnce(0.1);
     await withServer(baseConfig, async (baseUrl) => {
       const configResponse = await fetch(`${baseUrl}/api/fault-lab`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ enabled: true, latencyMs: 0, errorRate: 100, statusCode: 429, retryAfterSeconds: 5 })
+        body: JSON.stringify({
+          enabled: true,
+          latencyMs: 0,
+          errorRate: 100,
+          statusCode: 429,
+          retryAfterSeconds: 5,
+        }),
       });
 
-      expect(await configResponse.json()).toMatchObject({ enabled: true, errorRate: 100, statusCode: 429 });
+      expect(await configResponse.json()).toMatchObject({
+        enabled: true,
+        errorRate: 100,
+        statusCode: 429,
+      });
 
       const response = await fetch(`${baseUrl}/v1/customers`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(stripeCustomerCreateBody)
+        body: JSON.stringify(stripeCustomerCreateBody),
       });
       const body = await response.json();
 
@@ -144,28 +218,56 @@ describe("proxy flow integration", () => {
       expect(response.headers.get("x-ghostapi-fault-lab")).toBe("error");
       expect(response.headers.get("retry-after")).toBe("5");
       expect(body.error.type).toBe("rate_limit_error");
-      expect(getEventsHistory().at(-1)).toMatchObject({ source: "fault", statusCode: 429, provider: "stripe" });
+      expect(getEventsHistory().at(-1)).toMatchObject({
+        source: "fault",
+        statusCode: 429,
+        provider: "stripe",
+      });
     });
     randomSpy.mockRestore();
   });
 
   it("serves MCP-configured API behavior before cache and AI", async () => {
-    await setApiBehavior({ method: "POST", path: "/tasks", status: 429, body: { error: "agent configured" } });
+    await setApiBehavior({
+      method: "POST",
+      path: "/tasks",
+      status: 429,
+      body: { error: "agent configured" },
+    });
 
     await withServer(baseConfig, async (baseUrl) => {
-      const response = await fetch(`${baseUrl}/tasks`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(genericTaskBody) });
+      const response = await fetch(`${baseUrl}/tasks`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(genericTaskBody),
+      });
       const body = await response.json();
 
       expect(response.status).toBe(429);
       expect(response.headers.get("x-ghostapi-behavior")).toBe("HIT");
       expect(body).toEqual({ error: "agent configured" });
-      expect(getEventsHistory().at(-1)).toMatchObject({ source: "behavior", statusCode: 429, path: "/tasks" });
+      expect(getEventsHistory().at(-1)).toMatchObject({
+        source: "behavior",
+        statusCode: 429,
+        path: "/tasks",
+      });
     });
   });
 
   it("follows a safe relative behavior redirect on the same origin", async () => {
-    await setApiBehavior({ method: "GET", path: "/redirect-start", status: 302, body: {}, headers: { location: "/redirect-target" } });
-    await setApiBehavior({ method: "GET", path: "/redirect-target", status: 200, body: { reached: true } });
+    await setApiBehavior({
+      method: "GET",
+      path: "/redirect-start",
+      status: 302,
+      body: {},
+      headers: { location: "/redirect-target" },
+    });
+    await setApiBehavior({
+      method: "GET",
+      path: "/redirect-target",
+      status: 200,
+      body: { reached: true },
+    });
 
     await withServer(baseConfig, async (baseUrl) => {
       const response = await fetch(`${baseUrl}/redirect-start`);
@@ -175,9 +277,27 @@ describe("proxy flow integration", () => {
   });
 
   it("does not follow unsafe persisted Location values", async () => {
-    const unsafeLocations = ["//outside.invalid/escape", "https://outside.invalid/escape", "javascript:alert(1)", "data:text/plain,escape", "/\\outside.invalid/escape"];
+    const unsafeLocations = [
+      "//outside.invalid/escape",
+      "https://outside.invalid/escape",
+      "javascript:alert(1)",
+      "data:text/plain,escape",
+      "/\\outside.invalid/escape",
+    ];
     for (const [index, location] of unsafeLocations.entries()) {
-      await writeFile(getDataPaths().behaviors, JSON.stringify({ [`GET /unsafe-${index}`]: { method: "GET", path: `/unsafe-${index}`, status: 302, body: {}, headers: { location } } }), "utf8");
+      await writeFile(
+        getDataPaths().behaviors,
+        JSON.stringify({
+          [`GET /unsafe-${index}`]: {
+            method: "GET",
+            path: `/unsafe-${index}`,
+            status: 302,
+            body: {},
+            headers: { location },
+          },
+        }),
+        "utf8",
+      );
       await withServer(baseConfig, async (baseUrl) => {
         const response = await fetch(`${baseUrl}/unsafe-${index}`);
         expect(response.status).toBe(302);
@@ -188,14 +308,27 @@ describe("proxy flow integration", () => {
   });
 
   it("applies a bounded deterministic behavior delay", async () => {
-    await setApiBehavior({ method: "POST", path: "/delayed", status: 200, body: { ok: true }, delayMs: 25 });
+    await setApiBehavior({
+      method: "POST",
+      path: "/delayed",
+      status: 200,
+      body: { ok: true },
+      delayMs: 25,
+    });
 
     await withServer(baseConfig, async (baseUrl) => {
-      const response = await fetch(`${baseUrl}/delayed`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+      const response = await fetch(`${baseUrl}/delayed`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
 
       expect(response.status).toBe(200);
       expect(response.headers.get("x-ghostapi-behavior-delay-ms")).toBe("25");
-      expect(getEventsHistory().at(-1)).toMatchObject({ source: "behavior", path: "/delayed" });
+      expect(getEventsHistory().at(-1)).toMatchObject({
+        source: "behavior",
+        path: "/delayed",
+      });
       expect(getEventsHistory().at(-1)?.durationMs).toBeGreaterThanOrEqual(20);
     });
   });

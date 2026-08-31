@@ -20,7 +20,9 @@ Backup is available programmatically:
 
 ```ts
 import { backupRuntime } from "@yiaany/ghostapi";
-const result = await backupRuntime({ destinationDir: ".ghostapi/reliability/backups/manual-drill" });
+const result = await backupRuntime({
+  destinationDir: ".ghostapi/reliability/backups/manual-drill",
+});
 // result: { backupId, path, fileCount, totalBytes, verified: true, createdAt }
 ```
 
@@ -30,7 +32,10 @@ The backup verifies every copied file (size + sha256 + JSON structure for `.json
 
 ```ts
 import { restoreRuntimeBackup } from "@yiaany/ghostapi";
-await restoreRuntimeBackup({ sourceDir: ".ghostapi/reliability/backups/manual-drill", targetDir: ".ghostapi-restored" });
+await restoreRuntimeBackup({
+  sourceDir: ".ghostapi/reliability/backups/manual-drill",
+  targetDir: ".ghostapi-restored",
+});
 ```
 
 Then point the runtime at the restored directory:
@@ -65,14 +70,14 @@ Restore refuses:
 
 ## Failure Modes
 
-| Symptom | Meaning | Action |
-| --- | --- | --- |
-| "Backup destination already exists" | Refusing to overwrite | Use a new destination or remove the old backup deliberately |
-| "Backup source entry is not valid JSON" | A `.json` file in the data dir is corrupt | Find and fix/delete the corrupt store, then re-back up |
-| "Backup file content changed during copy" | Concurrent write during backup | Stop writers, re-run backup |
-| "failed integrity verification" on restore | Backup was tampered or the disk changed | Do not restore; find the original source or a different backup |
-| "path escapes its root directory" | Crafted/tampered manifest | Reject the backup as untrusted |
-| `/health/readiness` returns 503 | A restored store is corrupt | Inspect the `degraded` store in the report and repair/delete it, then re-check |
+| Symptom                                    | Meaning                                   | Action                                                                         |
+| ------------------------------------------ | ----------------------------------------- | ------------------------------------------------------------------------------ |
+| "Backup destination already exists"        | Refusing to overwrite                     | Use a new destination or remove the old backup deliberately                    |
+| "Backup source entry is not valid JSON"    | A `.json` file in the data dir is corrupt | Find and fix/delete the corrupt store, then re-back up                         |
+| "Backup file content changed during copy"  | Concurrent write during backup            | Stop writers, re-run backup                                                    |
+| "failed integrity verification" on restore | Backup was tampered or the disk changed   | Do not restore; find the original source or a different backup                 |
+| "path escapes its root directory"          | Crafted/tampered manifest                 | Reject the backup as untrusted                                                 |
+| `/health/readiness` returns 503            | A restored store is corrupt               | Inspect the `degraded` store in the report and repair/delete it, then re-check |
 
 ## Retention Guidance
 

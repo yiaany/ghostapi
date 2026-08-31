@@ -12,19 +12,19 @@ export function createAuth(config: HostedConfig, database: Pool) {
     socialProviders: {
       google: {
         clientId: config.googleClientId,
-        clientSecret: config.googleClientSecret
-      }
+        clientSecret: config.googleClientSecret,
+      },
     },
     advanced: {
       database: { generateId: "uuid" },
       useSecureCookies: true,
-      cookiePrefix: "ghostapi"
+      cookiePrefix: "ghostapi",
     },
     session: {
       expiresIn: 60 * 60 * 24 * 7,
       updateAge: 60 * 60 * 24,
-      freshAge: 60 * 10
+      freshAge: 60 * 10,
     },
-    account: { accountLinking: { enabled: false } }
+    account: { accountLinking: { enabled: false } },
   });
 }

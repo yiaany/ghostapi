@@ -93,7 +93,7 @@ Without `--evidence`, the eval command launches `task.command` through the exist
 
 Eval specs are local JSON data only. Schema v1 describes `syntheticWorld`, `task.command`, `injectedFailures`, deterministic `expectations`, `forbidden` actions, `limits`, and a points `rubric`. Unknown fields, oversized specs, symlinks, path traversal, enabled LLM judge settings, duplicate rubric references, and incomplete point totals are rejected. Built-in templates cover retry honoring `Retry-After`, duplicate payment prevention, webhook signature validation, no secret in logs, timeout recovery, and no production bypass.
 
-Core security score uses facts from sanitized evidence only. LLM-as-judge is optional future commentary and is never part of the core score. Forbidden actions such as production egress or secret leakage override cosmetic success and force the core score to `0`. A zero production-egress score requires completed Linux namespace run evidence; a retry score requires a retryable response followed by a matching later request. Eval reports include a stable logical hash, evidence hash/link, component-level reasons, repeatability notes, and no raw secrets.
+Core security score uses facts from sanitized evidence only. LLM-as-judge is optional future commentary and is never part of the core score. Forbidden actions such as observed production egress or secret leakage override cosmetic success and force the core score to `0`. The current backend does not award a zero production-egress score because it does not count kernel-denied socket attempts; a completed namespace run records the boundary lifecycle only. A retry score requires a retryable response followed by a matching later request. Eval reports include a stable logical hash, evidence hash/link, component-level reasons, repeatability notes, and no raw secrets.
 
 ## Stateful Synthetic Worlds
 
@@ -111,7 +111,11 @@ Schema-v1 worlds live under `.ghostapi/worlds/<id>.world.json`. A manifest defin
 ```json
 {
   "syntheticWorld": {
-    "world": { "id": "subscription-recovery", "version": "1.0.0", "seed": "demo-seed" },
+    "world": {
+      "id": "subscription-recovery",
+      "version": "1.0.0",
+      "seed": "demo-seed"
+    },
     "providers": ["stripe", "github", "resend", "generic"],
     "scenarios": ["stripe-subscription-payment-failed"]
   }
@@ -137,7 +141,7 @@ const access = createTestLedgerAccessAuthorizer(); // Test helper only.
 const tenantAudit = access.issue({
   tenantId: "tenant-a",
   principalId: "audit-service",
-  permissions: ["append", "read", "export"]
+  permissions: ["append", "read", "export"],
 });
 const ledger = createLocalActionLedger({ accessAuthorizer: access.authorizer });
 
@@ -152,7 +156,10 @@ Turn an action with a confirmed or ambiguous outcome into a local regression fix
 
 ```ts
 const incident = await ledger.createIncidentFixture(tenantAudit, "action-one");
-const result = await ledger.replayIncidentFixture(tenantAudit, incident.fixture);
+const result = await ledger.replayIncidentFixture(
+  tenantAudit,
+  incident.fixture,
+);
 ```
 
 The pipeline creates a deterministic synthetic world and one sanitized, sequence-strict local scenario bundle. It does not open a network connection, call a provider, reuse an original credential, or copy an action payload into the ledger. An ambiguous or unverified result reproduces as `409 requires_reconciliation`, never as success. Add the generated `*.fixture.json` and `*.bundle.json` to a normal Vitest/CI fixture test to make the incident a regression check.
@@ -165,7 +172,7 @@ Use the public API to construct the exact action, then execute it through a veri
 import {
   createApprovalInboxExecutionFlow,
   createEd25519ActionApprovalSigner,
-  createEd25519ActionApprovalVerifier
+  createEd25519ActionApprovalVerifier,
 } from "@yiaany/ghostapi";
 
 const action = {
@@ -183,22 +190,27 @@ const action = {
     "stripe.subscription.past_due",
     "email.subscription_payment_failed",
     "github.recovery_issue",
-    "generic_rest.payment_failed"
+    "generic_rest.payment_failed",
   ],
   riskClass: "write",
   reversibility: "none",
   policy: { version: 1, hash: "<SHA-256 of reviewed policy source>" },
   evidence: { hash: "<SHA-256 evidence reference>" },
   expiresAt: "2030-01-01T00:00:00.000Z",
-  nonce: "review-001"
+  nonce: "review-001",
 } as const;
 
-const approvalSigner = createEd25519ActionApprovalSigner({ keyId: "local-approval-2026", privateKey: privateKeyPem });
-const approvalVerifier = createEd25519ActionApprovalVerifier({ trustedKeys: { "local-approval-2026": publicKeyPem } });
+const approvalSigner = createEd25519ActionApprovalSigner({
+  keyId: "local-approval-2026",
+  privateKey: privateKeyPem,
+});
+const approvalVerifier = createEd25519ActionApprovalVerifier({
+  trustedKeys: { "local-approval-2026": publicKeyPem },
+});
 const inbox = createApprovalInboxExecutionFlow({
   approverVerifier,
   approvalSigner,
-  approvalVerifier
+  approvalVerifier,
 });
 
 const approvalPolicy = {
@@ -211,7 +223,7 @@ const approvalPolicy = {
   criticalRisks: ["update"],
   velocity: { maxActions: 10, windowMs: 60_000 },
   approvalTtlMs: 10 * 60_000,
-  escalationTimeoutMs: 5 * 60_000
+  escalationTimeoutMs: 5 * 60_000,
 } as const;
 
 const request = await inbox.request(action, approvalPolicy, { confidence: 95 });
@@ -221,7 +233,7 @@ const receipt = await inbox.execute(
   request.id,
   { actorId: "billing-agent", workloadId: "recovery-worker" },
   { version: 1, hash: action.policy.hash, allowed: true },
-  approvalPolicy
+  approvalPolicy,
 );
 ```
 
@@ -257,14 +269,14 @@ Policies can restrict environment, actor, resource, amount, confidence, and acti
 
 `createLocalTrustLadder()` is a data-only preparation layer for the typed synthetic action contract. It does not call the action gateway, approval inbox, credential broker, vault, provider SDK, HTTP client, or a real provider. Its only target identity is `{ provider: "ghostapi-synthetic", environment: "synthetic" }`; production/test-account identity mixing is rejected.
 
-| Trust level | Local synthetic capability | External side effects |
-| --- | --- | --- |
-| `simulate` | Supported local preparation state. | Never. |
-| `shadow` | Supported hash-only comparison of predicted action/context with supplied actual input context. | Never. |
-| `dry-run` | Unsupported because `ghostapi-synthetic` has no provider-official dry-run semantic. It is never substituted with execution. | Never. |
-| `approve` | Supported preparation state that denotes the existing approval boundary requirement. | Never. |
-| `bounded-auto` | Supported preparation state with deterministic canary eligibility and predicted/actual outcome comparison evidence. | Never. |
-| `trusted` | Unsupported. Local synthetic state is not production authorization. | Never. |
+| Trust level    | Local synthetic capability                                                                                                  | External side effects |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| `simulate`     | Supported local preparation state.                                                                                          | Never.                |
+| `shadow`       | Supported hash-only comparison of predicted action/context with supplied actual input context.                              | Never.                |
+| `dry-run`      | Unsupported because `ghostapi-synthetic` has no provider-official dry-run semantic. It is never substituted with execution. | Never.                |
+| `approve`      | Supported preparation state that denotes the existing approval boundary requirement.                                        | Never.                |
+| `bounded-auto` | Supported preparation state with deterministic canary eligibility and predicted/actual outcome comparison evidence.         | Never.                |
+| `trusted`      | Unsupported. Local synthetic state is not production authorization.                                                         | Never.                |
 
 Promotion is owner-gated and never automatic: a verified stable owner principal must explicitly advance exactly one supported step and provide fresh evidence meeting minimum-run, required-eval, violation-rate, and error-rate policy thresholds. Canary scope is tenant/resource/percentage based and assigned from a stable SHA-256 bucket. Violations can auto-demote to `approve` or open a circuit breaker according to policy. Once a breaker is open or a configured stop condition is breached, the controller rejects further canary activity. `rollbackToApproval()` records its reason in the bounded local audit chain. The store contains hashes and bounded metadata only under `.ghostapi/trust-ladder.json`; it is not a durable production audit ledger or authorization system. Read [`docs/security/trust-ladder-threat-model.md`](security/trust-ladder-threat-model.md) before extending any execution path.
 
@@ -280,13 +292,13 @@ The scheduled `GhostAPI Kill Switch Game Day` workflow runs the non-destructive 
 
 ## Team Control-Plane Prototype
 
-The [design-partner validation kit](design-partners/README.md) records no independently verifiable interview, CI, bug-caught, LOI, or paid-pilot evidence in this repository, so the cloud/enterprise gate remains unmet. The included prototype remains a local typed library, not a hosted account system or web UI. It models organizations, members/roles, projects, environments, versioned scenario metadata, sanitized CI evidence summaries, distributed policy versions, short-lived revocable tokens, audit metadata, migrations, and bounded retention. The separate hosted pilot skeleton and its explicit deployment limits are documented in [`docs/hosted-pilot.md`](hosted-pilot.md).
+The repository records no independently verified customer, paid-pilot, or deployed-service evidence. The included prototype remains a local typed library, not a hosted account system or web UI. It models organizations, members/roles, projects, environments, versioned scenario metadata, sanitized CI evidence summaries, distributed policy versions, short-lived revocable tokens, review metadata, migrations, and bounded retention. The separate hosted experiment and its explicit deployment limits are documented in [`docs/hosted-pilot.md`](hosted-pilot.md).
 
-Local runtime behavior is unchanged and does not require login. Cloud sync is not implemented. The prototype never uploads raw traffic, code, secrets, request bodies, or provider credentials; evidence is accepted only after GhostAPI schema/hash validation and stored as a restricted summary. Read [`docs/team-control-plane.md`](team-control-plane.md) for the tenant model, API, storage limitations, incident response, and design-partner onboarding workflow.
+Local runtime behavior is unchanged and does not require login. Cloud sync is not implemented. The prototype has no upload transport for raw traffic, code, secrets, request bodies, or provider credentials; evidence is accepted only after GhostAPI schema/hash validation and stored as a restricted summary. Read [`docs/team-control-plane.md`](team-control-plane.md) for the tenant model, API, storage limitations, and incident-response boundary.
 
 ## Optional Local Product Telemetry
 
-GhostAPI has no telemetry by default. `ghostapi telemetry enable` stores only four local aggregate counters and up to eight ISO week labels in `.ghostapi/product-telemetry.json`; it has no network transport and never records source code, traffic, commands, provider names, repository identity, credentials, or secrets. Inspect the aggregate with `ghostapi telemetry status` or `ghostapi telemetry export --json`. `ghostapi telemetry disable` deletes it. See [`docs/design-partners/telemetry-plan.md`](design-partners/telemetry-plan.md) for the event schema and retention limits.
+GhostAPI has no telemetry by default. `ghostapi telemetry enable` stores only four local aggregate counters and up to eight ISO week labels in `.ghostapi/product-telemetry.json`; it has no network transport and does not record source code, traffic, commands, provider names, repository identity, credentials, or secrets. Inspect the aggregate with `ghostapi telemetry status` or `ghostapi telemetry export --json`. `ghostapi telemetry disable` deletes it. See [`docs/telemetry.md`](telemetry.md) for the retention and export boundary.
 
 ## Policy As Code
 
@@ -374,11 +386,14 @@ curl -X POST http://127.0.0.1:8080/v1/customers \
 ```ts
 import Stripe from "stripe";
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "stripe_test_ghostapi", {
-  host: process.env.GHOSTAPI_HOST ?? "127.0.0.1",
-  port: Number(process.env.GHOSTAPI_PORT ?? "8080"),
-  protocol: process.env.GHOSTAPI_PROTOCOL ?? "http"
-});
+export const stripe = new Stripe(
+  process.env.STRIPE_SECRET_KEY ?? "stripe_test_ghostapi",
+  {
+    host: process.env.GHOSTAPI_HOST ?? "127.0.0.1",
+    port: Number(process.env.GHOSTAPI_PORT ?? "8080"),
+    protocol: process.env.GHOSTAPI_PROTOCOL ?? "http",
+  },
+);
 ```
 
 ## OpenAI SDK
@@ -388,7 +403,7 @@ import OpenAI from "openai";
 
 export const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY ?? "sk-ghostapi",
-  baseURL: process.env.GHOSTAPI_OPENAI_BASE_URL ?? "http://127.0.0.1:8080/v1"
+  baseURL: process.env.GHOSTAPI_OPENAI_BASE_URL ?? "http://127.0.0.1:8080/v1",
 });
 ```
 
@@ -435,15 +450,41 @@ console.log(formatRuntimeHealth(report));
 ### SLOs
 
 ```ts
-import { createLocalSloController, createSloRecordIdentity, createTestSloOperatorAuthorizer } from "@yiaany/ghostapi";
+import {
+  createLocalSloController,
+  createSloRecordIdentity,
+  createTestSloOperatorAuthorizer,
+} from "@yiaany/ghostapi";
 
 const { authorizer, issue } = createTestSloOperatorAuthorizer();
-const operator = issue({ id: "sre", principalId: "sre-one", permissions: ["slo.configure", "slo.inspect"] });
+const operator = issue({
+  id: "sre",
+  principalId: "sre-one",
+  permissions: ["slo.configure", "slo.inspect"],
+});
 const controller = createLocalSloController({ operatorAuthorizer: authorizer });
-await controller.configureTarget({ identity: operator, target: { id: "availability.checkout", metric: "availability", windowMs: 60 * 60 * 1000, minimumSamples: 10, targetBps: 9_000 } });
+await controller.configureTarget({
+  identity: operator,
+  target: {
+    id: "availability.checkout",
+    metric: "availability",
+    windowMs: 60 * 60 * 1000,
+    minimumSamples: 10,
+    targetBps: 9_000,
+  },
+});
 
 const recordIdentity = createSloRecordIdentity(); // only the reconciliation service and its peers hold this
-await controller.recordSample({ metric: "availability", ok: true, runId: "run-1", actionId: "action-1", labels: { tenantId: "tenant-a" } }, recordIdentity);
+await controller.recordSample(
+  {
+    metric: "availability",
+    ok: true,
+    runId: "run-1",
+    actionId: "action-1",
+    labels: { tenantId: "tenant-a" },
+  },
+  recordIdentity,
+);
 
 const report = await controller.evaluate({ identity: operator });
 ```
@@ -453,10 +494,15 @@ Recording requires the record capability; configuring/evaluating requires an aut
 ### Reconciliation
 
 ```ts
-import { createLocalReconciliationService, createWorldStateReconciliationProvider } from "@yiaany/ghostapi";
+import {
+  createLocalReconciliationService,
+  createWorldStateReconciliationProvider,
+} from "@yiaany/ghostapi";
 
 const service = createLocalReconciliationService({
-  ledger, capability, provider: createWorldStateReconciliationProvider(async (actionId) => worldId),
+  ledger,
+  capability,
+  provider: createWorldStateReconciliationProvider(async (actionId) => worldId),
 });
 const report = await service.runReconciliation();
 ```
@@ -466,10 +512,24 @@ Reconciliation exports the tenant ledger (blocked if integrity fails), classifie
 ### Cost governance
 
 ```ts
-import { createLocalCostGovernance, createTestCostOperatorAuthorizer } from "@yiaany/ghostapi";
+import {
+  createLocalCostGovernance,
+  createTestCostOperatorAuthorizer,
+} from "@yiaany/ghostapi";
 
-const controller = createLocalCostGovernance({ operatorAuthorizer: authorizer });
-await controller.recordCost({ identity: operator, record: { tenantId: "tenant-a", runId: "run-1", actionId: "action-1", attribution, amounts } });
+const controller = createLocalCostGovernance({
+  operatorAuthorizer: authorizer,
+});
+await controller.recordCost({
+  identity: operator,
+  record: {
+    tenantId: "tenant-a",
+    runId: "run-1",
+    actionId: "action-1",
+    attribution,
+    amounts,
+  },
+});
 const report = await controller.report({ identity: operator });
 ```
 
@@ -480,8 +540,13 @@ const report = await controller.report({ identity: operator });
 ```ts
 import { backupRuntime, restoreRuntimeBackup } from "@yiaany/ghostapi";
 
-const backup = await backupRuntime({ destinationDir: ".ghostapi/reliability/backups/drill-1" });
-await restoreRuntimeBackup({ sourceDir: backup.path, targetDir: ".ghostapi-restored" });
+const backup = await backupRuntime({
+  destinationDir: ".ghostapi/reliability/backups/drill-1",
+});
+await restoreRuntimeBackup({
+  sourceDir: backup.path,
+  targetDir: ".ghostapi-restored",
+});
 ```
 
 Backups verify every file against a sha256 manifest, refuse to overwrite, and exclude only the canonical `cache`/`backups` data locations, top-level `runs`, lock and temp files, and symbolic links — nested folders named `cache` or `backups` are backed up normally. Restore re-verifies everything, rejects tampered or path-escaping manifests, and refuses a non-empty target directory. See the [disaster-recovery runbook](operations/disaster-recovery-runbook.md).
@@ -491,29 +556,67 @@ Backups verify every file against a sha256 manifest, refuse to overwrite, and ex
 The inventory layer is local-first and synthetic. It imports agent, identity, tool, provider, resource, side-effect, credential, and policy records with provenance and freshness into `.ghostapi/inventory.json`, and it never reaches out to a source. ROI and removal numbers come from imported counters and the local store only.
 
 ```ts
-import { createLocalInventoryController, createTestInventoryOperatorAuthorizer } from "@yiaany/ghostapi";
+import {
+  createLocalInventoryController,
+  createTestInventoryOperatorAuthorizer,
+} from "@yiaany/ghostapi";
 
 const { authorizer, issue } = createTestInventoryOperatorAuthorizer();
-const operator = issue({ id: "invop", principalId: "invop-one", tenantId: "tenant-a", permissions: ["inventory.import", "inventory.inspect", "inventory.analyze", "inventory.remediate", "inventory.export"] });
-const controller = createLocalInventoryController({ operatorAuthorizer: authorizer });
+const operator = issue({
+  id: "invop",
+  principalId: "invop-one",
+  tenantId: "tenant-a",
+  permissions: [
+    "inventory.import",
+    "inventory.inspect",
+    "inventory.analyze",
+    "inventory.remediate",
+    "inventory.export",
+  ],
+});
+const controller = createLocalInventoryController({
+  operatorAuthorizer: authorizer,
+});
 
 await controller.import(operator, {
   schemaVersion: 1,
   kind: "ghostapi.inventory-import",
-  source: { sourceId: "repo-config", sourceType: "config", sourceName: "Repo config" },
-  agents: [{ agentId: "agent-order", name: "Order assistant", identityIds: ["identity-order"], environmentIds: ["production"], gatewayManaged: true, killSwitchEnabled: true }],
-  identities: [{ identityId: "identity-order", principalId: "svc-order", role: "service_account", toolIds: ["tool-stripe"], environmentIds: ["production"], scopes: ["read", "charge"] }]
+  source: {
+    sourceId: "repo-config",
+    sourceType: "config",
+    sourceName: "Repo config",
+  },
+  agents: [
+    {
+      agentId: "agent-order",
+      name: "Order assistant",
+      identityIds: ["identity-order"],
+      environmentIds: ["production"],
+      gatewayManaged: true,
+      killSwitchEnabled: true,
+    },
+  ],
+  identities: [
+    {
+      identityId: "identity-order",
+      principalId: "svc-order",
+      role: "service_account",
+      toolIds: ["tool-stripe"],
+      environmentIds: ["production"],
+      scopes: ["read", "charge"],
+    },
+  ],
 });
 ```
 
 Imports carry a digest; re-importing the same payload refreshes freshness without duplicating records or edges. Every graph edge has provenance (`source`, `importedAt`, `importedBy`) and a freshness status.
 
 ```ts
-const snapshot = await controller.inspect(operator);          // tenant-scoped records, edges, findings
+const snapshot = await controller.inspect(operator); // tenant-scoped records, edges, findings
 const paths = await controller.attackPaths(operator, "agent-order");
 const blast = await controller.blastRadius(operator, "agent-order"); // heuristic-labeled, advisory
-const { findings } = await controller.analyze(operator);       // detections on the current store
-const exported = await controller.export(operator);            // inventory, policies, evidence, ROI
+const { findings } = await controller.analyze(operator); // detections on the current store
+const exported = await controller.export(operator); // inventory, policies, evidence, ROI
 ```
 
 Detections cover orphaned agents, stale/unused credentials, excessive permissions, unowned production integrations, agents outside the gateway, missing kill switches, missing evidence, and policy drift. Heuristic findings are explicitly labeled; coverage gaps are surfaced as risk, not ignored.
@@ -521,10 +624,16 @@ Detections cover orphaned agents, stale/unused credentials, excessive permission
 Remediations are proposed against a finding and applied locally: assign an owner, reduce credential scopes (never expanded — proposals that add or keep scopes are rejected), revoke a credential, onboard an agent through the gateway, or create an eval scenario reference.
 
 ```ts
-const excessive = snapshot.findings.find((finding) => finding.kind === "excessive_permissions");
+const excessive = snapshot.findings.find(
+  (finding) => finding.kind === "excessive_permissions",
+);
 const proposal = await controller.proposeRemediation(operator, {
-  findingId: excessive!.findingId, kind: "reduce_scope", targetKind: "credential", targetId: "cred-stripe",
-  rationale: "Drop the unused admin scope.", reducedScopes: ["read", "charge"]
+  findingId: excessive!.findingId,
+  kind: "reduce_scope",
+  targetKind: "credential",
+  targetId: "cred-stripe",
+  rationale: "Drop the unused admin scope.",
+  reducedScopes: ["read", "charge"],
 });
 await controller.applyRemediation(operator, proposal.remediationId);
 ```

@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { clearState, getStateStore, saveToStateStore } from "../src/state/stateStore.js";
-import { extractIdFromPath, extractIdFromResponse } from "../src/state/stateExtractor.js";
+import {
+  clearState,
+  getStateStore,
+  saveToStateStore,
+} from "../src/state/stateStore.js";
+import {
+  extractIdFromPath,
+  extractIdFromResponse,
+} from "../src/state/stateExtractor.js";
 import { resolveState } from "../src/state/stateResolver.js";
 import type { NormalizedRequest } from "../src/proxy/requestNormalizer.js";
 import { readFile } from "node:fs/promises";
@@ -22,10 +29,16 @@ describe("State Management", () => {
     });
 
     it("saves and retrieves objects", async () => {
-      await saveToStateStore("stripe:cus_123", { id: "cus_123", email: "a@b.com" });
+      await saveToStateStore("stripe:cus_123", {
+        id: "cus_123",
+        email: "a@b.com",
+      });
       const state = await getStateStore();
-      
-      expect(state["stripe:cus_123"]).toEqual({ id: "cus_123", email: "a@b.com" });
+
+      expect(state["stripe:cus_123"]).toEqual({
+        id: "cus_123",
+        email: "a@b.com",
+      });
     });
 
     it("prevents race conditions via in-memory mutex", async () => {
@@ -42,14 +55,23 @@ describe("State Management", () => {
 
     it("redacts secrets before state reaches memory or disk", async () => {
       const secret = ["ghp", "state-secret"].join("_");
-      await saveToStateStore("github:secret", { access_token: secret, note: `Bearer ${secret}` });
+      await saveToStateStore("github:secret", {
+        access_token: secret,
+        note: `Bearer ${secret}`,
+      });
 
-      expect(await getStateStore()).toEqual({ "github:secret": { access_token: "***", note: "Bearer ***" } });
-      expect(await readFile(getDataPaths().state, "utf8")).not.toContain(secret);
+      expect(await getStateStore()).toEqual({
+        "github:secret": { access_token: "***", note: "Bearer ***" },
+      });
+      expect(await readFile(getDataPaths().state, "utf8")).not.toContain(
+        secret,
+      );
     });
 
     it("rejects an oversized persistent state entry", async () => {
-      await expect(saveToStateStore("generic:large", { payload: "x".repeat(513 * 1024) })).rejects.toThrow("size limit");
+      await expect(
+        saveToStateStore("generic:large", { payload: "x".repeat(513 * 1024) }),
+      ).rejects.toThrow("size limit");
     });
   });
 
@@ -69,21 +91,38 @@ describe("State Management", () => {
     });
 
     it("extracts ID from end of even-length paths", () => {
-      expect(extractIdFromPath({ path: "/v1/customers/cus_1" } as NormalizedRequest)).toBe("cus_1");
-      expect(extractIdFromPath({ path: "/emails/em_1" } as NormalizedRequest)).toBe("em_1");
+      expect(
+        extractIdFromPath({ path: "/v1/customers/cus_1" } as NormalizedRequest),
+      ).toBe("cus_1");
+      expect(
+        extractIdFromPath({ path: "/emails/em_1" } as NormalizedRequest),
+      ).toBe("em_1");
     });
 
     it("returns undefined for odd-length paths (list endpoints)", () => {
-      expect(extractIdFromPath({ path: "/v1/customers" } as NormalizedRequest)).toBeUndefined();
-      expect(extractIdFromPath({ path: "/v1/customers/cus_1/charges" } as NormalizedRequest)).toBeUndefined();
+      expect(
+        extractIdFromPath({ path: "/v1/customers" } as NormalizedRequest),
+      ).toBeUndefined();
+      expect(
+        extractIdFromPath({
+          path: "/v1/customers/cus_1/charges",
+        } as NormalizedRequest),
+      ).toBeUndefined();
     });
   });
 
   describe("Resolver", () => {
     it("resolves GET by ID from state", async () => {
       await saveToStateStore("stripe:cus_123", { id: "cus_123" });
-      
-      const req = { method: "GET", path: "/v1/customers/cus_123", query: {}, headers: {}, body: null, receivedAt: "" } as NormalizedRequest;
+
+      const req = {
+        method: "GET",
+        path: "/v1/customers/cus_123",
+        query: {},
+        headers: {},
+        body: null,
+        receivedAt: "",
+      } as NormalizedRequest;
       const res = await resolveState(req, "stripe");
 
       expect(res?.status).toBe(200);
@@ -91,39 +130,82 @@ describe("State Management", () => {
     });
 
     it("resolves GET list formatting matching namespace", async () => {
-      await saveToStateStore("stripe:cus_1", { id: "cus_1", object: "customer" });
-      await saveToStateStore("stripe:cus_2", { id: "cus_2", object: "customer" });
-      
-      const req = { method: "GET", path: "/v1/customers", query: {}, headers: {}, body: null, receivedAt: "" } as NormalizedRequest;
+      await saveToStateStore("stripe:cus_1", {
+        id: "cus_1",
+        object: "customer",
+      });
+      await saveToStateStore("stripe:cus_2", {
+        id: "cus_2",
+        object: "customer",
+      });
+
+      const req = {
+        method: "GET",
+        path: "/v1/customers",
+        query: {},
+        headers: {},
+        body: null,
+        receivedAt: "",
+      } as NormalizedRequest;
       const res = await resolveState(req, "stripe");
 
       expect(res?.body).toEqual({
         object: "list",
-        data: [{ id: "cus_1", object: "customer" }, { id: "cus_2", object: "customer" }],
+        data: [
+          { id: "cus_1", object: "customer" },
+          { id: "cus_2", object: "customer" },
+        ],
         has_more: false,
-        url: "/v1/list_placeholder"
+        url: "/v1/list_placeholder",
       });
     });
 
     it("resolves DELETE by marking as deleted", async () => {
-      await saveToStateStore("stripe:cus_1", { id: "cus_1", object: "customer" });
-      
-      const req = { method: "DELETE", path: "/v1/customers/cus_1", query: {}, headers: {}, body: null, receivedAt: "" } as NormalizedRequest;
+      await saveToStateStore("stripe:cus_1", {
+        id: "cus_1",
+        object: "customer",
+      });
+
+      const req = {
+        method: "DELETE",
+        path: "/v1/customers/cus_1",
+        query: {},
+        headers: {},
+        body: null,
+        receivedAt: "",
+      } as NormalizedRequest;
       const res = await resolveState(req, "stripe");
 
-      expect(res?.body).toEqual({ id: "cus_1", object: "customer", deleted: true });
-      
+      expect(res?.body).toEqual({
+        id: "cus_1",
+        object: "customer",
+        deleted: true,
+      });
+
       const state = await getStateStore();
       expect(state["stripe:cus_1"]).toMatchObject({ deleted: true });
     });
 
     it("formats OpenAI lists as object lists", async () => {
-      await saveToStateStore("openai:model_mock_1", { id: "model_mock_1", object: "model" });
+      await saveToStateStore("openai:model_mock_1", {
+        id: "model_mock_1",
+        object: "model",
+      });
 
-      const req = { method: "GET", path: "/v1/models", query: {}, headers: {}, body: null, receivedAt: "" } as NormalizedRequest;
+      const req = {
+        method: "GET",
+        path: "/v1/models",
+        query: {},
+        headers: {},
+        body: null,
+        receivedAt: "",
+      } as NormalizedRequest;
       const res = await resolveState(req, "openai");
 
-      expect(res?.body).toEqual({ object: "list", data: [{ id: "model_mock_1", object: "model" }] });
+      expect(res?.body).toEqual({
+        object: "list",
+        data: [{ id: "model_mock_1", object: "model" }],
+      });
     });
   });
 });

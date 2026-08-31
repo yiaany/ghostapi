@@ -14,7 +14,11 @@ describe("AI rules generation", () => {
 
   it("generates Stripe host override instructions from package.json", async () => {
     tempDir = await mkdtemp(join(tmpdir(), "ghostapi-rules-"));
-    await writeFile(join(tempDir, "package.json"), JSON.stringify({ dependencies: { stripe: "^18.0.0" } }), "utf8");
+    await writeFile(
+      join(tempDir, "package.json"),
+      JSON.stringify({ dependencies: { stripe: "^18.0.0" } }),
+      "utf8",
+    );
 
     const result = await generateAiRules(tempDir);
 

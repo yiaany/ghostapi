@@ -4,6 +4,23 @@ All notable changes to GhostAPI will be documented in this file.
 
 The format follows the spirit of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project uses semantic versioning once public releases begin.
 
+## Unreleased
+
+### Security
+
+- Corrected evidence semantics so unmeasured production-egress attempt counts are reported as `not measured` instead of a fabricated zero.
+- Reframed the bounded repository safety scan as a provider-risk heuristic scan and exposed its file, size, and extension limits.
+- Removed external font requests from the local dashboard and added a regression test for external dashboard asset URLs.
+- Added CodeQL, OSV, OpenSSF Scorecard, Dependabot, container scanning, coverage thresholds, and retained Linux egress test output.
+- Added locked compatibility tests for the official Stripe `22.6.0` and OpenAI `7.8.0` Node SDKs against a loopback-only GhostAPI server.
+
+### Changed
+
+- Repositioned GhostAPI as an AI-assisted local API simulation experiment with explicit non-goals and no customer-validation claims.
+- Added project provenance, contribution authorship guidance, full-tree formatting, and type-aware ESLint parsing.
+- Removed fundraising, commercial, design-partner, community-operations, and enterprise-roadmap material from the public tree and npm package.
+- Added a release workflow for signed annotated tags, exact-tarball smoke testing, checksums, SBOM generation, build attestations, npm provenance, and post-publish `gitHead` verification.
+
 ## 0.1.8 - 2026-08-22
 
 ### Security

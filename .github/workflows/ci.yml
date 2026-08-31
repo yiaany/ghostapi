@@ -55,7 +55,30 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run smoke:package
+      - run: npm audit --audit-level=high
       - run: npm audit --omit=dev --audit-level=moderate
+
+  coverage:
+    name: Coverage thresholds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:coverage
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: coverage-${{ github.sha }}
+          path: |
+            coverage/coverage-summary.json
+            coverage/lcov.info
+          if-no-files-found: error
+          retention-days: 14
 
   linux-egress:
     name: Required Ubuntu Linux egress enforcement
@@ -86,14 +109,23 @@ jobs:
           GHOSTAPI_REQUIRE_LINUX_EGRESS: "1"
         run: |
           set -o pipefail
-          timeout 300s npm test -- --run test/egressRun.test.ts --reporter=verbose | tee /tmp/egress-vitest.log
-          grep -F "allows GhostAPI loopback and preserves the target exit code" /tmp/egress-vitest.log
-          grep -F "blocks fetch, https, direct IP, and child-process bypass attempts" /tmp/egress-vitest.log
-          grep -F "blocks curl executed by the target" /tmp/egress-vitest.log
-          if grep -E "[0-9]+ skipped|SKIP" /tmp/egress-vitest.log; then
+          mkdir -p "$GITHUB_WORKSPACE/.ghostapi-ci"
+          timeout 300s npm test -- --run test/egressRun.test.ts --reporter=verbose | tee "$GITHUB_WORKSPACE/.ghostapi-ci/egress-vitest.log"
+          grep -F "allows GhostAPI loopback and preserves the target exit code" "$GITHUB_WORKSPACE/.ghostapi-ci/egress-vitest.log"
+          grep -F "blocks fetch, https, direct IP, and child-process bypass attempts" "$GITHUB_WORKSPACE/.ghostapi-ci/egress-vitest.log"
+          grep -F "blocks curl executed by the target" "$GITHUB_WORKSPACE/.ghostapi-ci/egress-vitest.log"
+          if grep -E "[0-9]+ skipped|SKIP" "$GITHUB_WORKSPACE/.ghostapi-ci/egress-vitest.log"; then
             echo "Linux egress enforcement tests must execute without skips."
             exit 1
           fi
+      - name: Upload Linux egress test evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: linux-egress-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .ghostapi-ci/egress-vitest.log
+          if-no-files-found: error
+          retention-days: 30
 
   hosted:
     name: Hosted pilot checks
@@ -116,8 +148,17 @@ jobs:
   hosted-docker:
     name: Hosted Docker build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
       - run: docker build --file hosted/Dockerfile --tag ghostapi-hosted-ci hosted
+      - uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        with:
+          image-ref: ghostapi-hosted-ci
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL

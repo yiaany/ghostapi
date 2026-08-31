@@ -10,14 +10,24 @@ if (mode === "ghostapi") {
 } else if (mode === "fetch-external") {
   process.exitCode = await expectFailure(() => fetch("https://example.com"));
 } else if (mode === "https-external") {
-  process.exitCode = await expectFailure(() => request(https, "https://example.com"));
+  process.exitCode = await expectFailure(() =>
+    request(https, "https://example.com"),
+  );
 } else if (mode === "direct-ip") {
-  process.exitCode = await expectFailure(() => request(http, "http://198.51.100.1"));
+  process.exitCode = await expectFailure(() =>
+    request(http, "http://198.51.100.1"),
+  );
 } else if (mode === "child-fetch") {
-  const child = spawn(process.execPath, [process.argv[1], "fetch-external"], { stdio: "inherit" });
+  const child = spawn(process.execPath, [process.argv[1], "fetch-external"], {
+    stdio: "inherit",
+  });
   process.exitCode = await waitForExit(child);
 } else if (mode === "curl") {
-  const child = spawn("curl", ["--connect-timeout", "1", "http://198.51.100.1"], { stdio: "ignore" });
+  const child = spawn(
+    "curl",
+    ["--connect-timeout", "1", "http://198.51.100.1"],
+    { stdio: "ignore" },
+  );
   const exitCode = await waitForExit(child);
   process.exitCode = exitCode === 0 ? 1 : 0;
 } else if (mode === "exit") {
@@ -51,7 +61,9 @@ function request(client, url) {
       response.resume();
       resolve();
     });
-    request.once("timeout", () => request.destroy(new Error("request timed out")));
+    request.once("timeout", () =>
+      request.destroy(new Error("request timed out")),
+    );
     request.once("error", reject);
   });
 }

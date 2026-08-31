@@ -9,7 +9,7 @@ export const twilioAdapter: ProviderAdapter = {
       code,
       message: details.message,
       more_info: `https://www.twilio.com/docs/errors/${code}`,
-      status: details.status
+      status: details.status,
     };
-  }
+  },
 };

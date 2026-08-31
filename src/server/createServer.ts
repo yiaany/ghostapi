@@ -3,7 +3,10 @@ import { initializeCacheDir } from "../cache/index.js";
 import { initializeStateStore } from "../state/stateStore.js";
 import { registerRoutes } from "./routes.js";
 import type { ServerConfig } from "../config/serverConfig.js";
-import { assertSafeDashboardConfig, dashboardAccessControl } from "./accessControl.js";
+import {
+  assertSafeDashboardConfig,
+  dashboardAccessControl,
+} from "./accessControl.js";
 import { initializeFaultLab } from "../fault/faultLab.js";
 
 export async function createServer(config: ServerConfig): Promise<Express> {
