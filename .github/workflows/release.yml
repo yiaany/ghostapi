@@ -54,7 +54,7 @@ jobs:
         run: |
           tarball="$(find release -maxdepth 1 -name '*.tgz' -type f -print -quit)"
           test -n "$tarball"
-          npm publish "$tarball" --access public --provenance
+          npm publish "$GITHUB_WORKSPACE/$tarball" --access public --provenance
       - run: node scripts/verify-published.mjs
       - name: Create GitHub Release
         env:
