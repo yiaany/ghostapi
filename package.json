@@ -1,6 +1,6 @@
 {
   "name": "@yiaany/ghostapi",
-  "version": "0.1.8",
+  "version": "0.2.0",
   "description": "Local API simulation and test evidence for AI-assisted development.",
   "type": "module",
   "repository": {

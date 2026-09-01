@@ -10,4 +10,4 @@ For each release, verify:
 - the tarball has a GitHub build-provenance attestation;
 - npm shows provenance and its `gitHead` matches the tagged commit.
 
-Historical `0.1.x` artifacts may not satisfy this complete chain. Do not rewrite their Git history. The first release intended to use the complete workflow is `v0.2.0`.
+Historical `0.1.x` artifacts may not satisfy this complete chain and retain their immutable original npm `gitHead` metadata. A reviewed metadata-only history correction was applied before `v0.2.0`; PR #20 records the unchanged trees, messages, and dates. The first release intended to use the complete workflow is `v0.2.0`.

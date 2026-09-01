@@ -6,6 +6,8 @@ The format follows the spirit of [Keep a Changelog](https://keepachangelog.com/e
 
 ## Unreleased
 
+## 0.2.0 - 2026-09-01
+
 ### Security
 
 - Corrected evidence semantics so unmeasured production-egress attempt counts are reported as `not measured` instead of a fabricated zero.
@@ -18,6 +20,7 @@ The format follows the spirit of [Keep a Changelog](https://keepachangelog.com/e
 
 - Repositioned GhostAPI as an AI-assisted local API simulation experiment with explicit non-goals and no customer-validation claims.
 - Added project provenance, contribution authorship guidance, full-tree formatting, and type-aware ESLint parsing.
+- Corrected 36 pre-0.2 Git author and committer identities from an accidental local tool identity to the contributing maintainer while preserving file trees, messages, and dates.
 - Removed fundraising, commercial, design-partner, community-operations, and enterprise-roadmap material from the public tree and npm package.
 - Added a release workflow for signed annotated tags, exact-tarball smoke testing, checksums, SBOM generation, build attestations, npm provenance, and post-publish `gitHead` verification.
 - Centered the README hero and dashboard product identity, and added responsive navigation and request/detail layouts for mobile screens.

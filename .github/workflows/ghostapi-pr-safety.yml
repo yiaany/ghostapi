@@ -11,7 +11,7 @@ on:
 permissions: {}
 
 env:
-  GHOSTAPI_VERSION: "0.1.8"
+  GHOSTAPI_VERSION: "0.2.0"
 
 jobs:
   safety:
