@@ -9,12 +9,16 @@ const spec = `${packageJson.name}@${packageJson.version}`;
 
 for (let attempt = 1; attempt <= 6; attempt += 1) {
   try {
-    const metadata = JSON.parse(
-      execFileSync("npm", ["view", spec, "version", "gitHead", "--json"], {
+    const output = execFileSync(
+      "npm",
+      ["view", spec, "version", "gitHead", "--json"],
+      {
         encoding: "utf8",
-      }),
+      },
     );
-    if (metadata.version !== packageJson.version) {
+    if (!output.trim()) throw new Error("Empty registry response");
+    const metadata = JSON.parse(output);
+    if (!metadata.version || metadata.version !== packageJson.version) {
       throw new Error(`registry version is ${metadata.version}`);
     }
     if (metadata.gitHead && metadata.gitHead !== expectedSha) {
