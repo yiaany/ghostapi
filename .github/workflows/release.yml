@@ -24,6 +24,10 @@ jobs:
           node-version: 24
           cache: npm
           registry-url: https://registry.npmjs.org
+      - name: Restore the signed tag object after checkout
+        run: |
+          git tag --delete "$GITHUB_REF_NAME"
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
       - name: Configure release tag verification
         run: git config gpg.ssh.allowedSignersFile "$GITHUB_WORKSPACE/.github/release-signers"
       - run: node scripts/release-verify.mjs "$GITHUB_REF_NAME"
