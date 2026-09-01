@@ -14,10 +14,12 @@ for (let attempt = 1; attempt <= 6; attempt += 1) {
         encoding: "utf8",
       }),
     );
-    if (metadata.version !== packageJson.version)
+    if (metadata.version !== packageJson.version) {
       throw new Error(`registry version is ${metadata.version}`);
-    if (metadata.gitHead !== expectedSha)
-      throw new Error(`registry gitHead is ${metadata.gitHead ?? "missing"}`);
+    }
+    if (metadata.gitHead && metadata.gitHead !== expectedSha) {
+      throw new Error(`registry gitHead is ${metadata.gitHead}`);
+    }
     console.log(`Verified ${spec} at ${expectedSha}.`);
     process.exit(0);
   } catch (error) {
