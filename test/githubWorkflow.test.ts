@@ -29,7 +29,7 @@ describe("GhostAPI PR safety workflow", () => {
   it("uses immutable actions, enforced execution, sanitized evidence, and safe comment boundaries", async () => {
     const workflow = await readWorkflow(workflowPath);
 
-    expect(workflow).toContain('GHOSTAPI_VERSION: "0.1.8"');
+    expect(workflow).toContain('GHOSTAPI_VERSION: "0.2.0"');
     expect(workflow).toContain(
       "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
     );

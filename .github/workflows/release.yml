@@ -24,6 +24,8 @@ jobs:
           node-version: 24
           cache: npm
           registry-url: https://registry.npmjs.org
+      - name: Configure release tag verification
+        run: git config gpg.ssh.allowedSignersFile "$GITHUB_WORKSPACE/.github/release-signers"
       - run: node scripts/release-verify.mjs "$GITHUB_REF_NAME"
       - run: npm ci
       - run: npm run lint
@@ -56,4 +58,5 @@ jobs:
         run: |
           tarball="$(find release -maxdepth 1 -name '*.tgz' -type f -print -quit)"
           test -n "$tarball"
-          gh release create "$GITHUB_REF_NAME" "$tarball" release/SHA256SUMS release/sbom.cdx.json --verify-tag --generate-notes
+          release_version="${GITHUB_REF_NAME#v}"
+          gh release create "$GITHUB_REF_NAME" "$tarball" release/SHA256SUMS release/sbom.cdx.json --verify-tag --title "GhostAPI $release_version: Local SDK Compatibility and Release Evidence" --generate-notes
