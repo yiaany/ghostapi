@@ -56,7 +56,7 @@ describe("repo setup generator", () => {
     ).toContain('"command": "npx"');
     expect(
       setup.files.find((file) => file.path === ".cursor/mcp.json")?.content,
-    ).toContain('"@yiaany/ghostapi@0.2.0"');
+    ).toContain('"@yiaany/ghostapi@0.2.1"');
     expect(
       setup.files.find((file) => file.path === "AGENTS.md")?.content,
     ).toContain("do not run it manually in a terminal");

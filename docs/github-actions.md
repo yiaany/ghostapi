@@ -6,7 +6,7 @@ The repository workflow at [`.github/workflows/ghostapi-pr-safety.yml`](../.gith
 
 ```yaml
 env:
-  GHOSTAPI_VERSION: "0.2.0"
+  GHOSTAPI_VERSION: "0.2.1"
 
 - name: Install pinned GhostAPI
   run: npm install --global "@yiaany/ghostapi@$GHOSTAPI_VERSION"

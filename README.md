@@ -177,7 +177,7 @@ Generic MCP configuration:
   "mcpServers": {
     "ghostapi": {
       "command": "npx",
-      "args": ["-y", "@yiaany/ghostapi@0.2.0", "mcp"]
+      "args": ["-y", "@yiaany/ghostapi@0.2.1", "mcp"]
     }
   }
 }
